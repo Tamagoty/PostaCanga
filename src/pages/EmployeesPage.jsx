@@ -3,8 +3,8 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { supabase } from '../lib/supabaseClient';
 import { useAuth } from '../context/AuthContext';
 import toast from 'react-hot-toast';
-import styles from './SuppliesPage.module.css'; // Reutilizando estilos
-import { FaPlus, FaTrashAlt, FaUserShield } from 'react-icons/fa';
+import styles from './EmployeesPage.module.css';
+import { FaPlus, FaTrashAlt, FaUserShield, FaUser } from 'react-icons/fa';
 import Button from '../components/Button';
 import Modal from '../components/Modal';
 import EmployeeForm from '../components/EmployeeForm';
@@ -17,11 +17,18 @@ const EmployeesPage = () => {
   const [isModalOpen, setIsModalOpen] = useState(false);
 
   const fetchEmployees = useCallback(async () => {
-    if (!isAdmin) return;
+    if (!isAdmin) {
+      setLoading(false);
+      return;
+    }
     setLoading(true);
-    const { data, error } = await supabase.rpc('list_all_employees');
+    
+    // CORREÇÃO: Chamando a nova e definitiva função RPC 'get_all_employee_details'.
+    const { data, error } = await supabase.rpc('get_all_employee_details');
+
     if (error) {
       toast.error('Erro ao buscar funcionários: ' + error.message);
+      setEmployees([]);
     } else {
       setEmployees(data);
     }
@@ -34,8 +41,6 @@ const EmployeesPage = () => {
 
   const handleCreateEmployee = async (formData) => {
     setIsSaving(true);
-    // ATENÇÃO: Esta é uma chamada insegura e é apenas um placeholder.
-    // A criação de usuários deve ser feita via Edge Function no ambiente de produção.
     const { data: { user }, error: authError } = await supabase.auth.signUp({
       email: formData.email,
       password: formData.password,
@@ -47,18 +52,18 @@ const EmployeesPage = () => {
       return;
     }
 
-    // Se o usuário foi criado na auth, insere na tabela public.employees
     if (user) {
-      const { error: profileError } = await supabase.from('employees').insert({
-        id: user.id,
-        full_name: formData.full_name,
-        registration_number: formData.registration_number,
-        role: formData.role,
-      });
+      const { error: profileError } = await supabase
+        .from('employees')
+        .update({
+          full_name: formData.full_name,
+          registration_number: formData.registration_number,
+          role: formData.role,
+        })
+        .eq('id', user.id);
 
       if (profileError) {
-        toast.error(`Erro ao criar perfil: ${profileError.message}`);
-        // Idealmente, aqui deveria haver uma lógica para deletar o usuário da auth que acabou de ser criado.
+        toast.error(`Erro ao atualizar perfil: ${profileError.message}`);
       } else {
         toast.success('Funcionário criado com sucesso!');
         setIsModalOpen(false);
@@ -112,26 +117,30 @@ const EmployeesPage = () => {
           </thead>
           <tbody>
             {loading ? (
-              <tr><td colSpan="5">Carregando...</td></tr>
-            ) : employees.map(emp => (
-              <tr key={emp.id}>
-                <td data-label="Nome">{emp.full_name}</td>
-                <td data-label="Matrícula">{emp.registration_number}</td>
-                <td data-label="E-mail">{emp.email}</td>
-                <td data-label="Permissão">
-                  <span className={`${styles.role} ${styles[emp.role]}`}>
-                    {emp.role === 'admin' && <FaUserShield />} {emp.role}
-                  </span>
-                </td>
-                <td data-label="Ações">
-                  {userProfile?.id !== emp.id && (
-                    <button className={styles.deleteButton} onClick={() => handleDeleteEmployee(emp.id, emp.full_name)}>
-                      <FaTrashAlt />
-                    </button>
-                  )}
-                </td>
-              </tr>
-            ))}
+              <tr><td colSpan="5">A carregar funcionários...</td></tr>
+            ) : employees.length > 0 ? (
+              employees.map(emp => (
+                <tr key={emp.id}>
+                  <td data-label="Nome">{emp.full_name}</td>
+                  <td data-label="Matrícula">{emp.registration_number}</td>
+                  <td data-label="E-mail">{emp.email}</td>
+                  <td data-label="Permissão">
+                    <span className={`${styles.role} ${styles[emp.role]}`}>
+                      {emp.role === 'admin' ? <FaUserShield /> : <FaUser />} {emp.role}
+                    </span>
+                  </td>
+                  <td data-label="Ações">
+                    {userProfile?.id !== emp.id && (
+                      <button className={styles.deleteButton} onClick={() => handleDeleteEmployee(emp.id, emp.full_name)}>
+                        <FaTrashAlt />
+                      </button>
+                    )}
+                  </td>
+                </tr>
+              ))
+            ) : (
+              <tr><td colSpan="5">Nenhum funcionário encontrado.</td></tr>
+            )}
           </tbody>
         </table>
       </div>

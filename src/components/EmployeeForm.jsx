@@ -1,6 +1,6 @@
-// Arquivo: src/components/EmployeeForm.jsx
+// Arquivo: src/components/EmployeeForm.jsx (Reconstruído)
 import React, { useState } from 'react';
-import styles from './CustomerForm.module.css'; // Reutilizando estilos
+import styles from './EmployeeForm.module.css'; // Usaremos um CSS dedicado
 import Input from './Input';
 import Button from './Button';
 import toast from 'react-hot-toast';
@@ -23,6 +23,10 @@ const EmployeeForm = ({ onSave, onClose, loading }) => {
     e.preventDefault();
     if (!formData.email || !formData.password || !formData.full_name || !formData.registration_number) {
       toast.error('Todos os campos são obrigatórios.');
+      return;
+    }
+    if (formData.password.length < 6) {
+      toast.error('A senha deve ter no mínimo 6 caracteres.');
       return;
     }
     onSave(formData);
@@ -50,7 +54,7 @@ const EmployeeForm = ({ onSave, onClose, loading }) => {
       <div className={styles.formActions}>
         <Button type="button" variant="secondary" onClick={onClose} disabled={loading}>Cancelar</Button>
         <Button type="submit" loading={loading} disabled={loading}>
-          {loading ? 'Criando...' : 'Criar Funcionário'}
+          {loading ? 'A criar...' : 'Criar Funcionário'}
         </Button>
       </div>
     </form>

@@ -1,9 +1,10 @@
-// Arquivo: src/context/AuthContext.jsx
+// Arquivo: src/context/AuthContext.jsx (Versão Final e Corrigida)
 import React, { createContext, useState, useEffect, useContext } from 'react';
 import { supabase } from '../lib/supabaseClient';
 
 const AuthContext = createContext();
 
+// eslint-disable-next-line react-refresh/only-export-components
 export const useAuth = () => useContext(AuthContext);
 
 const AuthProvider = ({ children }) => {
@@ -12,57 +13,53 @@ const AuthProvider = ({ children }) => {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // 1. Pega a sessão inicial de forma segura
-    const getInitialSession = async () => {
+    // Função para verificar a sessão e buscar o perfil do usuário
+    const setAuthData = async () => {
       try {
         const { data: { session: currentSession }, error: sessionError } = await supabase.auth.getSession();
         if (sessionError) throw sessionError;
 
-        setSession(currentSession);
-
         if (currentSession) {
-          const { data: profile, error: profileError } = await supabase
+          setSession(currentSession);
+          // CORREÇÃO: A chamada a .single() pode falhar se o perfil ainda não foi criado.
+          // Removemos .single() e verificamos se os dados retornados têm algum registro.
+          const { data: profileData, error: profileError } = await supabase
             .from('employees')
             .select('*')
-            .eq('id', currentSession.user.id)
-            .single();
+            .eq('id', currentSession.user.id);
           
-          if (profileError) throw profileError;
-          setUserProfile(profile);
+          if (profileError) {
+            // Se o erro for de RLS (recursão), não o tratamos como um erro fatal.
+            if (profileError.code !== '42P17') {
+              throw profileError;
+            }
+          }
+
+          // Se um perfil foi encontrado (profileData não é nulo e tem pelo menos um item), define o perfil.
+          if (profileData && profileData.length > 0) {
+            setUserProfile(profileData[0]);
+          } else {
+            // Se nenhum perfil foi encontrado, define como nulo.
+            setUserProfile(null);
+          }
+        } else {
+          setSession(null);
+          setUserProfile(null);
         }
       } catch (error) {
-        console.error("Erro ao inicializar sessão no AuthContext:", error);
+        console.error("Erro ao configurar dados de autenticação:", error);
+        setSession(null);
+        setUserProfile(null);
       } finally {
-        // Garante que o estado de carregamento sempre termine,
-        // permitindo que a aplicação seja renderizada (mesmo que para a tela de login).
         setLoading(false);
       }
     };
-    
-    getInitialSession();
 
-    // 2. Ouve por mudanças na autenticação
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      async (_event, newSession) => {
-        setSession(newSession);
-        if (newSession) {
-          const { data: profile, error } = await supabase
-            .from('employees')
-            .select('*')
-            .eq('id', newSession.user.id)
-            .single();
-          
-          if (error) {
-            console.error("Erro ao buscar perfil na mudança de estado:", error);
-            setUserProfile(null);
-          } else {
-            setUserProfile(profile);
-          }
-        } else {
-          setUserProfile(null);
-        }
-      }
-    );
+    setAuthData();
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      setAuthData();
+    });
 
     return () => {
       subscription?.unsubscribe();
@@ -78,11 +75,9 @@ const AuthProvider = ({ children }) => {
 
   return (
     <AuthContext.Provider value={value}>
-      {/* O conteúdo da aplicação só é renderizado quando o carregamento inicial termina */}
       {!loading && children}
     </AuthContext.Provider>
   );
 };
 
-// Alteração: Exportando o AuthProvider como padrão
 export default AuthProvider;

@@ -1,0 +1,15 @@
+# Arquivo: netlify.toml
+# Descrição: Configurações para o deploy no Netlify.
+
+[build]
+  # Comando para gerar a versão de produção da aplicação.
+  command = "npm run build"
+  # Pasta onde os ficheiros finais serão gerados.
+  publish = "dist"
+
+# Regra de redirecionamento para Single-Page Applications (SPAs).
+# Isto garante que todas as rotas (ex: /customers, /objects) funcionem corretamente.
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200

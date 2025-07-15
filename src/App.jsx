@@ -1,42 +1,34 @@
 // Arquivo: src/App.jsx
-// Descrição: Gerencia a sessão e define as rotas principais.
+// Descrição: Gerencia a sessão e define as rotas principais da aplicação.
 
-import React, { useState, useEffect } from 'react';
+import React from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
 import { Toaster } from 'react-hot-toast';
-import { supabase } from './lib/supabaseClient';
+import { useAuth } from './context/AuthContext'; // Importando o hook de autenticação
 
-// Importando páginas e componentes
+// Importando todas as páginas e componentes de layout
 import LoginPage from './pages/LoginPage';
 import Layout from './components/Layout';
+import DashboardPage from './pages/DashboardPage';
 import ObjectsPage from './pages/ObjectsPage';
 import CustomersPage from './pages/CustomersPage';
+import CustomerDetailPage from './pages/CustomerDetailPage'; // Importando a página de detalhes
 import SuppliesPage from './pages/SuppliesPage';
-import DashboardPage from './pages/DashboardPage'; // Importando a página real
+import SettingsPage from './pages/SettingsPage';
+import EmployeesPage from './pages/EmployeesPage';
 
 function App() {
-  const [session, setSession] = useState(null);
-  const [loading, setLoading] = useState(true);
+  // Utiliza o estado de sessão e carregamento do nosso AuthContext
+  const { session, loading } = useAuth();
 
-  useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setSession(session);
-      setLoading(false);
-    });
-
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      setSession(session);
-    });
-
-    return () => subscription.unsubscribe();
-  }, []);
-
+  // Exibe uma mensagem de carregamento enquanto a sessão é verificada
   if (loading) {
     return <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh' }}>Carregando...</div>;
   }
 
   return (
     <>
+      {/* Componente para exibir notificações em toda a aplicação */}
       <Toaster
         position="top-right"
         toastOptions={{
@@ -47,20 +39,31 @@ function App() {
           },
         }}
       />
+      
+      {/* Sistema de Roteamento Principal */}
       <Routes>
+        {/* Rota para a página de login */}
         <Route 
           path="/login" 
           element={!session ? <LoginPage /> : <Navigate to="/" />} 
         />
+        
+        {/* Rota protegida que engloba todas as páginas internas */}
         <Route 
           path="/*" 
           element={session ? <Layout /> : <Navigate to="/login" />}
         >
-          {/* Rotas aninhadas que serão renderizadas dentro do Layout */}
-          <Route index element={<DashboardPage />} /> {/* Usando a página real */}
+          {/* Rotas aninhadas que são renderizadas dentro do componente Layout */}
+          <Route index element={<DashboardPage />} />
           <Route path="objects" element={<ObjectsPage />} />
           <Route path="customers" element={<CustomersPage />} />
+          {/* ROTA CORRIGIDA: Esta é a rota que define o caminho para a página de detalhes do cliente. */}
+          <Route path="customers/:customerId" element={<CustomerDetailPage />} />
           <Route path="supplies" element={<SuppliesPage />} />
+          <Route path="employees" element={<EmployeesPage />} />
+          <Route path="settings" element={<SettingsPage />} />
+          
+          {/* Rota "catch-all" para redirecionar qualquer caminho não encontrado para o Dashboard */}
           <Route path="*" element={<Navigate to="/" />} />
         </Route>
       </Routes>

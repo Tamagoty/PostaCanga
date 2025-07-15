@@ -1,12 +1,14 @@
 // Arquivo: src/components/Sidebar.jsx
 import React from 'react';
 import { NavLink } from 'react-router-dom';
-import { useAuth } from '../context/AuthContext'; // Importando o hook de autenticação
+import { useAuth } from '../context/AuthContext';
 import styles from './Sidebar.module.css';
 import { FaTachometerAlt, FaBoxOpen, FaUsers, FaClipboardList, FaSignOutAlt, FaCog, FaTimes, FaUserCog } from 'react-icons/fa';
 
 const Sidebar = ({ onLogout, isOpen, toggleSidebar }) => {
-  const { isAdmin } = useAuth(); // Usando o hook para verificar se é admin
+  const { isAdmin } = useAuth();
+  const agencyName = import.meta.env.VITE_AGENCY_NAME;
+  const logoUrl = import.meta.env.VITE_LOGO_URL;
 
   const navItems = [
     { to: "/", icon: FaTachometerAlt, label: "Dashboard" },
@@ -18,7 +20,13 @@ const Sidebar = ({ onLogout, isOpen, toggleSidebar }) => {
   return (
     <aside className={`${styles.sidebar} ${isOpen ? styles.open : ''}`}>
       <div className={styles.header}>
-        <h1 className={styles.logo}>PostaCanga</h1>
+        <div className={styles.logoContainer}>
+          {logoUrl && <img src={logoUrl} alt="Logo da Aplicação" className={styles.logoImage} />}
+          <div className={styles.logoTextContainer}>
+            <h1 className={styles.logoTitle}>PostaCanga</h1>
+            {agencyName && <span className={styles.logoSubtitle}>{agencyName}</span>}
+          </div>
+        </div>
         <button onClick={toggleSidebar} className={styles.closeButton}>
           <FaTimes />
         </button>
@@ -30,7 +38,6 @@ const Sidebar = ({ onLogout, isOpen, toggleSidebar }) => {
             <span className={styles.navLabel}>{item.label}</span>
           </NavLink>
         ))}
-        {/* Renderização condicional do link de Gestão de Funcionários */}
         {isAdmin && (
           <NavLink to="/employees" className={({ isActive }) => `${styles.navLink} ${isActive ? styles.active : ''}`}>
             <FaUserCog className={styles.navIcon} />

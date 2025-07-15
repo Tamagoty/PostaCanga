@@ -3,12 +3,13 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { supabase } from '../lib/supabaseClient';
 import toast from 'react-hot-toast';
 import styles from './CustomersPage.module.css';
-import { FaSearch, FaPlus, FaEdit, FaUserCircle, FaPhoneAlt, FaFileCsv } from 'react-icons/fa';
+import { FaSearch, FaPlus, FaEye, FaUserCircle, FaPhoneAlt } from 'react-icons/fa';
 import Input from '../components/Input';
 import Button from '../components/Button';
 import Modal from '../components/Modal';
 import CustomerForm from '../components/CustomerForm';
 import ToggleSwitch from '../components/ToggleSwitch';
+import { useNavigate } from 'react-router-dom'; // Importando useNavigate
 
 const CustomersPage = () => {
   const [customers, setCustomers] = useState([]);
@@ -17,6 +18,7 @@ const CustomersPage = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [customerToEdit, setCustomerToEdit] = useState(null);
+  const navigate = useNavigate(); // Hook para navegação
 
   const fetchCustomers = useCallback(async () => {
     setLoading(true);
@@ -39,11 +41,6 @@ const CustomersPage = () => {
 
   const handleOpenModalForNew = () => {
     setCustomerToEdit(null);
-    setIsModalOpen(true);
-  };
-
-  const handleOpenModalForEdit = (customer) => {
-    setCustomerToEdit(customer);
     setIsModalOpen(true);
   };
 
@@ -97,37 +94,6 @@ const CustomersPage = () => {
     }
   };
 
-  const handleExportCSV = () => {
-    if (customers.length === 0) {
-      toast.error("Não há clientes para exportar.");
-      return;
-    }
-
-    const headers = "Name,Given Name,Family Name,Phone 1 - Type,Phone 1 - Value";
-    const rows = customers
-      .filter(c => c.is_active && c.cellphone) // Exporta apenas clientes ativos com celular
-      .map(c => {
-        const name = c.full_name;
-        const phone = c.cellphone.replace(/\D/g, '');
-        // Simples separação de nome, pode ser melhorada
-        const nameParts = name.split(' ');
-        const givenName = nameParts[0];
-        const familyName = nameParts.slice(1).join(' ');
-        
-        return `"${name}","${givenName}","${familyName}","Mobile","${phone}"`;
-      });
-
-    const csvContent = "data:text/csv;charset=utf-8," + [headers, ...rows].join("\n");
-    const encodedUri = encodeURI(csvContent);
-    const link = document.createElement("a");
-    link.setAttribute("href", encodedUri);
-    link.setAttribute("download", "google_contacts.csv");
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    toast.success("Exportação concluída!");
-  };
-
   const filteredCustomers = customers.filter(c => 
     c.full_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
     (c.cpf && c.cpf.includes(searchTerm)) ||
@@ -159,9 +125,6 @@ const CustomersPage = () => {
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
           />
-          <Button onClick={handleExportCSV} variant="secondary">
-            <FaFileCsv /> Exportar CSV
-          </Button>
           <Button onClick={handleOpenModalForNew}>
             <FaPlus /> Novo Cliente
           </Button>
@@ -198,8 +161,9 @@ const CustomersPage = () => {
                   checked={customer.is_active}
                   onChange={() => handleToggleStatus(customer)}
                 />
-                <button className={styles.actionButton} onClick={() => handleOpenModalForEdit(customer)}>
-                  <FaEdit /> Editar
+                {/* Botão atualizado para navegar para a página de detalhes */}
+                <button className={styles.actionButton} onClick={() => navigate(`/customers/${customer.id}`)}>
+                  <FaEye /> Detalhes
                 </button>
               </div>
             </div>
