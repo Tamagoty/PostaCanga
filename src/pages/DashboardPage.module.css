@@ -1,0 +1,20 @@
+/* Arquivo: src/pages/DashboardPage.module.css */
+.container {
+  display: flex;
+  flex-direction: column;
+  gap: 2rem;
+}
+
+.title {
+  font-size: 2rem;
+  color: var(--text-primary);
+}
+
+.loading {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  height: 50vh;
+  color: var(--text-secondary);
+  font-size: 1.2rem;
+}

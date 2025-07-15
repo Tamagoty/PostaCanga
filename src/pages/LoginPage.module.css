@@ -1,0 +1,35 @@
+/* Arquivo: src/pages/LoginPage.module.css */
+
+.loginContainer {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 100vh;
+  padding: 2rem;
+}
+
+.loginForm {
+  width: 100%;
+  max-width: 400px;
+  padding: 2.5rem;
+  background-color: var(--bg-secondary);
+  border-radius: var(--border-radius);
+  border: 1px solid var(--border-color);
+  box-shadow: var(--shadow-lg);
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem; /* 24px */
+}
+
+.title {
+  font-size: 1.75rem; /* 28px */
+  font-weight: 700;
+  text-align: center;
+  color: var(--text-primary);
+}
+
+.subtitle {
+  text-align: center;
+  color: var(--text-secondary);
+  margin-top: -1rem;
+}

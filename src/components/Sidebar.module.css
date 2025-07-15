@@ -1,0 +1,108 @@
+/* Arquivo: src/components/Sidebar.module.css */
+.sidebar {
+  display: flex;
+  flex-direction: column;
+  width: 250px;
+  height: 100vh;
+  position: fixed; /* Fixo para sobrepor em mobile */
+  left: -250px; /* Começa escondido fora da tela */
+  top: 0;
+  background-color: var(--bg-secondary);
+  border-right: 1px solid var(--border-color);
+  padding: 1rem;
+  transition: left 0.3s ease-in-out;
+  z-index: 1000;
+}
+
+.sidebar.open {
+  left: 0; /* Mostra a sidebar */
+}
+
+.header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 2rem;
+}
+
+.logo {
+  color: var(--text-primary);
+  font-size: 1.75rem;
+  font-weight: 700;
+}
+
+.closeButton {
+  display: none; /* Escondido por padrão */
+  background: none;
+  border: none;
+  color: var(--text-secondary);
+  font-size: 1.5rem;
+  cursor: pointer;
+}
+
+.nav {
+  flex-grow: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.navLink, .logoutButton {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  padding: 0.75rem 1rem;
+  border-radius: var(--border-radius);
+  text-decoration: none;
+  color: var(--text-secondary);
+  font-weight: 500;
+  transition: background-color 0.2s, color 0.2s;
+}
+
+.navLink:hover, .logoutButton:hover {
+  background-color: var(--bg-tertiary);
+  color: var(--text-primary);
+}
+
+.navLink.active {
+  background-color: var(--accent-primary);
+  color: white;
+  font-weight: 600;
+}
+
+.navIcon {
+  font-size: 1.25rem;
+}
+
+.navLabel {
+  font-size: 1rem;
+}
+
+.footer {
+  margin-top: auto;
+}
+
+.logoutButton {
+  width: 100%;
+  background: none;
+  border: none;
+  cursor: pointer;
+}
+
+/* Telas Maiores (Desktop) */
+@media (min-width: 768px) {
+  .sidebar {
+    position: static; /* Volta ao fluxo normal do documento */
+    left: 0;
+  }
+  .closeButton {
+    display: none; /* Botão de fechar não é necessário no desktop */
+  }
+}
+
+/* Telas Pequenas (Mobile) */
+@media (max-width: 767px) {
+  .closeButton {
+    display: block; /* Mostra o botão de fechar em mobile */
+  }
+}

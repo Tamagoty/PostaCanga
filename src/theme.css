@@ -1,0 +1,76 @@
+/*
+  Arquivo: src/theme.css
+  Descrição: Define as variáveis de cores globais para o tema da aplicação.
+  Este arquivo centraliza o design system para garantir consistência.
+*/
+
+:root {
+  /* Paleta de Cores - Tema Escuro Padrão */
+  --font-family: 'Inter', sans-serif;
+
+  --bg-primary: #1a1d24;      /* Fundo principal, mais escuro */
+  --bg-secondary: #272b35;   /* Fundo de containers, cards, modais */
+  --bg-tertiary: #3a404e;    /* Fundo para inputs, elementos interativos */
+
+  --text-primary: #f0f0f0;    /* Cor principal do texto */
+  --text-secondary: #a0a0a0; /* Cor de texto para descrições, placeholders */
+  --text-disabled: #6b7280;  /* Cor para texto/elementos desabilitados */
+
+  --accent-primary: #3b82f6; /* Cor de destaque principal (azul) */
+  --accent-primary-hover: #2563eb;
+  
+  --accent-secondary: #10b981; /* Cor de sucesso (verde) */
+  --accent-secondary-hover: #059669;
+
+  --accent-danger: #ef4444;    /* Cor para ações de perigo (vermelho) */
+  --accent-danger-hover: #dc2626;
+
+  --border-color: #4b5563;   /* Cor das bordas */
+
+  /* Estilos de Sombra */
+  --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.15);
+  --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.2), 0 2px 4px -2px rgb(0 0 0 / 0.2);
+  --shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.2), 0 4px 6px -4px rgb(0 0 0 / 0.2);
+
+  /* Raio da Borda */
+  --border-radius: 0.5rem; /* 8px */
+}
+
+/* Reset Básico e Estilos Globais */
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html, body, #root {
+  height: 100%;
+}
+
+body {
+  font-family: var(--font-family);
+  background-color: var(--bg-primary);
+  color: var(--text-primary);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Estilização da barra de rolagem */
+::-webkit-scrollbar {
+  width: 10px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--bg-primary);
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--bg-tertiary);
+  border-radius: 5px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--border-color);
+}

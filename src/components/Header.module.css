@@ -1,0 +1,26 @@
+/* Arquivo: src/components/Header.module.css */
+.header {
+  display: flex;
+  align-items: center;
+  padding: 1rem 1.5rem;
+  background-color: var(--bg-secondary);
+  border-bottom: 1px solid var(--border-color);
+  position: sticky;
+  top: 0;
+  z-index: 900;
+}
+
+.menuButton {
+  background: none;
+  border: none;
+  color: var(--text-primary);
+  font-size: 1.5rem;
+  cursor: pointer;
+  margin-right: 1rem;
+}
+
+@media (min-width: 768px) {
+  .header {
+    display: none; /* O header com o botão some em telas grandes */
+  }
+}

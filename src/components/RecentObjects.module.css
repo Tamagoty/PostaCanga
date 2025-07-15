@@ -1,0 +1,68 @@
+/* Arquivo: src/components/RecentObjects.module.css */
+.container {
+  background-color: var(--bg-secondary);
+  border-radius: var(--border-radius);
+  padding: 1.5rem;
+  border: 1px solid var(--border-color);
+}
+
+.title {
+  font-size: 1.25rem;
+  margin-bottom: 1.5rem;
+  color: var(--text-primary);
+}
+
+.list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.listItem {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  padding-bottom: 1rem;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.list li:last-child {
+  border-bottom: none;
+  padding-bottom: 0;
+}
+
+.iconWrapper {
+  color: var(--accent-primary);
+  font-size: 1.25rem;
+}
+
+.info {
+  flex-grow: 1;
+  display: flex;
+  flex-direction: column;
+}
+
+.recipient {
+  font-weight: 500;
+  color: var(--text-primary);
+}
+
+.details {
+  font-size: 0.875rem;
+  color: var(--text-secondary);
+}
+
+.date {
+  font-size: 0.875rem;
+  color: var(--text-secondary);
+  white-space: nowrap;
+}
+
+.emptyMessage {
+  color: var(--text-secondary);
+  text-align: center;
+  padding: 2rem 0;
+}

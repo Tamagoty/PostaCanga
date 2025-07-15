@@ -1,0 +1,109 @@
+/* Arquivo: src/pages/SettingsPage.module.css */
+.container {
+  display: flex;
+  flex-direction: column;
+  gap: 2.5rem;
+}
+
+.container h1 {
+  font-size: 2rem;
+  color: var(--text-primary);
+}
+
+.section {
+  background-color: var(--bg-secondary);
+  border-radius: var(--border-radius);
+  padding: 1.5rem;
+  border: 1px solid var(--border-color);
+}
+
+.section h2 {
+  margin-top: 0;
+  margin-bottom: 1.5rem;
+  border-bottom: 1px solid var(--border-color);
+  padding-bottom: 1rem;
+}
+
+.colorGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 1.5rem;
+}
+
+.colorInputGroup {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.colorInputGroup label {
+  color: var(--text-secondary);
+  text-transform: capitalize;
+  flex-grow: 1;
+}
+
+.colorInputGroup input[type="color"] {
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  appearance: none;
+  width: 50px;
+  height: 50px;
+  background-color: transparent;
+  border: none;
+  cursor: pointer;
+  border-radius: 50%;
+  overflow: hidden;
+}
+.colorInputGroup input[type="color"]::-webkit-color-swatch {
+  border-radius: 50%;
+  border: 2px solid var(--border-color);
+}
+.colorInputGroup input[type="color"]::-moz-color-swatch {
+  border-radius: 50%;
+  border: 2px solid var(--border-color);
+}
+
+.actions {
+  margin-top: 2rem;
+  display: flex;
+  gap: 1rem;
+}
+
+.savedThemesGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+  gap: 1rem;
+}
+
+.themeCard {
+  background-color: var(--bg-tertiary);
+  padding: 1rem;
+  border-radius: var(--border-radius);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.themeName {
+  font-weight: 500;
+}
+
+.themeActions {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.deleteButton {
+  background: none;
+  border: none;
+  color: var(--text-secondary);
+  cursor: pointer;
+  padding: 0.5rem;
+  font-size: 1rem;
+  transition: color 0.2s;
+}
+
+.deleteButton:hover {
+  color: var(--accent-danger);
+}

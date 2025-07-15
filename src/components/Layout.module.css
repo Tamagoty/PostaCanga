@@ -1,0 +1,41 @@
+/* Arquivo: src/components/Layout.module.css */
+.layout {
+  display: flex;
+  height: 100vh;
+  background-color: var(--bg-primary);
+}
+
+.contentWrapper {
+  display: flex;
+  flex-direction: column;
+  flex-grow: 1;
+  width: 100%;
+}
+
+.mainContent {
+  flex-grow: 1;
+  overflow-y: auto; /* Permite scroll apenas no conteúdo principal */
+  padding: 1.5rem;
+}
+
+.overlay {
+  display: none;
+}
+
+/* Em telas pequenas, o layout muda */
+@media (max-width: 767px) {
+  .mainContent {
+    padding: 1rem;
+  }
+  
+  .overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0, 0, 0, 0.5);
+    z-index: 999;
+    display: block;
+  }
+}

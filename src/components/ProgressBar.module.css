@@ -1,0 +1,52 @@
+/* Arquivo: src/components/ProgressBar.module.css */
+.progressBarContainer {
+  width: 100%;
+  min-width: 150px;
+}
+
+.progressBar {
+  width: 100%;
+  height: 8px;
+  background-color: var(--bg-tertiary);
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.progressFill {
+  height: 100%;
+  border-radius: 4px;
+  transition: width 0.5s ease-in-out;
+}
+
+/* Cores da barra */
+.green { background-color: #10b981; }
+.yellow { background-color: #f59e0b; }
+.red { background-color: #ef4444; }
+
+.dateLabels {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.75rem; /* 12px */
+  color: var(--text-secondary);
+  margin-top: 0.25rem;
+}
+
+/* Estilos para o texto de status quando não há barra */
+.statusText {
+  padding: 0.25rem 0.75rem;
+  border-radius: 9999px;
+  font-weight: 600;
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.entregue {
+  background-color: #10b98130;
+  color: #10b981;
+}
+
+.devolvido {
+  background-color: #ef444430;
+  color: #ef4444;
+}

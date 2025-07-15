@@ -1,0 +1,54 @@
+/* Arquivo: src/components/Input.module.css */
+
+.inputWrapper {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem; /* 8px */
+}
+
+.label {
+  font-size: 0.875rem; /* 14px */
+  font-weight: 500;
+  color: var(--text-secondary);
+}
+
+.inputContainer {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.icon {
+  position: absolute;
+  left: 0.75rem; /* 12px */
+  color: var(--text-disabled);
+  font-size: 1rem; /* 16px */
+}
+
+.input {
+  width: 100%;
+  padding: 0.75rem 1rem; /* 12px 16px */
+  padding-left: 2.5rem; /* 40px, para dar espaço ao ícone */
+  background-color: var(--bg-tertiary);
+  border: 1px solid var(--border-color);
+  border-radius: var(--border-radius);
+  color: var(--text-primary);
+  font-size: 1rem; /* 16px */
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+.input::placeholder {
+  color: var(--text-disabled);
+}
+
+.input:focus {
+  outline: none;
+  border-color: var(--accent-primary);
+  box-shadow: 0 0 0 2px var(--accent-primary-hover);
+}
+
+.input:disabled {
+  background-color: var(--bg-secondary);
+  cursor: not-allowed;
+}
