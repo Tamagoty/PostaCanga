@@ -99,14 +99,6 @@
   color: var(--accent-primary);
 }
 
-/* Estilos para os botões de adicionar/remover estoque */
-.addStock:hover {
-  color: var(--accent-secondary) !important;
-}
-.removeStock:hover {
-  color: var(--accent-danger) !important;
-}
-
 
 /* Responsividade */
 @media (min-width: 768px) {

@@ -3,32 +3,31 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { supabase } from '../lib/supabaseClient';
 import toast from 'react-hot-toast';
 import styles from './SuppliesPage.module.css';
-import { FaSearch, FaPlus, FaEdit, FaPlusCircle, FaMinusCircle } from 'react-icons/fa';
+import { FaSearch, FaPlus, FaEdit, FaPlusCircle, FaMinusCircle, FaHistory } from 'react-icons/fa';
 import Input from '../components/Input';
 import Button from '../components/Button';
 import Modal from '../components/Modal';
 import SupplyForm from '../components/SupplyForm';
+import AdjustStockForm from '../components/AdjustStockForm';
+import { useNavigate } from 'react-router-dom'; // Importando o hook de navegação
 
 const SuppliesPage = () => {
   const [supplies, setSupplies] = useState([]);
   const [loading, setLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
-  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const [isAdjustModalOpen, setIsAdjustModalOpen] = useState(false);
   const [supplyToEdit, setSupplyToEdit] = useState(null);
+  const [supplyToAdjust, setSupplyToAdjust] = useState(null);
+  const [adjustActionType, setAdjustActionType] = useState('add');
+  const navigate = useNavigate(); // Hook para navegação
 
   const fetchSupplies = useCallback(async () => {
     setLoading(true);
-    let { data, error } = await supabase
-      .from('office_supplies')
-      .select('*')
-      .order('name', { ascending: true });
-
-    if (error) {
-      toast.error('Erro ao buscar materiais: ' + error.message);
-    } else {
-      setSupplies(data);
-    }
+    let { data, error } = await supabase.from('office_supplies').select('*').order('name', { ascending: true });
+    if (error) toast.error('Erro ao buscar materiais: ' + error.message);
+    else setSupplies(data);
     setLoading(false);
   }, []);
 
@@ -36,86 +35,76 @@ const SuppliesPage = () => {
     fetchSupplies();
   }, [fetchSupplies]);
 
-  const handleOpenModalForNew = () => {
-    setSupplyToEdit(null);
-    setIsModalOpen(true);
-  };
-
-  const handleOpenModalForEdit = (supply) => {
+  const handleOpenEditModal = (supply) => {
     setSupplyToEdit(supply);
-    setIsModalOpen(true);
+    setIsEditModalOpen(true);
   };
 
-  const handleCloseModal = () => {
-    setIsModalOpen(false);
-    setSupplyToEdit(null);
+  const handleOpenAdjustModal = (supply, actionType) => {
+    setSupplyToAdjust(supply);
+    setAdjustActionType(actionType);
+    setIsAdjustModalOpen(true);
   };
 
   const handleSaveSupply = async (formData) => {
     setIsSaving(true);
     const { error } = await supabase.rpc('create_or_update_supply', {
-      p_supply_id: formData.p_supply_id,
-      p_name: formData.name,
-      p_description: formData.description,
-      p_initial_stock: formData.initial_stock,
+      p_supply_id: formData.p_supply_id, p_name: formData.name,
+      p_description: formData.description, p_initial_stock: formData.initial_stock,
     });
-
-    if (error) {
-      toast.error(`Erro ao salvar: ${error.message}`);
-    } else {
+    if (error) toast.error(`Erro ao salvar: ${error.message}`);
+    else {
       toast.success(`Material ${supplyToEdit ? 'atualizado' : 'criado'}!`);
-      handleCloseModal();
+      setIsEditModalOpen(false);
       fetchSupplies();
     }
     setIsSaving(false);
   };
 
-  const handleAdjustStock = async (supplyId, quantity) => {
-    const { error } = await supabase.rpc('adjust_supply_stock', {
-      p_supply_id: supplyId,
+  const handleLogAndAdjustStock = async ({ quantity, reason }) => {
+    setIsSaving(true);
+    const { error } = await supabase.rpc('log_and_adjust_stock', {
+      p_supply_id: supplyToAdjust.id,
       p_quantity_change: quantity,
+      p_reason: reason
     });
-
     if (error) {
       toast.error(`Erro ao ajustar estoque: ${error.message}`);
     } else {
-      toast.success('Estoque atualizado!');
+      toast.success('Estoque ajustado com sucesso!');
+      setIsAdjustModalOpen(false);
       fetchSupplies();
     }
+    setIsSaving(false);
   };
 
-  const filteredSupplies = supplies.filter(s =>
-    s.name.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  const filteredSupplies = supplies.filter(s => s.name.toLowerCase().includes(searchTerm.toLowerCase()));
 
   return (
     <div className={styles.container}>
-      <Modal
-        isOpen={isModalOpen}
-        onClose={handleCloseModal}
-        title={supplyToEdit ? 'Editar Material' : 'Adicionar Novo Material'}
-      >
-        <SupplyForm
-          onSave={handleSaveSupply}
-          onClose={handleCloseModal}
-          supplyToEdit={supplyToEdit}
-          loading={isSaving}
-        />
+      {/* Modal para Criar/Editar Material */}
+      <Modal isOpen={isEditModalOpen} onClose={() => setIsEditModalOpen(false)} title={supplyToEdit ? 'Editar Material' : 'Adicionar Novo Material'}>
+        <SupplyForm onSave={handleSaveSupply} onClose={() => setIsEditModalOpen(false)} supplyToEdit={supplyToEdit} loading={isSaving} />
       </Modal>
+
+      {/* Modal para Ajustar Estoque */}
+      {supplyToAdjust && (
+        <Modal isOpen={isAdjustModalOpen} onClose={() => setIsAdjustModalOpen(false)} title="">
+          <AdjustStockForm 
+            onSave={handleLogAndAdjustStock} 
+            onClose={() => setIsAdjustModalOpen(false)} 
+            supplyName={supplyToAdjust.name}
+            actionType={adjustActionType}
+            loading={isSaving} 
+          />
+        </Modal>
+      )}
 
       <header className={styles.header}>
         <h1>Material de Expediente</h1>
         <div className={styles.actions}>
-          <Input
-            id="search"
-            placeholder="Buscar por nome do material..."
-            icon={FaSearch}
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-          />
-          <Button onClick={handleOpenModalForNew}>
-            <FaPlus /> Novo Material
-          </Button>
+          <Input id="search" placeholder="Buscar por nome..." icon={FaSearch} value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} />
+          <Button onClick={() => { setSupplyToEdit(null); setIsEditModalOpen(true); }}><FaPlus /> Novo Material</Button>
         </div>
       </header>
 
@@ -123,41 +112,38 @@ const SuppliesPage = () => {
         <table className={styles.table}>
           <thead>
             <tr>
-              <th>Nome do Material</th>
-              <th>Descrição</th>
-              <th>Estoque Atual</th>
-              <th>Ações</th>
+              <th>Nome do Material</th><th>Descrição</th><th>Estoque Atual</th><th>Ações</th>
             </tr>
           </thead>
           <tbody>
-            {loading ? (
-              <tr><td colSpan="4">Carregando...</td></tr>
-            ) : filteredSupplies.length > 0 ? (
-              filteredSupplies.map(supply => (
-                <tr key={supply.id}>
-                  <td data-label="Nome">{supply.name}</td>
-                  <td data-label="Descrição">{supply.description || 'N/A'}</td>
-                  <td data-label="Estoque">
-                    <div className={styles.stockCell}>
-                      <button className={styles.stockButton} onClick={() => handleAdjustStock(supply.id, -1)}>
-                        <FaMinusCircle />
-                      </button>
-                      <span className={styles.stockValue}>{supply.stock}</span>
-                      <button className={styles.stockButton} onClick={() => handleAdjustStock(supply.id, 1)}>
-                        <FaPlusCircle />
-                      </button>
-                    </div>
-                  </td>
-                  <td data-label="Ações">
-                    <button className={styles.editButton} onClick={() => handleOpenModalForEdit(supply)}>
+            {loading ? (<tr><td colSpan="4">A carregar...</td></tr>) 
+            : filteredSupplies.map(supply => (
+              <tr key={supply.id}>
+                <td data-label="Nome">{supply.name}</td>
+                <td data-label="Descrição">{supply.description || 'N/A'}</td>
+                <td data-label="Estoque">
+                  <div className={styles.stockCell}>
+                    <button className={`${styles.actionButton} ${styles.removeStock}`} title="Remover Estoque" onClick={() => handleOpenAdjustModal(supply, 'remove')} disabled={supply.stock <= 0}>
+                      <FaMinusCircle />
+                    </button>
+                    <span className={styles.stockValue}>{supply.stock}</span>
+                    <button className={`${styles.actionButton} ${styles.addStock}`} title="Adicionar Estoque" onClick={() => handleOpenAdjustModal(supply, 'add')}>
+                      <FaPlusCircle />
+                    </button>
+                  </div>
+                </td>
+                <td data-label="Ações">
+                  <div className={styles.actionButtons}>
+                    <button className={styles.actionButton} title="Ver Histórico" onClick={() => navigate(`/supplies/${supply.id}/log`)}>
+                      <FaHistory />
+                    </button>
+                    <button className={styles.actionButton} title="Editar Detalhes" onClick={() => handleOpenEditModal(supply)}>
                       <FaEdit />
                     </button>
-                  </td>
-                </tr>
-              ))
-            ) : (
-              <tr><td colSpan="4">Nenhum material encontrado.</td></tr>
-            )}
+                  </div>
+                </td>
+              </tr>
+            ))}
           </tbody>
         </table>
       </div>

@@ -22,16 +22,35 @@ const EmployeesPage = () => {
       return;
     }
     setLoading(true);
-    
-    // CORREÇÃO: Chamando a nova e definitiva função RPC 'get_all_employee_details'.
-    const { data, error } = await supabase.rpc('get_all_employee_details');
 
-    if (error) {
-      toast.error('Erro ao buscar funcionários: ' + error.message);
-      setEmployees([]);
-    } else {
-      setEmployees(data);
+    // Etapa 1: Buscar os perfis dos funcionários.
+    const { data: profiles, error: profileError } = await supabase.rpc('get_employee_profiles');
+    if (profileError) {
+      toast.error('Erro ao buscar perfis: ' + profileError.message);
+      setLoading(false);
+      return;
     }
+
+    // Etapa 2: Buscar os dados de autenticação (e-mails).
+    // ATENÇÃO: Esta chamada requer que o usuário seja um "Super Admin" no Supabase.
+    // Se ocorrer um erro aqui, verifique as permissões no seu projeto Supabase.
+    const { data: { users }, error: usersError } = await supabase.auth.admin.listUsers();
+    if (usersError) {
+      toast.error('Erro ao buscar e-mails: ' + usersError.message);
+      setLoading(false);
+      return;
+    }
+
+    // Etapa 3: Juntar os dados no frontend.
+    const combinedData = profiles.map(profile => {
+      const authUser = users.find(user => user.id === profile.id);
+      return {
+        ...profile,
+        email: authUser ? authUser.email : 'Não encontrado',
+      };
+    });
+
+    setEmployees(combinedData);
     setLoading(false);
   }, [isAdmin]);
 
@@ -118,29 +137,25 @@ const EmployeesPage = () => {
           <tbody>
             {loading ? (
               <tr><td colSpan="5">A carregar funcionários...</td></tr>
-            ) : employees.length > 0 ? (
-              employees.map(emp => (
-                <tr key={emp.id}>
-                  <td data-label="Nome">{emp.full_name}</td>
-                  <td data-label="Matrícula">{emp.registration_number}</td>
-                  <td data-label="E-mail">{emp.email}</td>
-                  <td data-label="Permissão">
-                    <span className={`${styles.role} ${styles[emp.role]}`}>
-                      {emp.role === 'admin' ? <FaUserShield /> : <FaUser />} {emp.role}
-                    </span>
-                  </td>
-                  <td data-label="Ações">
-                    {userProfile?.id !== emp.id && (
-                      <button className={styles.deleteButton} onClick={() => handleDeleteEmployee(emp.id, emp.full_name)}>
-                        <FaTrashAlt />
-                      </button>
-                    )}
-                  </td>
-                </tr>
-              ))
-            ) : (
-              <tr><td colSpan="5">Nenhum funcionário encontrado.</td></tr>
-            )}
+            ) : employees.map(emp => (
+              <tr key={emp.id}>
+                <td data-label="Nome">{emp.full_name}</td>
+                <td data-label="Matrícula">{emp.registration_number}</td>
+                <td data-label="E-mail">{emp.email}</td>
+                <td data-label="Permissão">
+                  <span className={`${styles.role} ${styles[emp.role]}`}>
+                    {emp.role === 'admin' ? <FaUserShield /> : <FaUser />} {emp.role}
+                  </span>
+                </td>
+                <td data-label="Ações">
+                  {userProfile?.id !== emp.id && (
+                    <button className={styles.deleteButton} onClick={() => handleDeleteEmployee(emp.id, emp.full_name)}>
+                      <FaTrashAlt />
+                    </button>
+                  )}
+                </td>
+              </tr>
+            ))}
           </tbody>
         </table>
       </div>

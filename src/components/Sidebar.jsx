@@ -3,7 +3,7 @@ import React from 'react';
 import { NavLink } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import styles from './Sidebar.module.css';
-import { FaTachometerAlt, FaBoxOpen, FaUsers, FaClipboardList, FaSignOutAlt, FaCog, FaTimes, FaUserCog } from 'react-icons/fa';
+import { FaTachometerAlt, FaBoxOpen, FaUsers, FaClipboardList, FaSignOutAlt, FaCog, FaTimes, FaUserCog, FaMapMarkedAlt } from 'react-icons/fa';
 
 const Sidebar = ({ onLogout, isOpen, toggleSidebar }) => {
   const { isAdmin } = useAuth();
@@ -14,6 +14,7 @@ const Sidebar = ({ onLogout, isOpen, toggleSidebar }) => {
     { to: "/", icon: FaTachometerAlt, label: "Dashboard" },
     { to: "/objects", icon: FaBoxOpen, label: "Objetos" },
     { to: "/customers", icon: FaUsers, label: "Clientes" },
+    { to: "/addresses", icon: FaMapMarkedAlt, label: "Endereços" }, // Novo link
     { to: "/supplies", icon: FaClipboardList, label: "Expediente" },
   ];
 
@@ -27,9 +28,7 @@ const Sidebar = ({ onLogout, isOpen, toggleSidebar }) => {
             {agencyName && <span className={styles.logoSubtitle}>{agencyName}</span>}
           </div>
         </div>
-        <button onClick={toggleSidebar} className={styles.closeButton}>
-          <FaTimes />
-        </button>
+        <button onClick={toggleSidebar} className={styles.closeButton}><FaTimes /></button>
       </div>
       <nav className={styles.nav}>
         {navItems.map((item) => (

@@ -8,18 +8,40 @@
 .header {
   display: flex;
   flex-direction: column;
-  gap: 1rem;
+  gap: 1.5rem;
 }
 
 .header h1 {
   font-size: 2rem;
   color: var(--text-primary);
+  margin: 0;
 }
 
 .actions {
   display: flex;
-  flex-direction: column;
+  flex-wrap: wrap;
+  align-items: center;
   gap: 1rem;
+}
+
+.searchInputWrapper {
+  flex: 1 1 250px;
+  min-width: 200px;
+}
+
+.filterGroup {
+  display: flex;
+  gap: 0.5rem;
+  background-color: var(--bg-secondary);
+  padding: 0.25rem;
+  border-radius: var(--border-radius);
+  border: 1px solid var(--border-color);
+}
+
+.filterGroup > button {
+  width: auto;
+  flex-grow: 1;
+  border: none !important; /* Remove a borda dos botões dentro do grupo */
 }
 
 /* Grid de Cards */
@@ -44,14 +66,11 @@
   box-shadow: var(--shadow-lg);
 }
 
-/* Estilo para card inativo */
 .card.inactive {
-  opacity: 0.5;
-  background-color: var(--bg-primary);
+  opacity: 0.6;
 }
-
 .card.inactive:hover {
-  opacity: 0.7;
+  opacity: 0.8;
 }
 
 .cardHeader {
@@ -111,7 +130,7 @@
   padding: 1rem 1.5rem;
   background-color: var(--bg-tertiary);
   display: flex;
-  justify-content: space-between; /* Alinha itens nas extremidades */
+  justify-content: space-between;
   align-items: center;
 }
 
@@ -134,16 +153,45 @@
   border-color: var(--accent-primary);
 }
 
+/* Novos estilos para a paginação */
+.pagination {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 1rem;
+  margin-top: 1rem;
+}
 
-/* Responsividade */
-@media (min-width: 768px) {
+.pagination button {
+  width: auto;
+}
+
+.pageJumpForm {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.pageJumpForm span {
+  font-weight: 500;
+  color: var(--text-secondary);
+}
+
+.pageInputWrapper {
+  width: 70px;
+}
+
+/* CORREÇÃO: Ajustado o padding do input da página para que fique harmonioso */
+.pageInput :global(input) {
+  text-align: center;
+  padding: 0.75rem !important;
+}
+
+
+@media (min-width: 900px) {
   .header {
     flex-direction: row;
     justify-content: space-between;
-    align-items: center;
-  }
-  .actions {
-    flex-direction: row;
     align-items: center;
   }
 }
