@@ -3,7 +3,7 @@ import React from 'react';
 import { NavLink } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import styles from './Sidebar.module.css';
-import { FaTachometerAlt, FaBoxOpen, FaUsers, FaClipboardList, FaSignOutAlt, FaCog, FaTimes, FaUserCog, FaMapMarkedAlt } from 'react-icons/fa';
+import { FaTachometerAlt, FaBoxOpen, FaUsers, FaClipboardList, FaSignOutAlt, FaCog, FaTimes, FaUserCog, FaMapMarkedAlt, FaRulerCombined } from 'react-icons/fa';
 
 const Sidebar = ({ onLogout, isOpen, toggleSidebar }) => {
   const { isAdmin } = useAuth();
@@ -14,7 +14,7 @@ const Sidebar = ({ onLogout, isOpen, toggleSidebar }) => {
     { to: "/", icon: FaTachometerAlt, label: "Dashboard" },
     { to: "/objects", icon: FaBoxOpen, label: "Objetos" },
     { to: "/customers", icon: FaUsers, label: "Clientes" },
-    { to: "/addresses", icon: FaMapMarkedAlt, label: "Endereços" }, // Novo link
+    { to: "/addresses", icon: FaMapMarkedAlt, label: "Endereços" },
     { to: "/supplies", icon: FaClipboardList, label: "Expediente" },
   ];
 
@@ -38,10 +38,16 @@ const Sidebar = ({ onLogout, isOpen, toggleSidebar }) => {
           </NavLink>
         ))}
         {isAdmin && (
-          <NavLink to="/employees" className={({ isActive }) => `${styles.navLink} ${isActive ? styles.active : ''}`}>
-            <FaUserCog className={styles.navIcon} />
-            <span className={styles.navLabel}>Funcionários</span>
-          </NavLink>
+          <>
+            <NavLink to="/employees" className={({ isActive }) => `${styles.navLink} ${isActive ? styles.active : ''}`}>
+              <FaUserCog className={styles.navIcon} />
+              <span className={styles.navLabel}>Funcionários</span>
+            </NavLink>
+            <NavLink to="/tracking-rules" className={({ isActive }) => `${styles.navLink} ${isActive ? styles.active : ''}`}>
+              <FaRulerCombined className={styles.navIcon} />
+              <span className={styles.navLabel}>Regras de Rastreio</span>
+            </NavLink>
+          </>
         )}
       </nav>
       <div className={styles.footer}>

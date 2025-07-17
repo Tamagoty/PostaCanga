@@ -24,6 +24,12 @@
   gap: 1rem;
 }
 
+/* CORREÇÃO: Nova regra para ajustar a largura dos botões diretos */
+.actions > :global(button) {
+  width: auto;
+  flex-shrink: 0; /* Impede que os botões encolham */
+}
+
 .searchInputWrapper {
   flex: 1 1 250px;
   min-width: 200px;

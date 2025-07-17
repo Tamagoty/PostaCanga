@@ -4,6 +4,7 @@ import styles from './CustomerForm.module.css'; // Reutilizando estilos
 import Input from './Input';
 import Button from './Button';
 import toast from 'react-hot-toast';
+import { FaSearch } from 'react-icons/fa';
 
 const ObjectForm = ({ onSave, onClose, objectToEdit, loading }) => {
   const initialFormData = {
@@ -11,14 +12,15 @@ const ObjectForm = ({ onSave, onClose, objectToEdit, loading }) => {
     object_type: 'Encomenda PAC',
     tracking_code: '',
     cep: '',
-    street_type: 'Rua',
     street_name: '',
+    number: '',
     neighborhood: '',
     city: '',
     state: '',
   };
 
   const [formData, setFormData] = useState(initialFormData);
+  const [cepLoading, setCepLoading] = useState(false);
 
   useEffect(() => {
     if (objectToEdit) {
@@ -26,13 +28,45 @@ const ObjectForm = ({ onSave, onClose, objectToEdit, loading }) => {
         recipient_name: objectToEdit.recipient_name || '',
         object_type: objectToEdit.object_type || 'Encomenda PAC',
         tracking_code: objectToEdit.tracking_code || '',
-        // Campos de endereço não são editáveis por simplicidade, apenas na criação
-        cep: '', street_type: 'Rua', street_name: '', neighborhood: '', city: '', state: '',
+        cep: '', street_name: '', number: '', neighborhood: '', city: '', state: '',
       });
     } else {
       setFormData(initialFormData);
     }
   }, [objectToEdit]);
+
+  const handleCepChange = async (e) => {
+    const cepValue = e.target.value;
+    setFormData(prev => ({ ...prev, cep: cepValue }));
+    
+    const cleanedCep = cepValue.replace(/\D/g, '');
+    
+    if (cleanedCep.length === 8) {
+      setCepLoading(true);
+      try {
+        const response = await fetch(`https://viacep.com.br/ws/${cleanedCep}/json/`);
+        const data = await response.json();
+        if (data.erro) {
+          toast.error('CEP não encontrado.');
+        } else {
+          setFormData(prev => ({
+            ...prev,
+            street_name: data.logradouro,
+            neighborhood: data.bairro,
+            city: data.localidade,
+            state: data.uf,
+          }));
+          toast.success('Endereço preenchido!');
+          // Move o foco para o campo de número
+          document.getElementById('number')?.focus();
+        }
+      } catch (error) {
+        toast.error('Falha ao buscar o CEP. Verifique sua conexão.');
+      } finally {
+        setCepLoading(false);
+      }
+    }
+  };
 
   const handleChange = (e) => {
     const { name, value } = e.target;
@@ -45,10 +79,12 @@ const ObjectForm = ({ onSave, onClose, objectToEdit, loading }) => {
       toast.error('O nome do Destinatário é obrigatório.');
       return;
     }
+    if (formData.street_name && (!formData.city || !formData.state)) {
+        toast.error('Para adicionar um endereço, os campos Logradouro, Cidade e UF são obrigatórios.');
+        return;
+    }
     onSave(formData);
   };
-
-  const streetTypes = ["Rua", "Avenida", "Praça", "Travessa", "Alameda", "Estrada", "Largo", "Beco", "Viela"];
 
   return (
     <form onSubmit={handleSubmit} className={styles.form}>
@@ -58,7 +94,14 @@ const ObjectForm = ({ onSave, onClose, objectToEdit, loading }) => {
         <div className={styles.formGroup}>
           <label htmlFor="object_type">Tipo de Objeto</label>
           <select id="object_type" name="object_type" value={formData.object_type} onChange={handleChange} className={styles.select}>
-            <option>Encomenda PAC</option><option>SEDEX</option><option>Carta Registrada</option><option>Carta Simples</option><option>Revista</option><option>Cartão</option><option>Telegrama</option><option>Outro</option>
+            <option>Encomenda PAC</option>
+            <option>SEDEX</option>
+            <option>Carta Registrada</option>
+            <option>Carta Simples</option>
+            <option>Revista</option>
+            <option>Cartão</option>
+            <option>Telegrama</option>
+            <option>Outro</option>
           </select>
         </div>
         <Input id="tracking_code" name="tracking_code" label="Código de Rastreio (Opcional)" value={formData.tracking_code} onChange={handleChange} />
@@ -67,18 +110,16 @@ const ObjectForm = ({ onSave, onClose, objectToEdit, loading }) => {
       {!objectToEdit && (
         <fieldset className={styles.fieldset}>
           <legend>Endereço de Entrega (Opcional)</legend>
-          <Input id="cep" name="cep" label="CEP" value={formData.cep} onChange={handleChange} />
+          <div className={styles.cepGroup}>
+            <Input id="cep" name="cep" label="CEP" value={formData.cep} onChange={handleCepChange} icon={cepLoading ? undefined : FaSearch} />
+            {cepLoading && <div className={styles.loader}></div>}
+          </div>
+          <Input id="street_name" name="street_name" label="Logradouro" value={formData.street_name} onChange={handleChange} />
           <div className={styles.grid}>
-            <div className={styles.formGroup}>
-              <label htmlFor="street_type">Tipo</label>
-              <select id="street_type" name="street_type" value={formData.street_type} onChange={handleChange} className={styles.select}>
-                {streetTypes.map(type => <option key={type} value={type}>{type}</option>)}
-              </select>
-            </div>
-            <Input id="street_name" name="street_name" label="Logradouro" value={formData.street_name} onChange={handleChange} />
+            <Input id="number" name="number" label="Número" value={formData.number} onChange={handleChange} />
+            <Input id="neighborhood" name="neighborhood" label="Bairro" value={formData.neighborhood} onChange={handleChange} />
           </div>
           <div className={styles.grid}>
-            <Input id="neighborhood" name="neighborhood" label="Bairro" value={formData.neighborhood} onChange={handleChange} />
             <Input id="city" name="city" label="Cidade" value={formData.city} onChange={handleChange} />
             <Input id="state" name="state" label="UF" value={formData.state} onChange={handleChange} maxLength="2" />
           </div>

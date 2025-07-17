@@ -9,11 +9,12 @@ import DashboardPage from './pages/DashboardPage';
 import ObjectsPage from './pages/ObjectsPage';
 import CustomersPage from './pages/CustomersPage';
 import CustomerDetailPage from './pages/CustomerDetailPage';
-import AddressesPage from './pages/AddressesPage'; // Nova página
+import AddressesPage from './pages/AddressesPage';
 import SuppliesPage from './pages/SuppliesPage';
 import StockLogPage from './pages/StockLogPage';
 import SettingsPage from './pages/SettingsPage';
 import EmployeesPage from './pages/EmployeesPage';
+import TrackingRulesPage from './pages/TrackingRulesPage'; // Nova página
 
 function App() {
   const { session, loading } = useAuth();
@@ -28,11 +29,12 @@ function App() {
           <Route path="objects" element={<ObjectsPage />} />
           <Route path="customers" element={<CustomersPage />} />
           <Route path="customers/:customerId" element={<CustomerDetailPage />} />
-          <Route path="addresses" element={<AddressesPage />} /> {/* Nova rota */}
+          <Route path="addresses" element={<AddressesPage />} />
           <Route path="supplies" element={<SuppliesPage />} />
           <Route path="supplies/:supplyId/log" element={<StockLogPage />} />
           <Route path="employees" element={<EmployeesPage />} />
           <Route path="settings" element={<SettingsPage />} />
+          <Route path="tracking-rules" element={<TrackingRulesPage />} /> {/* Nova rota */}
           <Route path="*" element={<Navigate to="/" />} />
         </Route>
       </Routes>

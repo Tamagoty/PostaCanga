@@ -3,11 +3,13 @@ import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { supabase } from '../lib/supabaseClient';
 import toast from 'react-hot-toast';
 import styles from './ObjectsPage.module.css';
-import { FaSearch, FaPlus, FaEdit, FaCheckCircle, FaUndoAlt, FaWhatsapp, FaArchive, FaHistory, FaPaperPlane, FaPhone, FaPhoneSlash, FaBoxOpen, FaCopy } from 'react-icons/fa';
+import { FaSearch, FaPlus, FaEdit, FaCheckCircle, FaUndoAlt, FaWhatsapp, FaArchive, FaHistory, FaPaperPlane, FaPhone, FaPhoneSlash, FaBoxOpen, FaCopy, FaBoxes, FaArrowUp, FaArrowDown, FaFilePdf } from 'react-icons/fa';
 import Input from '../components/Input';
 import Button from '../components/Button';
 import Modal from '../components/Modal';
 import ObjectForm from '../components/ObjectForm';
+import BulkObjectForm from '../components/BulkObjectForm';
+import BulkRegisteredForm from '../components/BulkRegisteredForm';
 import ProgressBar from '../components/ProgressBar';
 
 // --- Funções Auxiliares ---
@@ -31,31 +33,36 @@ const getWhatsAppMessage = (object) => {
 // --- Componente Principal ---
 const ObjectsPage = () => {
   const [objects, setObjects] = useState([]);
-  const [contactMap, setContactMap] = useState({}); // Mapeia nome do destinatário para o telefone
+  const [contactMap, setContactMap] = useState({});
   const [loading, setLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isBulkSimpleModalOpen, setIsBulkSimpleModalOpen] = useState(false);
+  const [isBulkRegisteredModalOpen, setIsBulkRegisteredModalOpen] = useState(false);
+  const [isReportModalOpen, setIsReportModalOpen] = useState(false);
+  const [bulkReportData, setBulkReportData] = useState([]);
   const [isExportModalOpen, setIsExportModalOpen] = useState(false);
   const [codesToExport, setCodesToExport] = useState('');
   const [objectToEdit, setObjectToEdit] = useState(null);
   const [showArchived, setShowArchived] = useState(false);
   const [selectedObjects, setSelectedObjects] = useState(new Set());
+  const [sortConfig, setSortConfig] = useState({ key: 'arrival_date', direction: 'desc' });
   const textareaRef = useRef(null);
 
   const loadInitialData = useCallback(async () => {
     setLoading(true);
     try {
-      // Etapa 1: Buscar a lista de objetos
       let objectQuery = supabase.from('objects').select('*, addresses:delivery_address_id(*, city:cities(name, state:states(uf)))');
       objectQuery = showArchived ? objectQuery.eq('is_archived', true) : objectQuery.eq('is_archived', false);
-      const { data: objectsData, error: objectsError } = await objectQuery.order('arrival_date', { ascending: false });
+      const { data: objectsData, error: objectsError } = await objectQuery.order(sortConfig.key, { ascending: sortConfig.direction === 'asc' });
       if (objectsError) throw objectsError;
-      setObjects(objectsData || []);
+      
+      const currentObjects = objectsData || [];
+      setObjects(currentObjects);
 
-      // Etapa 2: Se houver objetos, buscar os telefones para os destinatários
-      if (objectsData && objectsData.length > 0) {
-        const recipientNames = [...new Set(objectsData.map(obj => obj.recipient_name))];
+      if (currentObjects.length > 0) {
+        const recipientNames = [...new Set(currentObjects.map(obj => obj.recipient_name))];
         const { data: phoneData, error: phoneError } = await supabase.rpc('get_phones_for_recipients', { p_recipient_names: recipientNames });
         if (phoneError) throw phoneError;
         setContactMap(phoneData || {});
@@ -67,7 +74,7 @@ const ObjectsPage = () => {
     } finally {
       setLoading(false);
     }
-  }, [showArchived]);
+  }, [showArchived, sortConfig]);
 
   useEffect(() => { loadInitialData(); setSelectedObjects(new Set()); }, [loadInitialData]);
 
@@ -81,6 +88,38 @@ const ObjectsPage = () => {
     });
     if (error) toast.error(`Erro ao salvar: ${error.message}`);
     else { toast.success(`Objeto ${objectToEdit ? 'atualizado' : 'criado'}!`); setIsModalOpen(false); loadInitialData(); }
+    setIsSaving(false);
+  };
+
+  const handleBulkSave = async ({ objects, type }) => {
+    setIsSaving(true);
+    const { data: report, error } = await supabase.rpc('bulk_create_simple_objects', { p_object_type: type, p_objects: objects });
+    if (error) { toast.error(`Erro na inserção em massa: ${error.message}`); }
+    else {
+      const reportData = report.map(r => ({ name: r.report_recipient_name, number: r.report_control_number }));
+      toast.success(`${report.length} objetos foram criados com sucesso!`);
+      setBulkReportData(reportData);
+      await supabase.rpc('save_bulk_report', { p_report_data: reportData });
+      setIsReportModalOpen(true);
+      setIsBulkSimpleModalOpen(false);
+      loadInitialData();
+    }
+    setIsSaving(false);
+  };
+
+  const handleBulkRegisteredSave = async ({ objects }) => {
+    setIsSaving(true);
+    const { data: report, error } = await supabase.rpc('bulk_create_registered_objects', { p_objects: objects });
+    if (error) { toast.error(`Erro na inserção em massa: ${error.message}`); }
+    else {
+      const reportData = report.map(r => ({ name: r.report_recipient_name, number: r.report_control_number, code: r.report_tracking_code }));
+      toast.success(`${report.length} objetos registrados foram criados!`);
+      setBulkReportData(reportData);
+      await supabase.rpc('save_bulk_report', { p_report_data: reportData });
+      setIsReportModalOpen(true);
+      setIsBulkRegisteredModalOpen(false);
+      loadInitialData();
+    }
     setIsSaving(false);
   };
 
@@ -165,8 +204,33 @@ const ObjectsPage = () => {
     URL.revokeObjectURL(url);
   };
 
+  const requestSort = (key) => {
+    let direction = 'asc';
+    if (sortConfig.key === key && sortConfig.direction === 'asc') {
+      direction = 'desc';
+    }
+    setSortConfig({ key, direction });
+  };
+
+  const getSortIcon = (name) => {
+    if (sortConfig.key !== name) return null;
+    return sortConfig.direction === 'asc' ? <FaArrowUp /> : <FaArrowDown />;
+  };
+
+  const generatePDF = () => {
+    const { jsPDF } = window.jspdf;
+    const doc = new jsPDF();
+    doc.text("Relatório de Inserção em Massa", 14, 16);
+    doc.autoTable({
+      head: [['Destinatário', 'Cód. Rastreio', 'N° Controle']],
+      body: bulkReportData.map(item => [item.name, item.code || '-', item.number]),
+      startY: 20,
+    });
+    doc.save(`relatorio_${new Date().toISOString().split('T')[0]}.pdf`);
+  };
+
   const filteredObjects = objects.filter(obj => 
-    obj.recipient_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    (obj.recipient_name && obj.recipient_name.toLowerCase().includes(searchTerm.toLowerCase())) ||
     (obj.tracking_code && obj.tracking_code.toLowerCase().includes(searchTerm.toLowerCase())) ||
     obj.control_number.toString().includes(searchTerm)
   );
@@ -175,6 +239,31 @@ const ObjectsPage = () => {
     <div className={styles.container}>
       <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} title={objectToEdit ? 'Editar Objeto' : 'Adicionar Novo Objeto'}>
         <ObjectForm onSave={handleSaveObject} onClose={() => setIsModalOpen(false)} objectToEdit={objectToEdit} loading={isSaving} />
+      </Modal>
+
+      <Modal isOpen={isBulkSimpleModalOpen} onClose={() => setIsBulkSimpleModalOpen(false)} title="Inserir Objetos Simples em Massa">
+        <BulkObjectForm onSave={handleBulkSave} onClose={() => setIsBulkSimpleModalOpen(false)} loading={isSaving} />
+      </Modal>
+
+      <Modal isOpen={isBulkRegisteredModalOpen} onClose={() => setIsBulkRegisteredModalOpen(false)} title="Inserir Objetos Registrados em Massa">
+        <BulkRegisteredForm onSave={handleBulkRegisteredSave} onClose={() => setIsBulkRegisteredModalOpen(false)} loading={isSaving} />
+      </Modal>
+
+      <Modal isOpen={isReportModalOpen} onClose={() => setIsReportModalOpen(false)} title="Relatório de Inserção">
+        <div className={styles.reportContainer}>
+          <table className={styles.reportTable}>
+            <thead><tr><th>Destinatário</th><th>Cód. Rastreio</th><th>N° Controle</th></tr></thead>
+            <tbody>
+              {bulkReportData.map(item => (
+                <tr key={item.number}><td>{item.name}</td><td>{item.code || '-'}</td><td><strong>{item.number}</strong></td></tr>
+              ))}
+            </tbody>
+          </table>
+          <div className={styles.reportActions}>
+            <Button onClick={generatePDF} variant="secondary"><FaFilePdf /> Gerar PDF</Button>
+            <Button onClick={() => setIsReportModalOpen(false)}>Fechar</Button>
+          </div>
+        </div>
       </Modal>
 
       <Modal isOpen={isExportModalOpen} onClose={() => setIsExportModalOpen(false)} title="Exportar Códigos de Rastreamento">
@@ -186,9 +275,12 @@ const ObjectsPage = () => {
         <h1>{showArchived ? "Objetos Arquivados" : "Gerenciamento de Objetos"}</h1>
         <div className={styles.actions}>
           <div className={styles.searchInputWrapper}><Input id="search" placeholder="Buscar..." icon={FaSearch} value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} /></div>
+          {selectedObjects.size > 0 && <Button onClick={handleGenerateBulkNotifyHTML} variant="secondary"><FaPaperPlane /> Notificar ({selectedObjects.size})</Button>}
           {selectedObjects.size > 0 && <Button onClick={handleExportTrackingCodes} variant="secondary"><FaCopy /> Exportar Códigos</Button>}
           <Button onClick={() => setShowArchived(!showArchived)} variant="secondary">{showArchived ? <FaBoxOpen /> : <FaArchive />} {showArchived ? "Ver Ativos" : "Ver Arquivados"}</Button>
           {!showArchived && <Button onClick={handleArchiveAction}><FaArchive /> Arquivar Concluídos</Button>}
+          <Button onClick={() => setIsBulkRegisteredModalOpen(true)} variant="secondary"><FaBoxes /> Inserir Registrados</Button>
+          <Button onClick={() => setIsBulkSimpleModalOpen(true)} variant="secondary"><FaBoxes /> Inserir Simples</Button>
           <Button onClick={() => { setObjectToEdit(null); setIsModalOpen(true); }}><FaPlus /> Novo Objeto</Button>
         </div>
       </header>
@@ -198,7 +290,11 @@ const ObjectsPage = () => {
           <thead>
             <tr>
               {!showArchived && <th className={styles.checkboxCell}><input type="checkbox" onChange={handleSelectAll} /></th>}
-              <th>N° Controle</th><th>Destinatário</th><th>Endereço</th><th>Prazo de Guarda</th><th>Ações</th>
+              <th onClick={() => requestSort('control_number')} className={styles.sortableHeader}>N° Controle {getSortIcon('control_number')}</th>
+              <th onClick={() => requestSort('recipient_name')} className={styles.sortableHeader}>Destinatário {getSortIcon('recipient_name')}</th>
+              <th>Endereço</th>
+              <th>Prazo de Guarda</th>
+              <th>Ações</th>
             </tr>
           </thead>
           <tbody>
@@ -206,7 +302,7 @@ const ObjectsPage = () => {
             : filteredObjects.length > 0 ? (
               filteredObjects.map(obj => {
                 const hasContact = !!contactMap[obj.recipient_name];
-                const addressText = obj.addresses ? `${obj.addresses.street_name}, ${obj.addresses.city.name}` : 'Não informado';
+                const addressText = obj.addresses ? obj.addresses.street_name : 'Não informado';
                 return (
                   <tr key={obj.control_number} className={selectedObjects.has(obj.control_number) ? styles.selectedRow : ''}>
                     {!showArchived && <td className={styles.checkboxCell}>{obj.status === 'Aguardando Retirada' && <input type="checkbox" checked={selectedObjects.has(obj.control_number)} onChange={() => handleSelectObject(obj.control_number)} />}</td>}
