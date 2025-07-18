@@ -1,4 +1,6 @@
 // Arquivo: src/components/Layout.jsx
+// MELHORIA (v2): Implementado o `handleSupabaseError`.
+
 import React, { useState } from 'react';
 import { Outlet } from 'react-router-dom';
 import Sidebar from './Sidebar';
@@ -6,6 +8,7 @@ import Header from './Header';
 import styles from './Layout.module.css';
 import { supabase } from '../lib/supabaseClient';
 import toast from 'react-hot-toast';
+import { handleSupabaseError } from '../utils/errorHandler';
 
 const Layout = () => {
   const [isSidebarOpen, setSidebarOpen] = useState(false);
@@ -17,7 +20,7 @@ const Layout = () => {
   const handleLogout = async () => {
     const { error } = await supabase.auth.signOut();
     if (error) {
-      toast.error('Erro ao sair:', error.message);
+      toast.error(handleSupabaseError(error));
     } else {
       toast.success('Você saiu com sucesso.');
     }
@@ -29,7 +32,7 @@ const Layout = () => {
       <div className={styles.contentWrapper}>
         <Header toggleSidebar={toggleSidebar} />
         <main className={styles.mainContent}>
-          <Outlet /> {/* As páginas da rota serão renderizadas aqui */}
+          <Outlet />
         </main>
       </div>
       {isSidebarOpen && <div className={styles.overlay} onClick={toggleSidebar}></div>}

@@ -1,4 +1,6 @@
 // Arquivo: src/pages/CustomerDetailPage.jsx
+// MELHORIA (v2): Implementado o `handleSupabaseError`.
+
 import React, { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { supabase } from '../lib/supabaseClient';
@@ -9,6 +11,7 @@ import Button from '../components/Button';
 import ProgressBar from '../components/ProgressBar';
 import Modal from '../components/Modal';
 import CustomerForm from '../components/CustomerForm';
+import { handleSupabaseError } from '../utils/errorHandler';
 
 const CustomerDetailPage = () => {
   const { customerId } = useParams();
@@ -21,7 +24,7 @@ const CustomerDetailPage = () => {
   const fetchDetails = useCallback(async () => {
     setLoading(true);
     const { data, error } = await supabase.rpc('get_customer_details', { p_customer_id: customerId });
-    if (error) { toast.error('Erro ao buscar detalhes: ' + error.message); setCustomerDetails(null); }
+    if (error) { toast.error(handleSupabaseError(error)); setCustomerDetails(null); }
     else { setCustomerDetails(data); }
     setLoading(false);
   }, [customerId]);
@@ -37,7 +40,7 @@ const CustomerDetailPage = () => {
       p_address_id: formData.address_id || null, p_address_number: formData.address_number || null,
       p_address_complement: formData.address_complement || null
     });
-    if (error) { toast.error(`Erro ao salvar: ${error.message}`); }
+    if (error) { toast.error(handleSupabaseError(error)); }
     else { toast.success('Cliente atualizado!'); setIsModalOpen(false); fetchDetails(); }
     setIsSaving(false);
   };

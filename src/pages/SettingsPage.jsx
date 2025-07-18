@@ -1,31 +1,44 @@
 // Arquivo: src/pages/SettingsPage.jsx
+// MELHORIA (v3): Implementado o `handleSupabaseError`.
+
 import React, { useState, useEffect, useCallback } from 'react';
 import { useTheme } from '../context/ThemeContext';
 import { supabase } from '../lib/supabaseClient';
 import toast from 'react-hot-toast';
 import styles from './SettingsPage.module.css';
 import Button from '../components/Button';
-import Input from '../components/Input'; // Importando o Input
 import AppSettingForm from '../components/AppSettingForm';
 import Modal from '../components/Modal';
-import { FaTrash, FaEdit, FaPlus, FaSave } from 'react-icons/fa';
+import ConfirmationModal from '../components/ConfirmationModal';
+import PromptModal from '../components/PromptModal';
+import { FaTrash, FaEdit, FaPlus } from 'react-icons/fa';
+import { handleSupabaseError } from '../utils/errorHandler';
 
 const SettingsPage = () => {
   const { theme, applyTheme, resetToDefault, defaultTheme } = useTheme();
   const [savedThemes, setSavedThemes] = useState([]);
   const [currentColors, setCurrentColors] = useState(theme);
   const [appSettings, setAppSettings] = useState([]);
-  const [isThemeModalOpen, setIsThemeModalOpen] = useState(false); // Modal para temas
-  const [isSettingModalOpen, setIsSettingModalOpen] = useState(false); // Modal para configurações
+  const [isSettingModalOpen, setIsSettingModalOpen] = useState(false);
   const [settingToEdit, setSettingToEdit] = useState(null);
   const [loading, setLoading] = useState(false);
+  const [isPromptModalOpen, setIsPromptModalOpen] = useState(false);
+  const [isSettingConfirmOpen, setIsSettingConfirmOpen] = useState(false);
+  const [settingToDelete, setSettingToDelete] = useState(null);
+  const [isThemeConfirmOpen, setIsThemeConfirmOpen] = useState(false);
+  const [themeToDelete, setThemeToDelete] = useState(null);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   const fetchSettings = useCallback(async () => {
     setLoading(true);
-    const { data: themes } = await supabase.from('user_themes').select('*');
-    setSavedThemes(themes || []);
-    const { data: settings } = await supabase.from('app_settings').select('*').order('key');
-    setAppSettings(settings || []);
+    const { data: themes, error: themesError } = await supabase.from('user_themes').select('*');
+    if (themesError) toast.error(handleSupabaseError(themesError));
+    else setSavedThemes(themes || []);
+
+    const { data: settings, error: settingsError } = await supabase.from('app_settings').select('*').order('key');
+    if (settingsError) toast.error(handleSupabaseError(settingsError));
+    else setAppSettings(settings || []);
+    
     setLoading(false);
   }, []);
 
@@ -42,16 +55,54 @@ const SettingsPage = () => {
     const { error } = await supabase.rpc('create_or_update_app_setting', {
       p_key: formData.key, p_value: formData.value, p_description: formData.description
     });
-    if (error) toast.error('Erro ao salvar configuração.');
+    if (error) toast.error(handleSupabaseError(error));
     else { toast.success('Configuração salva!'); setIsSettingModalOpen(false); fetchSettings(); }
     setLoading(false);
   };
 
-  const handleDeleteSetting = async (key) => {
-    if (!window.confirm(`Tem certeza que deseja apagar a configuração "${key}"?`)) return;
-    const { error } = await supabase.rpc('delete_app_setting', { p_key: key });
-    if (error) toast.error(`Erro ao apagar: ${error.message}`);
+  const startDeleteSetting = (setting) => {
+    setSettingToDelete(setting);
+    setIsSettingConfirmOpen(true);
+  };
+
+  const confirmDeleteSetting = async () => {
+    if (!settingToDelete) return;
+    setIsDeleting(true);
+    const { error } = await supabase.rpc('delete_app_setting', { p_key: settingToDelete.key });
+    if (error) toast.error(handleSupabaseError(error));
     else { toast.success('Configuração apagada.'); fetchSettings(); }
+    setIsDeleting(false);
+    setIsSettingConfirmOpen(false);
+    setSettingToDelete(null);
+  };
+  
+  const confirmSaveTheme = async (themeName) => {
+    if (savedThemes.length >= 3 && !savedThemes.find(t => t.theme_name === themeName)) {
+      toast.error('Você pode salvar no máximo 3 temas. Apague um para salvar um novo.');
+      return;
+    }
+    setLoading(true);
+    const { error } = await supabase.rpc('save_user_theme', { p_theme_name: themeName, p_theme_colors: currentColors });
+    if (error) toast.error(handleSupabaseError(error));
+    else { toast.success(`Tema "${themeName}" salvo com sucesso!`); fetchSettings(); }
+    setIsPromptModalOpen(false);
+    setLoading(false);
+  };
+
+  const startDeleteTheme = (theme) => {
+    setThemeToDelete(theme);
+    setIsThemeConfirmOpen(true);
+  };
+
+  const confirmDeleteTheme = async () => {
+    if (!themeToDelete) return;
+    setIsDeleting(true);
+    const { error } = await supabase.rpc('delete_user_theme', { p_theme_id: themeToDelete.id });
+    if (error) toast.error(handleSupabaseError(error));
+    else { toast.success('Tema apagado.'); fetchSettings(); }
+    setIsDeleting(false);
+    setIsThemeConfirmOpen(false);
+    setThemeToDelete(null);
   };
 
   const handleColorChange = (e) => {
@@ -61,25 +112,6 @@ const SettingsPage = () => {
     applyTheme(newColors);
   };
 
-  const handleSaveTheme = async () => {
-    const themeName = prompt('Digite um nome para o seu tema (ex: Meu Tema Azul):');
-    if (!themeName) return;
-    if (savedThemes.length >= 3 && !savedThemes.find(t => t.theme_name === themeName)) {
-      toast.error('Você pode salvar no máximo 3 temas. Apague um para salvar um novo.');
-      return;
-    }
-    const { error } = await supabase.rpc('save_user_theme', { p_theme_name: themeName, p_theme_colors: currentColors });
-    if (error) toast.error('Erro ao salvar o tema.');
-    else { toast.success(`Tema "${themeName}" salvo com sucesso!`); fetchSettings(); }
-  };
-
-  const handleDeleteTheme = async (themeId) => {
-    if (!window.confirm('Tem certeza que deseja apagar este tema?')) return;
-    const { error } = await supabase.rpc('delete_user_theme', { p_theme_id: themeId });
-    if (error) toast.error('Erro ao apagar o tema.');
-    else { toast.success('Tema apagado.'); fetchSettings(); }
-  };
-
   const colorInputs = Object.keys(defaultTheme).filter(key => !key.includes('hover'));
 
   return (
@@ -87,6 +119,34 @@ const SettingsPage = () => {
       <Modal isOpen={isSettingModalOpen} onClose={() => setIsSettingModalOpen(false)} title={settingToEdit ? 'Editar Configuração' : 'Nova Configuração'}>
         <AppSettingForm onSave={handleSaveSetting} onClose={() => setIsSettingModalOpen(false)} settingToEdit={settingToEdit} loading={loading} />
       </Modal>
+
+      <PromptModal
+        isOpen={isPromptModalOpen}
+        onClose={() => setIsPromptModalOpen(false)}
+        onSave={confirmSaveTheme}
+        title="Salvar Tema"
+        label="Digite um nome para o seu tema"
+        placeholder="Ex: Meu Tema Azul"
+        loading={loading}
+      />
+
+      <ConfirmationModal
+        isOpen={isSettingConfirmOpen}
+        onClose={() => setIsSettingConfirmOpen(false)}
+        onConfirm={confirmDeleteSetting}
+        title="Confirmar Exclusão" loading={isDeleting}
+      >
+        <p>Tem certeza que deseja apagar a configuração <strong>{settingToDelete?.key}</strong>?</p>
+      </ConfirmationModal>
+
+      <ConfirmationModal
+        isOpen={isThemeConfirmOpen}
+        onClose={() => setIsThemeConfirmOpen(false)}
+        onConfirm={confirmDeleteTheme}
+        title="Confirmar Exclusão" loading={isDeleting}
+      >
+        <p>Tem certeza que deseja apagar o tema <strong>{themeToDelete?.theme_name}</strong>?</p>
+      </ConfirmationModal>
 
       <h1>Configurações</h1>
       
@@ -105,7 +165,7 @@ const SettingsPage = () => {
                     </div>
                     <div className={styles.settingActions}>
                         <button onClick={() => handleOpenSettingModal(setting)}><FaEdit /></button>
-                        <button onClick={() => handleDeleteSetting(setting.key)} className={styles.deleteButton}><FaTrash /></button>
+                        <button onClick={() => startDeleteSetting(setting)} className={styles.deleteButton}><FaTrash /></button>
                     </div>
                 </div>
             ))}
@@ -123,7 +183,7 @@ const SettingsPage = () => {
           ))}
         </div>
         <div className={styles.actions}>
-          <Button onClick={handleSaveTheme}>Salvar Tema Atual</Button>
+          <Button onClick={() => setIsPromptModalOpen(true)}>Salvar Tema Atual</Button>
           <Button onClick={resetToDefault} variant="secondary">Restaurar Padrão</Button>
         </div>
       </div>
@@ -136,7 +196,7 @@ const SettingsPage = () => {
               <span className={styles.themeName}>{st.theme_name}</span>
               <div className={styles.themeActions}>
                 <Button onClick={() => applyTheme(st.theme_colors)}>Aplicar</Button>
-                <button className={styles.deleteButton} onClick={() => handleDeleteTheme(st.id)}>
+                <button className={styles.deleteButton} onClick={() => startDeleteTheme(st)}>
                   <FaTrash />
                 </button>
               </div>

@@ -1,4 +1,6 @@
 // Arquivo: src/pages/ObjectTypesPage.jsx
+// MELHORIA (v3): Implementado o `handleSupabaseError`.
+
 import React, { useState, useEffect, useCallback } from 'react';
 import { supabase } from '../lib/supabaseClient';
 import toast from 'react-hot-toast';
@@ -7,18 +9,23 @@ import { FaPlus, FaEdit, FaTrashAlt } from 'react-icons/fa';
 import Button from '../components/Button';
 import Modal from '../components/Modal';
 import ObjectTypeForm from '../components/ObjectTypeForm';
+import ConfirmationModal from '../components/ConfirmationModal';
+import { handleSupabaseError } from '../utils/errorHandler';
 
 const ObjectTypesPage = () => {
   const [types, setTypes] = useState([]);
   const [loading, setLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
-  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isFormModalOpen, setIsFormModalOpen] = useState(false);
   const [typeToEdit, setTypeToEdit] = useState(null);
+  const [isConfirmModalOpen, setIsConfirmModalOpen] = useState(false);
+  const [typeToDelete, setTypeToDelete] = useState(null);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   const fetchTypes = useCallback(async () => {
     setLoading(true);
     const { data, error } = await supabase.from('object_types').select('*').order('name');
-    if (error) toast.error('Erro ao buscar tipos: ' + error.message);
+    if (error) toast.error(handleSupabaseError(error));
     else setTypes(data);
     setLoading(false);
   }, []);
@@ -27,29 +34,52 @@ const ObjectTypesPage = () => {
 
   const handleOpenModal = (type = null) => {
     setTypeToEdit(type);
-    setIsModalOpen(true);
+    setIsFormModalOpen(true);
   };
 
   const handleSaveType = async (formData) => {
     setIsSaving(true);
     const { error } = await supabase.rpc('create_or_update_object_type', formData);
-    if (error) toast.error(`Erro ao salvar: ${error.message}`);
-    else { toast.success('Tipo de objeto salvo!'); setIsModalOpen(false); fetchTypes(); }
+    if (error) toast.error(handleSupabaseError(error));
+    else { toast.success('Tipo de objeto salvo!'); setIsFormModalOpen(false); fetchTypes(); }
     setIsSaving(false);
   };
 
-  const handleDeleteType = async (typeId) => {
-    if (!window.confirm('Tem certeza que deseja apagar este tipo?')) return;
-    const { error } = await supabase.rpc('delete_object_type', { p_type_id: typeId });
-    if (error) toast.error(`Erro ao apagar: ${error.message}`);
-    else { toast.success('Tipo apagado.'); fetchTypes(); }
+  const startDeleteType = (type) => {
+    setTypeToDelete(type);
+    setIsConfirmModalOpen(true);
+  };
+
+  const confirmDeleteType = async () => {
+    if (!typeToDelete) return;
+    setIsDeleting(true);
+    const { error } = await supabase.rpc('delete_object_type', { p_type_id: typeToDelete.id });
+    if (error) {
+      toast.error(handleSupabaseError(error));
+    } else {
+      toast.success('Tipo apagado.');
+      fetchTypes();
+    }
+    setIsDeleting(false);
+    setIsConfirmModalOpen(false);
+    setTypeToDelete(null);
   };
 
   return (
     <div className={styles.container}>
-      <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} title={typeToEdit ? 'Editar Tipo' : 'Novo Tipo de Objeto'}>
-        <ObjectTypeForm onSave={handleSaveType} onClose={() => setIsModalOpen(false)} typeToEdit={typeToEdit} loading={isSaving} />
+      <Modal isOpen={isFormModalOpen} onClose={() => setIsFormModalOpen(false)} title={typeToEdit ? 'Editar Tipo' : 'Novo Tipo de Objeto'}>
+        <ObjectTypeForm onSave={handleSaveType} onClose={() => setIsFormModalOpen(false)} typeToEdit={typeToEdit} loading={isSaving} />
       </Modal>
+
+      <ConfirmationModal
+        isOpen={isConfirmModalOpen}
+        onClose={() => setIsConfirmModalOpen(false)}
+        onConfirm={confirmDeleteType}
+        title="Confirmar Exclusão"
+        loading={isDeleting}
+      >
+        <p>Tem certeza que deseja apagar o tipo <strong>{typeToDelete?.name}</strong>?</p>
+      </ConfirmationModal>
 
       <header className={styles.header}>
         <h1>Tipos de Objeto</h1>
@@ -68,7 +98,7 @@ const ObjectTypesPage = () => {
                 <td data-label="Ações">
                   <div className={styles.actionButtons}>
                     <button className={styles.actionButton} onClick={() => handleOpenModal(type)}><FaEdit /></button>
-                    <button className={`${styles.actionButton} ${styles.removeStock}`} onClick={() => handleDeleteType(type.id)}><FaTrashAlt /></button>
+                    <button className={`${styles.actionButton} ${styles.removeStock}`} onClick={() => startDeleteType(type)}><FaTrashAlt /></button>
                   </div>
                 </td>
               </tr>

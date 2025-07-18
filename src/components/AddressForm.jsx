@@ -1,11 +1,14 @@
 // Arquivo: src/components/AddressForm.jsx
+// MELHORIA (v2): Implementado o `handleSupabaseError`.
+
 import React, { useState, useEffect, useCallback } from 'react';
-import styles from './CustomerForm.module.css'; // Reutilizando estilos
+import styles from './CustomerForm.module.css';
 import Input from './Input';
 import Button from './Button';
 import toast from 'react-hot-toast';
 import { supabase } from '../lib/supabaseClient';
 import { FaSearch } from 'react-icons/fa';
+import { handleSupabaseError } from '../utils/errorHandler';
 
 const AddressForm = ({ onSave, onClose, addressToEdit, loading }) => {
   const initialFormData = { cep: '', street_name: '', neighborhood: '', city_id: '' };
@@ -16,25 +19,29 @@ const AddressForm = ({ onSave, onClose, addressToEdit, loading }) => {
   const [cepLoading, setCepLoading] = useState(false);
   const [cityToSelect, setCityToSelect] = useState('');
 
-  // Busca a lista de estados ao montar o componente
   useEffect(() => {
-    supabase.from('states').select('*').order('uf').then(({ data }) => setStates(data || []));
+    supabase.from('states').select('*').order('uf').then(({ data, error }) => {
+        if(error) toast.error(handleSupabaseError(error));
+        else setStates(data || []);
+    });
   }, []);
 
-  // Busca as cidades sempre que um estado é selecionado
   useEffect(() => {
     if (selectedState) {
-      supabase.from('cities').select('*').eq('state_id', selectedState).order('name').then(({ data }) => setCities(data || []));
+      supabase.from('cities').select('*').eq('state_id', selectedState).order('name').then(({ data, error }) => {
+          if(error) toast.error(handleSupabaseError(error));
+          else setCities(data || []);
+      });
     } else {
       setCities([]);
     }
   }, [selectedState]);
 
-  // Preenche o formulário ao editar um endereço
   useEffect(() => {
     if (addressToEdit && addressToEdit.city_id) {
-      supabase.from('cities').select('*, states(*)').eq('id', addressToEdit.city_id).single().then(({data}) => {
-        if (data) {
+      supabase.from('cities').select('*, states(*)').eq('id', addressToEdit.city_id).single().then(({data, error}) => {
+        if(error) toast.error(handleSupabaseError(error));
+        else if (data) {
           setSelectedState(data.states.id);
           setFormData({
             cep: addressToEdit.cep || '', street_name: addressToEdit.street_name || '',
@@ -45,7 +52,6 @@ const AddressForm = ({ onSave, onClose, addressToEdit, loading }) => {
     }
   }, [addressToEdit]);
   
-  // Seleciona a cidade correta depois que a lista de cidades é carregada (após busca por CEP)
   useEffect(() => {
     if (cityToSelect && cities.length > 0) {
       const city = cities.find(c => c.name.toLowerCase() === cityToSelect.toLowerCase());
@@ -54,7 +60,7 @@ const AddressForm = ({ onSave, onClose, addressToEdit, loading }) => {
       } else {
         toast.error(`A cidade "${cityToSelect}" não foi encontrada no nosso banco de dados para este estado.`);
       }
-      setCityToSelect(''); // Limpa o gatilho
+      setCityToSelect('');
     }
   }, [cities, cityToSelect]);
 
@@ -74,12 +80,12 @@ const AddressForm = ({ onSave, onClose, addressToEdit, loading }) => {
         const stateFound = states.find(s => s.uf === data.uf);
         if (stateFound) {
           setSelectedState(stateFound.id);
-          setCityToSelect(data.localidade); // Armazena a cidade para selecionar depois
+          setCityToSelect(data.localidade);
           setFormData(prev => ({
             ...prev,
             street_name: data.logradouro,
             neighborhood: data.bairro,
-            city_id: '' // Limpa a cidade para aguardar a nova seleção
+            city_id: ''
           }));
           toast.success('Endereço encontrado!');
         } else {

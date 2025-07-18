@@ -1,4 +1,6 @@
 // Arquivo: src/pages/CustomersPage.jsx
+// MELHORIA (v3): Implementado o `handleSupabaseError` para exibir mensagens de erro amigáveis.
+
 import React, { useState, useEffect, useCallback } from 'react';
 import { supabase } from '../lib/supabaseClient';
 import toast from 'react-hot-toast';
@@ -10,8 +12,9 @@ import Modal from '../components/Modal';
 import CustomerForm from '../components/CustomerForm';
 import ToggleSwitch from '../components/ToggleSwitch';
 import { useNavigate } from 'react-router-dom';
-
-const ITEMS_PER_PAGE = 20;
+import useDebounce from '../hooks/useDebounce';
+import { ITEMS_PER_PAGE } from '../constants';
+import { handleSupabaseError } from '../utils/errorHandler';
 
 const CustomersPage = () => {
   const [customers, setCustomers] = useState([]);
@@ -22,32 +25,48 @@ const CustomersPage = () => {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [customerToEdit, setCustomerToEdit] = useState(null);
   const [page, setPage] = useState(0);
-  const [pageInput, setPageInput] = useState('');
   const [totalCount, setTotalCount] = useState(0);
   const navigate = useNavigate();
 
+  const debouncedSearchTerm = useDebounce(searchTerm, 500);
+
   const fetchCustomers = useCallback(async () => {
     setLoading(true);
-    const { data: count, error: countError } = await supabase.rpc('count_customers_filtered', {
-        p_search_term: searchTerm, p_status_filter: statusFilter
-    });
-    if (countError) { toast.error('Erro ao contar clientes: ' + countError.message); setLoading(false); return; }
-    setTotalCount(count || 0);
+    try {
+        const { data: count, error: countError } = await supabase.rpc('count_customers_filtered', {
+            p_search_term: debouncedSearchTerm, p_status_filter: statusFilter
+        });
+        if (countError) throw countError;
+        setTotalCount(count || 0);
 
-    const from = page * ITEMS_PER_PAGE;
-    const to = from + ITEMS_PER_PAGE - 1;
-    let dataQuery = supabase.from('customers').select('*, addresses(*, city:cities(name, state:states(uf))), contact:contact_customer_id(full_name)');
-    if (searchTerm) { dataQuery = dataQuery.or(`full_name.ilike.%${searchTerm}%,cpf.ilike.%${searchTerm}%,cellphone.ilike.%${searchTerm}%`); }
-    if (statusFilter !== 'all') { dataQuery = dataQuery.eq('is_active', statusFilter === 'active'); }
-    dataQuery = dataQuery.range(from, to).order('full_name', { ascending: true });
-    const { data, error: dataError } = await dataQuery;
-    if (dataError) { toast.error('Erro ao buscar clientes: ' + dataError.message); }
-    else { setCustomers(data || []); }
-    setLoading(false);
-  }, [page, searchTerm, statusFilter]);
+        const from = page * ITEMS_PER_PAGE;
+        const to = from + ITEMS_PER_PAGE - 1;
+
+        let dataQuery = supabase.from('customers')
+            .select('*, addresses(*, city:cities(name, state:states(uf))), contact:contact_customer_id(full_name)');
+
+        if (debouncedSearchTerm) {
+            dataQuery = dataQuery.or(`full_name.ilike.%${debouncedSearchTerm}%,cpf.ilike.%${debouncedSearchTerm}%,cellphone.ilike.%${debouncedSearchTerm}%`);
+        }
+        if (statusFilter !== 'all') {
+            dataQuery = dataQuery.eq('is_active', statusFilter === 'active');
+        }
+
+        dataQuery = dataQuery.range(from, to).order('full_name', { ascending: true });
+
+        const { data, error: dataError } = await dataQuery;
+        if (dataError) throw dataError;
+
+        setCustomers(data || []);
+    } catch (error) {
+        toast.error(handleSupabaseError(error));
+    } finally {
+        setLoading(false);
+    }
+  }, [page, debouncedSearchTerm, statusFilter]);
 
   useEffect(() => { fetchCustomers(); }, [fetchCustomers]);
-  useEffect(() => { setPage(0); }, [searchTerm, statusFilter]);
+  useEffect(() => { setPage(0); }, [debouncedSearchTerm, statusFilter]);
 
   const handleSaveCustomer = async (formData) => {
     setIsSaving(true);
@@ -58,7 +77,7 @@ const CustomersPage = () => {
       p_address_id: formData.address_id || null, p_address_number: formData.address_number || null, p_address_complement: formData.address_complement || null
     };
     const { error } = await supabase.rpc('create_or_update_customer', payload);
-    if (error) { toast.error(`Erro ao salvar: ${error.message}`); }
+    if (error) { toast.error(handleSupabaseError(error)); }
     else { toast.success(`Cliente ${customerToEdit ? 'atualizado' : 'criado'}!`); setIsModalOpen(false); fetchCustomers(); }
     setIsSaving(false);
   };
@@ -67,12 +86,13 @@ const CustomersPage = () => {
     const newStatus = !customer.is_active;
     const toastId = toast.loading(`${newStatus ? 'Ativando' : 'Desativando'} cliente...`);
     const { error } = await supabase.rpc('set_customer_status', { p_customer_id: customer.id, p_is_active: newStatus });
-    if (error) { toast.error(`Erro: ${error.message}`, { id: toastId }); }
+    if (error) { toast.error(handleSupabaseError(error), { id: toastId }); }
     else { toast.success('Status atualizado!', { id: toastId }); fetchCustomers(); }
   };
 
   const handleExportCSV = async () => {
-    toast.loading('Preparando exportação...');
+    const toastId = toast.loading('Preparando exportação...');
+    
     const { data: allActiveCustomers, error } = await supabase
       .from('customers')
       .select('full_name, cellphone')
@@ -80,7 +100,7 @@ const CustomersPage = () => {
       .not('cellphone', 'is', null);
 
     if (error || !allActiveCustomers || allActiveCustomers.length === 0) {
-      toast.error('Nenhum cliente ativo com telefone para exportar.');
+      toast.error(error ? handleSupabaseError(error) : 'Nenhum cliente ativo com telefone para exportar.', { id: toastId });
       return;
     }
     const headers = "Name,Given Name,Family Name,Phone 1 - Type,Phone 1 - Value";
@@ -98,16 +118,7 @@ const CustomersPage = () => {
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
-    toast.success("Exportação concluída!");
-  };
-
-  const handlePageJump = (e) => {
-    e.preventDefault();
-    const targetPage = parseInt(pageInput, 10);
-    const totalPages = Math.ceil(totalCount / ITEMS_PER_PAGE);
-    if (!isNaN(targetPage) && targetPage >= 1 && targetPage <= totalPages) { setPage(targetPage - 1); }
-    else { toast.error(`Por favor, insira um número de página entre 1 e ${totalPages}.`); }
-    setPageInput('');
+    toast.success("Exportação concluída!", { id: toastId });
   };
 
   const totalPages = Math.ceil(totalCount / ITEMS_PER_PAGE);
@@ -121,7 +132,15 @@ const CustomersPage = () => {
       <header className={styles.header}>
         <h1>Gerenciamento de Clientes</h1>
         <div className={styles.actions}>
-          <div className={styles.searchInputWrapper}><Input id="search" placeholder="Buscar por nome, CPF ou celular..." icon={FaSearch} value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} /></div>
+          <div className={styles.searchInputWrapper}>
+            <Input 
+                id="search" 
+                placeholder="Buscar por nome, CPF ou celular..." 
+                icon={FaSearch} 
+                value={searchTerm} 
+                onChange={(e) => setSearchTerm(e.target.value)} 
+            />
+          </div>
           <div className={styles.filterGroup}>
             <Button variant={statusFilter === 'active' ? 'primary' : 'secondary'} onClick={() => setStatusFilter('active')}>Ativos</Button>
             <Button variant={statusFilter === 'inactive' ? 'primary' : 'secondary'} onClick={() => setStatusFilter('inactive')}>Inativos</Button>
@@ -156,13 +175,15 @@ const CustomersPage = () => {
 
       {totalPages > 1 && (
         <div className={styles.pagination}>
-          <Button onClick={() => setPage(p => p - 1)} disabled={page === 0}><FaArrowLeft /> Anterior</Button>
-          <form onSubmit={handlePageJump} className={styles.pageJumpForm}>
-            <span>Página</span>
-            <div className={styles.pageInputWrapper}><div className={styles.pageInput}><Input type="number" value={pageInput} onChange={(e) => setPageInput(e.target.value)} placeholder={`${page + 1}`} /></div></div>
-            <span>de {totalPages}</span>
-          </form>
-          <Button onClick={() => setPage(p => p + 1)} disabled={page + 1 >= totalPages}><FaArrowRight /> Próxima</Button>
+          <Button onClick={() => setPage(p => p - 1)} disabled={page === 0}>
+            <FaArrowLeft /> Anterior
+          </Button>
+          <span className={styles.pageInfo}>
+            Página {page + 1} de {totalPages}
+          </span>
+          <Button onClick={() => setPage(p => p + 1)} disabled={page + 1 >= totalPages}>
+            Próxima <FaArrowRight />
+          </Button>
         </div>
       )}
     </div>

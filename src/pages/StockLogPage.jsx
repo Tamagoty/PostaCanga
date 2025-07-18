@@ -1,4 +1,6 @@
 // Arquivo: src/pages/StockLogPage.jsx
+// MELHORIA (v2): Implementado o `handleSupabaseError`.
+
 import React, { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { supabase } from '../lib/supabaseClient';
@@ -6,21 +8,21 @@ import toast from 'react-hot-toast';
 import styles from './StockLogPage.module.css';
 import { FaArrowLeft } from 'react-icons/fa';
 import Button from '../components/Button';
+import { handleSupabaseError } from '../utils/errorHandler';
 
 const StockLogPage = () => {
   const { supplyId } = useParams();
   const navigate = useNavigate();
   const [logEntries, setLogEntries] = useState([]);
-  const [employees, setEmployees] = useState([]); // Novo estado para armazenar funcionários
+  const [employees, setEmployees] = useState([]);
   const [supplyName, setSupplyName] = useState('');
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState('monthly');
 
-  // Função para buscar a lista de funcionários (id e nome)
   const fetchEmployees = useCallback(async () => {
     const { data, error } = await supabase.from('employees').select('id, full_name');
     if (error) {
-      toast.error('Não foi possível carregar a lista de operadores.');
+      toast.error(handleSupabaseError(error));
     } else {
       setEmployees(data);
     }
@@ -44,7 +46,7 @@ const StockLogPage = () => {
     });
 
     if (error) {
-      toast.error('Erro ao buscar histórico: ' + error.message);
+      toast.error(handleSupabaseError(error));
     } else {
       setLogEntries(data);
     }
@@ -57,12 +59,12 @@ const StockLogPage = () => {
   }, [supplyId]);
 
   useEffect(() => {
-    fetchEmployees(); // Busca os funcionários quando o componente carrega
+    fetchEmployees();
     fetchSupplyName();
   }, [fetchEmployees, fetchSupplyName]);
 
   useEffect(() => {
-    fetchLog(); // Busca o log sempre que o filtro muda
+    fetchLog();
   }, [fetchLog]);
 
   const getOperatorName = (userId) => {

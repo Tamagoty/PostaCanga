@@ -1,4 +1,6 @@
 // Arquivo: src/pages/EmployeesPage.jsx
+// MELHORIA (v2): Implementado o `handleSupabaseError`.
+
 import React, { useState, useEffect, useCallback } from 'react';
 import { supabase } from '../lib/supabaseClient';
 import { useAuth } from '../context/AuthContext';
@@ -8,13 +10,18 @@ import { FaPlus, FaTrashAlt, FaUserShield, FaUser } from 'react-icons/fa';
 import Button from '../components/Button';
 import Modal from '../components/Modal';
 import EmployeeForm from '../components/EmployeeForm';
+import ConfirmationModal from '../components/ConfirmationModal';
+import { handleSupabaseError } from '../utils/errorHandler';
 
 const EmployeesPage = () => {
   const { isAdmin, userProfile } = useAuth();
   const [employees, setEmployees] = useState([]);
   const [loading, setLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
-  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isFormModalOpen, setIsFormModalOpen] = useState(false);
+  const [isConfirmModalOpen, setIsConfirmModalOpen] = useState(false);
+  const [employeeToDelete, setEmployeeToDelete] = useState(null);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   const fetchEmployees = useCallback(async () => {
     if (!isAdmin) {
@@ -23,34 +30,14 @@ const EmployeesPage = () => {
     }
     setLoading(true);
 
-    // Etapa 1: Buscar os perfis dos funcionários.
-    const { data: profiles, error: profileError } = await supabase.rpc('get_employee_profiles');
-    if (profileError) {
-      toast.error('Erro ao buscar perfis: ' + profileError.message);
-      setLoading(false);
-      return;
+    const { data, error } = await supabase.functions.invoke('get-employees');
+
+    if (error) {
+      toast.error(handleSupabaseError(error));
+      setEmployees([]);
+    } else {
+      setEmployees(data || []);
     }
-
-    // Etapa 2: Buscar os dados de autenticação (e-mails).
-    // ATENÇÃO: Esta chamada requer que o usuário seja um "Super Admin" no Supabase.
-    // Se ocorrer um erro aqui, verifique as permissões no seu projeto Supabase.
-    const { data: { users }, error: usersError } = await supabase.auth.admin.listUsers();
-    if (usersError) {
-      toast.error('Erro ao buscar e-mails: ' + usersError.message);
-      setLoading(false);
-      return;
-    }
-
-    // Etapa 3: Juntar os dados no frontend.
-    const combinedData = profiles.map(profile => {
-      const authUser = users.find(user => user.id === profile.id);
-      return {
-        ...profile,
-        email: authUser ? authUser.email : 'Não encontrado',
-      };
-    });
-
-    setEmployees(combinedData);
     setLoading(false);
   }, [isAdmin]);
 
@@ -66,7 +53,7 @@ const EmployeesPage = () => {
     });
 
     if (authError) {
-      toast.error(`Erro de autenticação: ${authError.message}`);
+      toast.error(handleSupabaseError(authError));
       setIsSaving(false);
       return;
     }
@@ -82,28 +69,37 @@ const EmployeesPage = () => {
         .eq('id', user.id);
 
       if (profileError) {
-        toast.error(`Erro ao atualizar perfil: ${profileError.message}`);
+        toast.error(handleSupabaseError(profileError));
       } else {
         toast.success('Funcionário criado com sucesso!');
-        setIsModalOpen(false);
+        setIsFormModalOpen(false);
         fetchEmployees();
       }
     }
     setIsSaving(false);
   };
 
-  const handleDeleteEmployee = async (employeeId, employeeName) => {
-    if (!window.confirm(`Tem certeza que deseja apagar ${employeeName}? Esta ação é irreversível.`)) return;
-    
+  const startDeleteEmployee = (employee) => {
+    setEmployeeToDelete(employee);
+    setIsConfirmModalOpen(true);
+  };
+
+  const confirmDeleteEmployee = async () => {
+    if (!employeeToDelete) return;
+    setIsDeleting(true);
     const toastId = toast.loading('Apagando funcionário...');
-    const { error } = await supabase.rpc('delete_employee', { p_user_id: employeeId });
+    
+    const { error } = await supabase.rpc('delete_employee', { p_user_id: employeeToDelete.id });
 
     if (error) {
-      toast.error(`Erro: ${error.message}`, { id: toastId });
+      toast.error(handleSupabaseError(error), { id: toastId });
     } else {
       toast.success('Funcionário apagado.', { id: toastId });
       fetchEmployees();
     }
+    setIsDeleting(false);
+    setIsConfirmModalOpen(false);
+    setEmployeeToDelete(null);
   };
 
   if (!isAdmin) {
@@ -112,14 +108,25 @@ const EmployeesPage = () => {
 
   return (
     <div className={styles.container}>
-      <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} title="Novo Funcionário">
-        <EmployeeForm onSave={handleCreateEmployee} onClose={() => setIsModalOpen(false)} loading={isSaving} />
+      <Modal isOpen={isFormModalOpen} onClose={() => setIsFormModalOpen(false)} title="Novo Funcionário">
+        <EmployeeForm onSave={handleCreateEmployee} onClose={() => setIsFormModalOpen(false)} loading={isSaving} />
       </Modal>
+
+      <ConfirmationModal
+        isOpen={isConfirmModalOpen}
+        onClose={() => setIsConfirmModalOpen(false)}
+        onConfirm={confirmDeleteEmployee}
+        title="Confirmar Exclusão"
+        loading={isDeleting}
+      >
+        <p>Tem certeza que deseja apagar o funcionário <strong>{employeeToDelete?.full_name}</strong>?</p>
+        <p>Esta ação é irreversível.</p>
+      </ConfirmationModal>
 
       <header className={styles.header}>
         <h1>Gestão de Funcionários</h1>
         <div className={styles.actions}>
-          <Button onClick={() => setIsModalOpen(true)}><FaPlus /> Novo Funcionário</Button>
+          <Button onClick={() => setIsFormModalOpen(true)}><FaPlus /> Novo Funcionário</Button>
         </div>
       </header>
 
@@ -149,7 +156,7 @@ const EmployeesPage = () => {
                 </td>
                 <td data-label="Ações">
                   {userProfile?.id !== emp.id && (
-                    <button className={styles.deleteButton} onClick={() => handleDeleteEmployee(emp.id, emp.full_name)}>
+                    <button className={styles.deleteButton} onClick={() => startDeleteEmployee(emp)}>
                       <FaTrashAlt />
                     </button>
                   )}

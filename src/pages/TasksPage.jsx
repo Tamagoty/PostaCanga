@@ -1,24 +1,27 @@
 // Arquivo: src/pages/TasksPage.jsx
+// MELHORIA (v2): Implementado o `handleSupabaseError`.
+
 import React, { useState, useEffect, useCallback } from 'react';
 import { supabase } from '../lib/supabaseClient';
 import toast from 'react-hot-toast';
 import styles from './TasksPage.module.css';
 import { FaCheckCircle, FaRegCircle, FaInfoCircle, FaCog } from 'react-icons/fa';
 import { useAuth } from '../context/AuthContext';
-import { useNavigate } from 'react-router-dom'; // Importando o hook de navegação
-import Button from '../components/Button'; // Importando o componente Button
+import { useNavigate } from 'react-router-dom';
+import Button from '../components/Button';
+import { handleSupabaseError } from '../utils/errorHandler';
 
 const TasksPage = () => {
   const { isAdmin } = useAuth();
   const [tasks, setTasks] = useState([]);
   const [loading, setLoading] = useState(true);
-  const navigate = useNavigate(); // Hook para navegação
+  const navigate = useNavigate();
 
   const fetchTasks = useCallback(async () => {
     setLoading(true);
     const { data, error } = await supabase.rpc('get_pending_tasks');
     if (error) {
-      toast.error('Erro ao buscar tarefas: ' + error.message);
+      toast.error(handleSupabaseError(error));
     } else {
       setTasks(data || []);
     }
@@ -37,7 +40,7 @@ const TasksPage = () => {
 
     const { error } = await supabase.rpc('complete_task', { p_task_id: taskId });
     if (error) {
-      toast.error('Falha ao concluir tarefa. Restaurando...');
+      toast.error(handleSupabaseError(error));
       setTasks(originalTasks);
     } else {
       toast.success('Tarefa concluída!');
@@ -70,7 +73,6 @@ const TasksPage = () => {
           <h1>Tarefas do Gestor</h1>
           <p>Atividades pendentes que requerem a sua atenção.</p>
         </div>
-        {/* CORREÇÃO: Adicionado o botão para navegar para a página de gestão de tarefas */}
         <Button onClick={() => navigate('/tasks/manage')}>
           <FaCog /> Gerir Tarefas
         </Button>

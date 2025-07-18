@@ -1,4 +1,6 @@
 // Arquivo: src/pages/DashboardPage.jsx
+// MELHORIA (v2): Implementado o `handleSupabaseError`.
+
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabaseClient';
 import toast from 'react-hot-toast';
@@ -6,6 +8,7 @@ import styles from './DashboardPage.module.css';
 import DashboardStats from '../components/DashboardStats';
 import RecentObjects from '../components/RecentObjects';
 import UpcomingBirthdays from '../components/UpcomingBirthdays';
+import { handleSupabaseError } from '../utils/errorHandler';
 
 const DashboardPage = () => {
   const [dashboardData, setDashboardData] = useState(null);
@@ -17,7 +20,7 @@ const DashboardPage = () => {
       const { data, error } = await supabase.rpc('get_dashboard_data');
 
       if (error) {
-        toast.error('Erro ao carregar dados do dashboard: ' + error.message);
+        toast.error(handleSupabaseError(error));
       } else {
         setDashboardData(data);
       }

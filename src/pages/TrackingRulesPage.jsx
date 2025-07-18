@@ -1,24 +1,31 @@
 // Arquivo: src/pages/TrackingRulesPage.jsx
+// MELHORIA (v3): Implementado o `handleSupabaseError`.
+
 import React, { useState, useEffect, useCallback } from 'react';
 import { supabase } from '../lib/supabaseClient';
 import toast from 'react-hot-toast';
-import styles from './SuppliesPage.module.css'; // Reutilizando estilos
+import styles from './SuppliesPage.module.css';
 import { FaPlus, FaEdit, FaTrashAlt } from 'react-icons/fa';
 import Button from '../components/Button';
 import Modal from '../components/Modal';
 import TrackingRuleForm from '../components/TrackingRuleForm';
+import ConfirmationModal from '../components/ConfirmationModal';
+import { handleSupabaseError } from '../utils/errorHandler';
 
 const TrackingRulesPage = () => {
   const [rules, setRules] = useState([]);
   const [loading, setLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
-  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isFormModalOpen, setIsFormModalOpen] = useState(false);
   const [ruleToEdit, setRuleToEdit] = useState(null);
+  const [isConfirmModalOpen, setIsConfirmModalOpen] = useState(false);
+  const [ruleToDelete, setRuleToDelete] = useState(null);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   const fetchRules = useCallback(async () => {
     setLoading(true);
     const { data, error } = await supabase.from('tracking_code_rules').select('*').order('prefix');
-    if (error) toast.error('Erro ao buscar regras: ' + error.message);
+    if (error) toast.error(handleSupabaseError(error));
     else setRules(data);
     setLoading(false);
   }, []);
@@ -27,29 +34,52 @@ const TrackingRulesPage = () => {
 
   const handleOpenModal = (rule = null) => {
     setRuleToEdit(rule);
-    setIsModalOpen(true);
+    setIsFormModalOpen(true);
   };
 
   const handleSaveRule = async (formData) => {
     setIsSaving(true);
     const { error } = await supabase.rpc('create_or_update_tracking_rule', formData);
-    if (error) toast.error(`Erro ao salvar: ${error.message}`);
-    else { toast.success('Regra salva com sucesso!'); setIsModalOpen(false); fetchRules(); }
+    if (error) toast.error(handleSupabaseError(error));
+    else { toast.success('Regra salva com sucesso!'); setIsFormModalOpen(false); fetchRules(); }
     setIsSaving(false);
   };
 
-  const handleDeleteRule = async (ruleId) => {
-    if (!window.confirm('Tem certeza que deseja apagar esta regra?')) return;
-    const { error } = await supabase.rpc('delete_tracking_rule', { p_rule_id: ruleId });
-    if (error) toast.error(`Erro ao apagar: ${error.message}`);
-    else { toast.success('Regra apagada.'); fetchRules(); }
+  const startDeleteRule = (rule) => {
+    setRuleToDelete(rule);
+    setIsConfirmModalOpen(true);
+  };
+
+  const confirmDeleteRule = async () => {
+    if (!ruleToDelete) return;
+    setIsDeleting(true);
+    const { error } = await supabase.rpc('delete_tracking_rule', { p_rule_id: ruleToDelete.id });
+    if (error) {
+      toast.error(handleSupabaseError(error));
+    } else {
+      toast.success('Regra apagada.');
+      fetchRules();
+    }
+    setIsDeleting(false);
+    setIsConfirmModalOpen(false);
+    setRuleToDelete(null);
   };
 
   return (
     <div className={styles.container}>
-      <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} title={ruleToEdit ? 'Editar Regra' : 'Nova Regra de Rastreio'}>
-        <TrackingRuleForm onSave={handleSaveRule} onClose={() => setIsModalOpen(false)} ruleToEdit={ruleToEdit} loading={isSaving} />
+      <Modal isOpen={isFormModalOpen} onClose={() => setIsFormModalOpen(false)} title={ruleToEdit ? 'Editar Regra' : 'Nova Regra de Rastreio'}>
+        <TrackingRuleForm onSave={handleSaveRule} onClose={() => setIsFormModalOpen(false)} ruleToEdit={ruleToEdit} loading={isSaving} />
       </Modal>
+
+      <ConfirmationModal
+        isOpen={isConfirmModalOpen}
+        onClose={() => setIsConfirmModalOpen(false)}
+        onConfirm={confirmDeleteRule}
+        title="Confirmar Exclusão"
+        loading={isDeleting}
+      >
+        <p>Tem certeza que deseja apagar a regra com o prefixo <strong>{ruleToDelete?.prefix}</strong>?</p>
+      </ConfirmationModal>
 
       <header className={styles.header}>
         <h1>Regras de Rastreamento</h1>
@@ -69,7 +99,7 @@ const TrackingRulesPage = () => {
                 <td data-label="Ações">
                   <div className={styles.actionButtons}>
                     <button className={styles.actionButton} onClick={() => handleOpenModal(rule)}><FaEdit /></button>
-                    <button className={`${styles.actionButton} ${styles.removeStock}`} onClick={() => handleDeleteRule(rule.id)}><FaTrashAlt /></button>
+                    <button className={`${styles.actionButton} ${styles.removeStock}`} onClick={() => startDeleteRule(rule)}><FaTrashAlt /></button>
                   </div>
                 </td>
               </tr>
@@ -81,5 +111,4 @@ const TrackingRulesPage = () => {
   );
 };
 
-// CORREÇÃO: Adicionada a exportação padrão que estava em falta.
 export default TrackingRulesPage;

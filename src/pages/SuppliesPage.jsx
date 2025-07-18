@@ -1,4 +1,6 @@
 // Arquivo: src/pages/SuppliesPage.jsx
+// MELHORIA (v3): Implementado o `handleSupabaseError`.
+
 import React, { useState, useEffect, useCallback } from 'react';
 import { supabase } from '../lib/supabaseClient';
 import toast from 'react-hot-toast';
@@ -9,7 +11,9 @@ import Button from '../components/Button';
 import Modal from '../components/Modal';
 import SupplyForm from '../components/SupplyForm';
 import AdjustStockForm from '../components/AdjustStockForm';
-import { useNavigate } from 'react-router-dom'; // Importando o hook de navegação
+import { useNavigate } from 'react-router-dom';
+import useDebounce from '../hooks/useDebounce';
+import { handleSupabaseError } from '../utils/errorHandler';
 
 const SuppliesPage = () => {
   const [supplies, setSupplies] = useState([]);
@@ -21,12 +25,14 @@ const SuppliesPage = () => {
   const [supplyToEdit, setSupplyToEdit] = useState(null);
   const [supplyToAdjust, setSupplyToAdjust] = useState(null);
   const [adjustActionType, setAdjustActionType] = useState('add');
-  const navigate = useNavigate(); // Hook para navegação
+  const navigate = useNavigate();
+
+  const debouncedSearchTerm = useDebounce(searchTerm, 300);
 
   const fetchSupplies = useCallback(async () => {
     setLoading(true);
     let { data, error } = await supabase.from('office_supplies').select('*').order('name', { ascending: true });
-    if (error) toast.error('Erro ao buscar materiais: ' + error.message);
+    if (error) toast.error(handleSupabaseError(error));
     else setSupplies(data);
     setLoading(false);
   }, []);
@@ -52,7 +58,7 @@ const SuppliesPage = () => {
       p_supply_id: formData.p_supply_id, p_name: formData.name,
       p_description: formData.description, p_initial_stock: formData.initial_stock,
     });
-    if (error) toast.error(`Erro ao salvar: ${error.message}`);
+    if (error) toast.error(handleSupabaseError(error));
     else {
       toast.success(`Material ${supplyToEdit ? 'atualizado' : 'criado'}!`);
       setIsEditModalOpen(false);
@@ -69,7 +75,7 @@ const SuppliesPage = () => {
       p_reason: reason
     });
     if (error) {
-      toast.error(`Erro ao ajustar estoque: ${error.message}`);
+      toast.error(handleSupabaseError(error));
     } else {
       toast.success('Estoque ajustado com sucesso!');
       setIsAdjustModalOpen(false);
@@ -78,16 +84,16 @@ const SuppliesPage = () => {
     setIsSaving(false);
   };
 
-  const filteredSupplies = supplies.filter(s => s.name.toLowerCase().includes(searchTerm.toLowerCase()));
+  const filteredSupplies = supplies.filter(s => 
+    s.name.toLowerCase().includes(debouncedSearchTerm.toLowerCase())
+  );
 
   return (
     <div className={styles.container}>
-      {/* Modal para Criar/Editar Material */}
       <Modal isOpen={isEditModalOpen} onClose={() => setIsEditModalOpen(false)} title={supplyToEdit ? 'Editar Material' : 'Adicionar Novo Material'}>
         <SupplyForm onSave={handleSaveSupply} onClose={() => setIsEditModalOpen(false)} supplyToEdit={supplyToEdit} loading={isSaving} />
       </Modal>
 
-      {/* Modal para Ajustar Estoque */}
       {supplyToAdjust && (
         <Modal isOpen={isAdjustModalOpen} onClose={() => setIsAdjustModalOpen(false)} title="">
           <AdjustStockForm 

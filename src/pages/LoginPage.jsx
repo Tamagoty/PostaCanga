@@ -1,15 +1,14 @@
 // Arquivo: src/pages/LoginPage.jsx
-// Descrição: Página de login para os funcionários.
+// MELHORIA (v2): Implementado o `handleSupabaseError`.
 
 import React, { useState } from 'react';
 import { supabase } from '../lib/supabaseClient';
 import toast from 'react-hot-toast';
 import { FaEnvelope, FaLock } from 'react-icons/fa';
-
-// Importando componentes reutilizáveis
 import Input from '../components/Input';
 import Button from '../components/Button';
 import styles from './LoginPage.module.css';
+import { handleSupabaseError } from '../utils/errorHandler';
 
 const LoginPage = () => {
   const [loading, setLoading] = useState(false);
@@ -31,10 +30,9 @@ const LoginPage = () => {
     });
 
     if (error) {
-      toast.error(error.message || 'Falha no login. Verifique suas credenciais.');
+      toast.error(handleSupabaseError(error));
     } else {
       toast.success('Login realizado com sucesso!');
-      // O App.jsx vai detectar a mudança de sessão e redirecionar para o Dashboard.
     }
     setLoading(false);
   };

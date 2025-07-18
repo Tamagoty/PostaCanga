@@ -1,9 +1,12 @@
 // Arquivo: src/components/BulkRegisteredForm.jsx
+// MELHORIA (v2): Implementado o `handleSupabaseError`.
+
 import React, { useState } from 'react';
 import styles from './BulkRegisteredForm.module.css';
 import Button from './Button';
 import toast from 'react-hot-toast';
 import { supabase } from '../lib/supabaseClient';
+import { handleSupabaseError } from '../utils/errorHandler';
 
 const BulkRegisteredForm = ({ onSave, onClose, loading }) => {
   const [textData, setTextData] = useState('');
@@ -56,7 +59,7 @@ const BulkRegisteredForm = ({ onSave, onClose, loading }) => {
         onSave({ objects: finalObjects });
       }
     } catch (error) {
-      toast.error('Erro ao processar dados: ' + error.message);
+      toast.error(handleSupabaseError(error));
     } finally {
       setIsProcessing(false);
     }
@@ -75,11 +78,14 @@ const BulkRegisteredForm = ({ onSave, onClose, loading }) => {
         storage_days: obj.object_type.includes('Carta') || obj.object_type.includes('Cartão') ? 20 : 7
     }));
 
-    // Salva as novas regras no banco de dados
     for (const rule of newRules) {
-        await supabase.rpc('create_or_update_tracking_rule', {
+        const { error } = await supabase.rpc('create_or_update_tracking_rule', {
             p_rule_id: null, p_prefix: rule.prefix, p_object_type: rule.object_type, p_storage_days: rule.storage_days
         });
+        if (error) {
+            toast.error(handleSupabaseError(error));
+            return; // Interrompe se houver erro ao salvar uma regra
+        }
     }
     toast.success('Novas regras de rastreio salvas!');
 

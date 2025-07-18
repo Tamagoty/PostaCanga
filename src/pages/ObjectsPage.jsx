@@ -1,4 +1,6 @@
 // Arquivo: src/pages/ObjectsPage.jsx
+// MELHORIA (v2): Implementado o `handleSupabaseError`.
+
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { supabase } from '../lib/supabaseClient';
 import toast from 'react-hot-toast';
@@ -11,8 +13,8 @@ import ObjectForm from '../components/ObjectForm';
 import BulkObjectForm from '../components/BulkObjectForm';
 import BulkRegisteredForm from '../components/BulkRegisteredForm';
 import ProgressBar from '../components/ProgressBar';
+import { handleSupabaseError } from '../utils/errorHandler';
 
-// --- Funções Auxiliares ---
 const getWhatsAppMessage = (object) => {
   const agencyName = "Correio de América Dourada";
   const introMessage = `📢 *${agencyName}* informa!\n\n`;
@@ -30,7 +32,6 @@ const getWhatsAppMessage = (object) => {
   return introMessage + messageBody + disclaimer;
 };
 
-// --- Componente Principal ---
 const ObjectsPage = () => {
   const [objects, setObjects] = useState([]);
   const [contactMap, setContactMap] = useState({});
@@ -70,7 +71,7 @@ const ObjectsPage = () => {
         setContactMap({});
       }
     } catch (error) {
-      toast.error('Erro ao carregar dados: ' + error.message);
+      toast.error(handleSupabaseError(error));
     } finally {
       setLoading(false);
     }
@@ -86,7 +87,7 @@ const ObjectsPage = () => {
       p_street_name: formData.street_name || null, p_number: formData.number || null, p_neighborhood: formData.neighborhood || null,
       p_city_name: formData.city || null, p_state_uf: formData.state || null,
     });
-    if (error) toast.error(`Erro ao salvar: ${error.message}`);
+    if (error) toast.error(handleSupabaseError(error));
     else { toast.success(`Objeto ${objectToEdit ? 'atualizado' : 'criado'}!`); setIsModalOpen(false); loadInitialData(); }
     setIsSaving(false);
   };
@@ -94,7 +95,7 @@ const ObjectsPage = () => {
   const handleBulkSave = async ({ objects, type }) => {
     setIsSaving(true);
     const { data: report, error } = await supabase.rpc('bulk_create_simple_objects', { p_object_type: type, p_objects: objects });
-    if (error) { toast.error(`Erro na inserção em massa: ${error.message}`); }
+    if (error) { toast.error(handleSupabaseError(error)); }
     else {
       const reportData = report.map(r => ({ name: r.report_recipient_name, number: r.report_control_number }));
       toast.success(`${report.length} objetos foram criados com sucesso!`);
@@ -110,7 +111,7 @@ const ObjectsPage = () => {
   const handleBulkRegisteredSave = async ({ objects }) => {
     setIsSaving(true);
     const { data: report, error } = await supabase.rpc('bulk_create_registered_objects', { p_objects: objects });
-    if (error) { toast.error(`Erro na inserção em massa: ${error.message}`); }
+    if (error) { toast.error(handleSupabaseError(error)); }
     else {
       const reportData = report.map(r => ({ name: r.report_recipient_name, number: r.report_control_number, code: r.report_tracking_code }));
       toast.success(`${report.length} objetos registrados foram criados!`);
@@ -126,21 +127,21 @@ const ObjectsPage = () => {
   const handleArchiveAction = async () => {
     const toastId = toast.loading('Arquivando objetos concluídos...');
     const { error } = await supabase.rpc('archive_completed_objects');
-    if (error) toast.error(`Erro: ${error.message}`, { id: toastId });
+    if (error) toast.error(handleSupabaseError(error), { id: toastId });
     else { toast.success('Objetos arquivados!', { id: toastId }); loadInitialData(); }
   };
   
   const handleUnarchive = async (controlNumber) => {
     const toastId = toast.loading('Recuperando objeto...');
     const { error } = await supabase.rpc('unarchive_object', { p_control_number: controlNumber });
-    if (error) toast.error(`Erro: ${error.message}`, { id: toastId });
+    if (error) toast.error(handleSupabaseError(error), { id: toastId });
     else { toast.success('Objeto recuperado!', { id: toastId }); loadInitialData(); }
   };
 
   const updateObjectStatus = async (controlNumber, action) => {
     const rpc_function = action === 'deliver' ? 'deliver_object' : 'return_object';
     const { error } = await supabase.rpc(rpc_function, { p_control_number: controlNumber });
-    if (error) toast.error(`Erro: ${error.message}`);
+    if (error) toast.error(handleSupabaseError(error));
     else { toast.success('Status atualizado!'); loadInitialData(); }
   };
 
