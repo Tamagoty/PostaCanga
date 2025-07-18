@@ -1,0 +1,80 @@
+/* Arquivo: src/components/PendingTasks.module.css */
+
+.container {
+  background-color: var(--bg-secondary);
+  border-radius: var(--border-radius);
+  padding: 1.5rem;
+  border: 1px solid var(--border-color);
+}
+
+.header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1.5rem;
+  padding-bottom: 1rem;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.title {
+  font-size: 1.25rem;
+  margin: 0;
+  color: var(--text-primary);
+}
+
+.header button {
+    width: auto;
+    padding: 0.5rem 1rem;
+    font-size: 0.875rem;
+}
+
+.list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.listItem {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.iconWrapper {
+  color: var(--accent-primary);
+  font-size: 1.25rem;
+}
+
+.info {
+  flex-grow: 1;
+  display: flex;
+  flex-direction: column;
+}
+
+.taskTitle {
+  font-weight: 500;
+  color: var(--text-primary);
+}
+
+.details {
+  font-size: 0.875rem;
+  color: var(--text-secondary);
+}
+
+.allDone {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1rem;
+  padding: 2rem 0;
+  color: var(--text-secondary);
+}
+
+.allDone svg {
+    font-size: 2.5rem;
+    color: var(--accent-secondary);
+}

@@ -18,3 +18,16 @@
   color: var(--text-secondary);
   font-size: 1.2rem;
 }
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
+  gap: 2rem;
+}
+
+/* Garante que o grid funcione bem em telas menores */
+@media (max-width: 900px) {
+  .grid {
+    grid-template-columns: 1fr;
+  }
+}

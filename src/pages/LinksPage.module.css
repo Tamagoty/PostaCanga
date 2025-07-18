@@ -1,0 +1,161 @@
+/* Arquivo: src/pages/LinksPage.module.css */
+/* Estilos adaptados de CustomersPage.module.css */
+
+.container {
+  display: flex;
+  flex-direction: column;
+  gap: 2rem;
+}
+
+.header {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+.header h1 {
+  font-size: 2rem;
+  color: var(--text-primary);
+  margin: 0;
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 1rem;
+}
+
+.actions > :global(button) {
+  width: auto;
+  flex-shrink: 0;
+}
+
+.searchInputWrapper {
+  flex: 1 1 250px;
+  min-width: 200px;
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: 1.5rem;
+}
+
+.card {
+  background-color: var(--bg-secondary);
+  border-radius: var(--border-radius);
+  border: 1px solid var(--border-color);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  transition: transform 0.2s, box-shadow 0.2s;
+}
+
+.card:hover {
+  transform: translateY(-5px);
+  box-shadow: var(--shadow-lg);
+}
+
+.cardHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 1rem;
+  padding: 1rem 1.5rem;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.cardTitle {
+  font-size: 1.25rem;
+  margin: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.externalLink {
+  color: var(--text-secondary);
+  font-size: 1rem;
+  transition: color 0.2s;
+}
+
+.externalLink:hover {
+  color: var(--accent-primary);
+}
+
+.cardBody {
+  padding: 1.5rem;
+  flex-grow: 1;
+  font-size: 0.9rem;
+  color: var(--text-secondary);
+  display: flex; /* Adicionado para centralizar o botão */
+  align-items: center; /* Adicionado para centralizar o botão */
+}
+
+.cardBody p {
+    margin: 0;
+}
+
+.cardFooter {
+  padding: 1rem 1.5rem;
+  background-color: var(--bg-tertiary);
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 1rem;
+}
+
+.actionButton {
+  background: none;
+  border: 1px solid var(--border-color);
+  color: var(--text-primary);
+  padding: 0.5rem 1rem;
+  border-radius: var(--border-radius);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-weight: 500;
+  transition: background-color 0.2s, border-color 0.2s;
+}
+
+.actionButton:hover {
+  background-color: var(--accent-primary);
+  border-color: var(--accent-primary);
+}
+
+.actionButton:last-child:hover {
+    background-color: var(--accent-danger);
+    border-color: var(--accent-danger);
+}
+
+/* Novo estilo para o botão de detalhes */
+.detailsButton {
+  background-color: transparent;
+  color: var(--accent-primary);
+  border: 1px solid var(--accent-primary);
+  padding: 0.5rem 1rem;
+  border-radius: var(--border-radius);
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-weight: 500;
+  transition: background-color 0.2s, color 0.2s;
+  margin: 0 auto; /* Centraliza o botão no card body */
+}
+
+.detailsButton:hover {
+  background-color: var(--accent-primary);
+  color: white;
+}
+
+
+@media (min-width: 900px) {
+  .header {
+    flex-direction: row;
+    justify-content: space-between;
+    align-items: center;
+  }
+}

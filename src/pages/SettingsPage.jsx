@@ -1,5 +1,5 @@
 // Arquivo: src/pages/SettingsPage.jsx
-// MELHORIA (v3): Implementado o `handleSupabaseError`.
+// MELHORIA (v5): Removida a exibição da "chave" da lista de configurações para uma interface mais limpa.
 
 import React, { useState, useEffect, useCallback } from 'react';
 import { useTheme } from '../context/ThemeContext';
@@ -13,6 +13,8 @@ import ConfirmationModal from '../components/ConfirmationModal';
 import PromptModal from '../components/PromptModal';
 import { FaTrash, FaEdit, FaPlus } from 'react-icons/fa';
 import { handleSupabaseError } from '../utils/errorHandler';
+
+const CORE_SETTINGS = ['agency_name', 'agency_dh', 'agency_mcu', 'agency_sto', 'agency_address'];
 
 const SettingsPage = () => {
   const { theme, applyTheme, resetToDefault, defaultTheme } = useTheme();
@@ -53,7 +55,7 @@ const SettingsPage = () => {
   const handleSaveSetting = async (formData) => {
     setLoading(true);
     const { error } = await supabase.rpc('create_or_update_app_setting', {
-      p_key: formData.key, p_value: formData.value, p_description: formData.description
+      p_key: formData.key, p_value: formData.value, p_description: formData.description, p_label: formData.label
     });
     if (error) toast.error(handleSupabaseError(error));
     else { toast.success('Configuração salva!'); setIsSettingModalOpen(false); fetchSettings(); }
@@ -136,7 +138,7 @@ const SettingsPage = () => {
         onConfirm={confirmDeleteSetting}
         title="Confirmar Exclusão" loading={isDeleting}
       >
-        <p>Tem certeza que deseja apagar a configuração <strong>{settingToDelete?.key}</strong>?</p>
+        <p>Tem certeza que deseja apagar a configuração <strong>{settingToDelete?.label || settingToDelete?.key}</strong>?</p>
       </ConfirmationModal>
 
       <ConfirmationModal
@@ -156,19 +158,29 @@ const SettingsPage = () => {
             <Button onClick={() => handleOpenSettingModal()}><FaPlus /> Nova</Button>
         </div>
         <div className={styles.settingsList}>
-            {appSettings.map(setting => (
+            {appSettings.map(setting => {
+              const isCore = CORE_SETTINGS.includes(setting.key);
+              return (
                 <div key={setting.key} className={styles.settingItem}>
                     <div className={styles.settingInfo}>
-                        <strong>{setting.key}</strong>
+                        <strong>{setting.label || setting.key}</strong>
                         <span>{setting.value}</span>
                         <em>{setting.description}</em>
                     </div>
                     <div className={styles.settingActions}>
-                        <button onClick={() => handleOpenSettingModal(setting)}><FaEdit /></button>
-                        <button onClick={() => startDeleteSetting(setting)} className={styles.deleteButton}><FaTrash /></button>
+                        <button onClick={() => handleOpenSettingModal(setting)} title="Editar"><FaEdit /></button>
+                        <button 
+                          onClick={() => startDeleteSetting(setting)} 
+                          className={styles.deleteButton}
+                          disabled={isCore}
+                          title={isCore ? "Esta configuração não pode ser apagada" : "Apagar configuração"}
+                        >
+                          <FaTrash />
+                        </button>
                     </div>
                 </div>
-            ))}
+              )
+            })}
         </div>
       </div>
 

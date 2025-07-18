@@ -1,4 +1,6 @@
 // Arquivo: src/App.jsx
+// MELHORIA (v2): Adicionada a rota para a nova página de Links.
+
 import React from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
 import { Toaster } from 'react-hot-toast';
@@ -17,7 +19,8 @@ import EmployeesPage from './pages/EmployeesPage';
 import TrackingRulesPage from './pages/TrackingRulesPage';
 import ObjectTypesPage from './pages/ObjectTypesPage';
 import TasksPage from './pages/TasksPage';
-import ManageTasksPage from './pages/ManageTasksPage'; // Nova página
+import ManageTasksPage from './pages/ManageTasksPage';
+import LinksPage from './pages/LinksPage'; // 1. Importar a nova página
 
 function App() {
   const { session, loading } = useAuth();
@@ -40,7 +43,8 @@ function App() {
           <Route path="tracking-rules" element={<TrackingRulesPage />} />
           <Route path="object-types" element={<ObjectTypesPage />} />
           <Route path="tasks" element={<TasksPage />} />
-          <Route path="tasks/manage" element={<ManageTasksPage />} /> {/* Nova rota */}
+          <Route path="tasks/manage" element={<ManageTasksPage />} />
+          <Route path="links" element={<LinksPage />} /> {/* 2. Adicionar a nova rota */}
           <Route path="*" element={<Navigate to="/" />} />
         </Route>
       </Routes>

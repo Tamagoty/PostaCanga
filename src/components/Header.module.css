@@ -17,10 +17,22 @@
   font-size: 1.5rem;
   cursor: pointer;
   margin-right: 1rem;
+  display: none; /* Escondido por padrão, aparece em telas pequenas */
 }
 
-@media (min-width: 768px) {
-  .header {
-    display: none; /* O header com o botão some em telas grandes */
+.spacer {
+  flex-grow: 1; /* Ocupa o espaço disponível */
+}
+
+.actions {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+/* Em telas pequenas, o header muda e o botão de menu aparece */
+@media (max-width: 767px) {
+  .menuButton {
+    display: block;
   }
 }

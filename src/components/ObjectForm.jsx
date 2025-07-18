@@ -1,15 +1,19 @@
 // Arquivo: src/components/ObjectForm.jsx
+// MELHORIA (v2): O seletor de "Tipo de Objeto" agora busca os dados dinamicamente do banco de dados.
+
 import React, { useState, useEffect } from 'react';
-import styles from './CustomerForm.module.css'; // Reutilizando estilos
+import styles from './CustomerForm.module.css';
 import Input from './Input';
 import Button from './Button';
 import toast from 'react-hot-toast';
 import { FaSearch } from 'react-icons/fa';
+import { supabase } from '../lib/supabaseClient';
+import { handleSupabaseError } from '../utils/errorHandler';
 
 const ObjectForm = ({ onSave, onClose, objectToEdit, loading }) => {
   const initialFormData = {
     recipient_name: '',
-    object_type: 'Encomenda PAC',
+    object_type: '', // Inicia vazio para forçar a seleção
     tracking_code: '',
     cep: '',
     street_name: '',
@@ -21,12 +25,30 @@ const ObjectForm = ({ onSave, onClose, objectToEdit, loading }) => {
 
   const [formData, setFormData] = useState(initialFormData);
   const [cepLoading, setCepLoading] = useState(false);
+  const [objectTypes, setObjectTypes] = useState([]); // Estado para armazenar os tipos
+
+  // Busca os tipos de objeto do banco de dados quando o componente é montado
+  useEffect(() => {
+    const fetchObjectTypes = async () => {
+      const { data, error } = await supabase.from('object_types').select('name').order('name');
+      if (error) {
+        toast.error(handleSupabaseError(error));
+      } else if (data) {
+        setObjectTypes(data.map(item => item.name));
+        // Define um valor padrão para o formulário após carregar os tipos
+        if (!objectToEdit) {
+            setFormData(prev => ({...prev, object_type: data[0]?.name || ''}))
+        }
+      }
+    };
+    fetchObjectTypes();
+  }, [objectToEdit]);
 
   useEffect(() => {
     if (objectToEdit) {
       setFormData({
         recipient_name: objectToEdit.recipient_name || '',
-        object_type: objectToEdit.object_type || 'Encomenda PAC',
+        object_type: objectToEdit.object_type || '',
         tracking_code: objectToEdit.tracking_code || '',
         cep: '', street_name: '', number: '', neighborhood: '', city: '', state: '',
       });
@@ -57,7 +79,6 @@ const ObjectForm = ({ onSave, onClose, objectToEdit, loading }) => {
             state: data.uf,
           }));
           toast.success('Endereço preenchido!');
-          // Move o foco para o campo de número
           document.getElementById('number')?.focus();
         }
       } catch (error) {
@@ -75,8 +96,8 @@ const ObjectForm = ({ onSave, onClose, objectToEdit, loading }) => {
 
   const handleSubmit = (e) => {
     e.preventDefault();
-    if (!formData.recipient_name) {
-      toast.error('O nome do Destinatário é obrigatório.');
+    if (!formData.recipient_name || !formData.object_type) {
+      toast.error('O Nome do Destinatário e o Tipo de Objeto são obrigatórios.');
       return;
     }
     if (formData.street_name && (!formData.city || !formData.state)) {
@@ -93,15 +114,11 @@ const ObjectForm = ({ onSave, onClose, objectToEdit, loading }) => {
         <Input id="recipient_name" name="recipient_name" label="Nome do Destinatário" value={formData.recipient_name} onChange={handleChange} required />
         <div className={styles.formGroup}>
           <label htmlFor="object_type">Tipo de Objeto</label>
-          <select id="object_type" name="object_type" value={formData.object_type} onChange={handleChange} className={styles.select}>
-            <option>Encomenda PAC</option>
-            <option>SEDEX</option>
-            <option>Carta Registrada</option>
-            <option>Carta Simples</option>
-            <option>Revista</option>
-            <option>Cartão</option>
-            <option>Telegrama</option>
-            <option>Outro</option>
+          <select id="object_type" name="object_type" value={formData.object_type} onChange={handleChange} className={styles.select} required>
+            <option value="" disabled>Selecione um tipo</option>
+            {objectTypes.map(type => (
+              <option key={type} value={type}>{type}</option>
+            ))}
           </select>
         </div>
         <Input id="tracking_code" name="tracking_code" label="Código de Rastreio (Opcional)" value={formData.tracking_code} onChange={handleChange} />

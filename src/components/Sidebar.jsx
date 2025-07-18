@@ -1,21 +1,14 @@
 // Arquivo: src/components/Sidebar.jsx
+// MELHORIA (v2): Adicionado o link para a nova página de Links Úteis.
+
 import React from "react";
 import { NavLink } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import styles from "./Sidebar.module.css";
 import {
-  FaTachometerAlt,
-  FaBoxOpen,
-  FaUsers,
-  FaClipboardList,
-  FaSignOutAlt,
-  FaCog,
-  FaTimes,
-  FaUserCog,
-  FaMapMarkedAlt,
-  FaRulerCombined,
-  FaTags,
-  FaTasks,
+  FaTachometerAlt, FaBoxOpen, FaUsers, FaClipboardList, FaSignOutAlt,
+  FaCog, FaTimes, FaUserCog, FaMapMarkedAlt, FaRulerCombined, FaTags,
+  FaTasks, FaLink, // 1. Importar o ícone de link
 } from "react-icons/fa";
 
 const Sidebar = ({ onLogout, isOpen, toggleSidebar }) => {
@@ -29,6 +22,7 @@ const Sidebar = ({ onLogout, isOpen, toggleSidebar }) => {
     { to: "/customers", icon: FaUsers, label: "Clientes" },
     { to: "/addresses", icon: FaMapMarkedAlt, label: "Endereços" },
     { to: "/supplies", icon: FaClipboardList, label: "Expediente" },
+    { to: "/links", icon: FaLink, label: "Links Úteis" }, // 2. Adicionar o novo item de menu
   ];
 
   return (

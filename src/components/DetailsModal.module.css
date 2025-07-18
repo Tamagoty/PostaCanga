@@ -1,0 +1,27 @@
+/* Arquivo: src/components/DetailsModal.module.css */
+
+.content {
+  padding: 1rem 0;
+  color: var(--text-secondary);
+  line-height: 1.6;
+  max-height: 60vh;
+  overflow-y: auto;
+}
+
+.preformatted {
+  background-color: var(--bg-primary);
+  border: 1px solid var(--border-color);
+  border-radius: var(--border-radius);
+  padding: 1rem;
+  white-space: pre-wrap; /* Garante a quebra de linha */
+  word-wrap: break-word; /* Garante que palavras longas não quebrem o layout */
+  font-family: monospace;
+  color: var(--text-primary);
+}
+
+.actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.75rem;
+  margin-top: 1.5rem;
+}

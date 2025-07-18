@@ -1,7 +1,7 @@
 // Arquivo: src/components/BulkRegisteredForm.jsx
-// MELHORIA (v2): Implementado o `handleSupabaseError`.
+// MELHORIA (v3): O seletor de "Tipo de Objeto" para itens não classificados agora busca os dados dinamicamente.
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import styles from './BulkRegisteredForm.module.css';
 import Button from './Button';
 import toast from 'react-hot-toast';
@@ -13,6 +13,20 @@ const BulkRegisteredForm = ({ onSave, onClose, loading }) => {
   const [unclassifiedObjects, setUnclassifiedObjects] = useState([]);
   const [classifiedObjects, setClassifiedObjects] = useState([]);
   const [isProcessing, setIsProcessing] = useState(false);
+  const [objectTypes, setObjectTypes] = useState([]); // Estado para os tipos
+
+  // Busca os tipos de objeto do banco de dados
+  useEffect(() => {
+    const fetchObjectTypes = async () => {
+      const { data, error } = await supabase.from('object_types').select('name').order('name');
+      if (error) {
+        toast.error(handleSupabaseError(error));
+      } else if (data) {
+        setObjectTypes(data.map(item => item.name));
+      }
+    };
+    fetchObjectTypes();
+  }, []);
 
   const handleProcessData = async () => {
     if (!textData.trim()) { toast.error('Por favor, cole os dados na área de texto.'); return; }
@@ -41,12 +55,14 @@ const BulkRegisteredForm = ({ onSave, onClose, loading }) => {
 
       const classified = [];
       const unclassified = [];
+      const defaultUnclassifiedType = objectTypes.find(t => t === 'Encomenda PAC') || objectTypes[0] || 'Registrado';
+
       parsedObjects.forEach(obj => {
         const rule = rules.find(r => obj.tracking_code.startsWith(r.prefix));
         if (rule) {
           classified.push({ ...obj, object_type: rule.object_type });
         } else {
-          unclassified.push({ ...obj, object_type: 'Encomenda PAC' });
+          unclassified.push({ ...obj, object_type: defaultUnclassifiedType });
         }
       });
 
@@ -84,7 +100,7 @@ const BulkRegisteredForm = ({ onSave, onClose, loading }) => {
         });
         if (error) {
             toast.error(handleSupabaseError(error));
-            return; // Interrompe se houver erro ao salvar uma regra
+            return;
         }
     }
     toast.success('Novas regras de rastreio salvas!');
@@ -115,7 +131,9 @@ const BulkRegisteredForm = ({ onSave, onClose, loading }) => {
               <div key={index} className={styles.unclassifiedItem}>
                 <div className={styles.itemInfo}><strong>{obj.tracking_code}</strong><span>{obj.recipient_name}</span></div>
                 <select value={obj.object_type} onChange={(e) => handleManualClassificationChange(index, e.target.value)} className={styles.select}>
-                  <option>Encomenda PAC</option><option>SEDEX</option><option>Carta Registrada</option><option>Cartão Registrado</option><option>Registrado</option>
+                  {objectTypes.map(type => (
+                    <option key={type} value={type}>{type}</option>
+                  ))}
                 </select>
               </div>
             ))}

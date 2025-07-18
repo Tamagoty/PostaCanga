@@ -1,5 +1,5 @@
 // Arquivo: src/pages/DashboardPage.jsx
-// MELHORIA (v2): Implementado o `handleSupabaseError`.
+// MELHORIA (v3): Adicionado o componente de Tarefas Pendentes para administradores.
 
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabaseClient';
@@ -8,9 +8,12 @@ import styles from './DashboardPage.module.css';
 import DashboardStats from '../components/DashboardStats';
 import RecentObjects from '../components/RecentObjects';
 import UpcomingBirthdays from '../components/UpcomingBirthdays';
+import PendingTasks from '../components/PendingTasks'; // 1. Importa o novo componente
+import { useAuth } from '../context/AuthContext'; // 2. Importa o hook de autenticação
 import { handleSupabaseError } from '../utils/errorHandler';
 
 const DashboardPage = () => {
+  const { isAdmin } = useAuth(); // 3. Pega o status de admin
   const [dashboardData, setDashboardData] = useState(null);
   const [loading, setLoading] = useState(true);
 
@@ -42,6 +45,12 @@ const DashboardPage = () => {
     <div className={styles.container}>
       <h1 className={styles.title}>Dashboard</h1>
       <DashboardStats stats={dashboardData} />
+
+      {/* 4. Renderiza o componente de tarefas apenas se o usuário for admin e houver tarefas */}
+      {isAdmin && dashboardData.pending_tasks && (
+        <PendingTasks tasks={dashboardData.pending_tasks} />
+      )}
+
       <div className={styles.grid}>
         <RecentObjects objects={dashboardData.recent_objects} />
         <UpcomingBirthdays birthdays={dashboardData.upcoming_birthdays} />

@@ -49,6 +49,24 @@
   white-space: nowrap;
 }
 
+/* Novo estilo para cabeçalhos ordenáveis */
+.sortableHeader {
+  cursor: pointer;
+  user-select: none;
+  transition: color 0.2s;
+}
+
+.sortableHeader:hover {
+  color: var(--text-primary);
+}
+
+.sortableHeader svg {
+  margin-left: 0.5rem;
+  font-size: 0.7rem;
+  vertical-align: middle;
+}
+
+
 .table tbody tr:last-child td {
   border-bottom: none;
 }
@@ -61,7 +79,7 @@
 .stockCell {
   display: flex;
   align-items: center;
-  justify-content: center; /* Centraliza o valor do estoque */
+  justify-content: center;
   gap: 1rem;
 }
 
@@ -99,12 +117,22 @@
   color: var(--accent-primary);
 }
 
-/* Estilos para os botões de adicionar/remover estoque */
-.addStock:hover {
-  color: var(--accent-secondary) !important;
+/* Estilos para Paginação */
+.pagination {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 1rem;
+  margin-top: 1rem;
 }
-.removeStock:hover {
-  color: var(--accent-danger) !important;
+
+.pagination button {
+  width: auto;
+}
+
+.pageInfo {
+  font-weight: 500;
+  color: var(--text-secondary);
 }
 
 

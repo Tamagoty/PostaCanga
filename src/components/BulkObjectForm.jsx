@@ -1,12 +1,32 @@
 // Arquivo: src/components/BulkObjectForm.jsx
-import React, { useState } from 'react';
-import styles from './EmployeeForm.module.css'; // Reutilizando estilos
+// MELHORIA (v2): O seletor de "Tipo de Objeto" agora busca os dados dinamicamente.
+
+import React, { useState, useEffect } from 'react';
+import styles from './EmployeeForm.module.css';
 import Button from './Button';
 import toast from 'react-hot-toast';
+import { supabase } from '../lib/supabaseClient';
+import { handleSupabaseError } from '../utils/errorHandler';
 
 const BulkObjectForm = ({ onSave, onClose, loading }) => {
   const [textData, setTextData] = useState('');
-  const [objectType, setObjectType] = useState('Carta Simples');
+  const [objectType, setObjectType] = useState('');
+  const [objectTypes, setObjectTypes] = useState([]);
+
+  useEffect(() => {
+    const fetchObjectTypes = async () => {
+      const { data, error } = await supabase.from('object_types').select('name').order('name');
+      if (error) {
+        toast.error(handleSupabaseError(error));
+      } else if (data) {
+        setObjectTypes(data.map(item => item.name));
+        if (data.length > 0) {
+          setObjectType(data.find(t => t.name === 'Carta Simples') ? 'Carta Simples' : data[0].name);
+        }
+      }
+    };
+    fetchObjectTypes();
+  }, []);
 
   const handleSubmit = (e) => {
     e.preventDefault();
@@ -15,10 +35,9 @@ const BulkObjectForm = ({ onSave, onClose, loading }) => {
       return;
     }
     
-    // Processa o texto colado para extrair os dados
     const lines = textData.trim().split('\n');
     const objectsToCreate = lines.map(line => {
-      const columns = line.split('\t'); // Separa por TAB
+      const columns = line.split('\t');
       if (columns.length >= 4) {
         return {
           recipient_name: columns[2].trim(),
@@ -26,7 +45,7 @@ const BulkObjectForm = ({ onSave, onClose, loading }) => {
         };
       }
       return null;
-    }).filter(Boolean); // Remove linhas que não puderam ser processadas
+    }).filter(Boolean);
 
     if (objectsToCreate.length === 0) {
       toast.error('Nenhum objeto válido encontrado nos dados colados. Verifique o formato.');
@@ -59,10 +78,12 @@ const BulkObjectForm = ({ onSave, onClose, loading }) => {
             value={objectType} 
             onChange={(e) => setObjectType(e.target.value)} 
             className={styles.select}
+            required
           >
-            <option>Carta Simples</option>
-            <option>Cartão</option>
-            <option>Revista</option>
+            <option value="" disabled>Selecione um tipo</option>
+            {objectTypes.map(type => (
+              <option key={type} value={type}>{type}</option>
+            ))}
           </select>
         </div>
       </fieldset>

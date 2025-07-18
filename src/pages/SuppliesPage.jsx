@@ -1,11 +1,11 @@
 // Arquivo: src/pages/SuppliesPage.jsx
-// MELHORIA (v3): Implementado o `handleSupabaseError`.
+// MELHORIA (v4): Adicionada paginação e ordenação clicável em todas as colunas.
 
 import React, { useState, useEffect, useCallback } from 'react';
 import { supabase } from '../lib/supabaseClient';
 import toast from 'react-hot-toast';
 import styles from './SuppliesPage.module.css';
-import { FaSearch, FaPlus, FaEdit, FaPlusCircle, FaMinusCircle, FaHistory } from 'react-icons/fa';
+import { FaSearch, FaPlus, FaEdit, FaPlusCircle, FaMinusCircle, FaHistory, FaArrowLeft, FaArrowRight, FaArrowUp, FaArrowDown } from 'react-icons/fa';
 import Input from '../components/Input';
 import Button from '../components/Button';
 import Modal from '../components/Modal';
@@ -14,6 +14,7 @@ import AdjustStockForm from '../components/AdjustStockForm';
 import { useNavigate } from 'react-router-dom';
 import useDebounce from '../hooks/useDebounce';
 import { handleSupabaseError } from '../utils/errorHandler';
+import { ITEMS_PER_PAGE } from '../constants';
 
 const SuppliesPage = () => {
   const [supplies, setSupplies] = useState([]);
@@ -26,21 +27,68 @@ const SuppliesPage = () => {
   const [supplyToAdjust, setSupplyToAdjust] = useState(null);
   const [adjustActionType, setAdjustActionType] = useState('add');
   const navigate = useNavigate();
-
   const debouncedSearchTerm = useDebounce(searchTerm, 300);
+
+  // --- Estados para Paginação e Ordenação ---
+  const [page, setPage] = useState(0);
+  const [totalCount, setTotalCount] = useState(0);
+  const [sortConfig, setSortConfig] = useState({ key: 'name', direction: 'asc' });
 
   const fetchSupplies = useCallback(async () => {
     setLoading(true);
-    let { data, error } = await supabase.from('office_supplies').select('*').order('name', { ascending: true });
-    if (error) toast.error(handleSupabaseError(error));
-    else setSupplies(data);
-    setLoading(false);
-  }, []);
+    try {
+      // Busca o total de itens para a paginação (ignorando a busca por enquanto)
+      const { data: count, error: countError } = await supabase.rpc('count_supplies');
+      if (countError) throw countError;
+      setTotalCount(count || 0);
+
+      const from = page * ITEMS_PER_PAGE;
+      const to = from + ITEMS_PER_PAGE - 1;
+
+      let query = supabase.from('office_supplies').select('*');
+      
+      // Aplica a busca (filtragem)
+      if (debouncedSearchTerm) {
+        query = query.ilike('name', `%${debouncedSearchTerm}%`);
+      }
+
+      // Aplica a ordenação e paginação
+      query = query.order(sortConfig.key, { ascending: sortConfig.direction === 'asc' }).range(from, to);
+
+      const { data, error } = await query;
+      if (error) throw error;
+
+      setSupplies(data);
+    } catch (error) {
+      toast.error(handleSupabaseError(error));
+    } finally {
+      setLoading(false);
+    }
+  }, [page, sortConfig, debouncedSearchTerm]);
 
   useEffect(() => {
     fetchSupplies();
   }, [fetchSupplies]);
 
+  // Reseta a página ao buscar
+  useEffect(() => {
+    setPage(0);
+  }, [debouncedSearchTerm]);
+
+  const requestSort = (key) => {
+    let direction = 'asc';
+    if (sortConfig.key === key && sortConfig.direction === 'asc') {
+      direction = 'desc';
+    }
+    setSortConfig({ key, direction });
+    setPage(0);
+  };
+
+  const getSortIcon = (name) => {
+    if (sortConfig.key !== name) return null;
+    return sortConfig.direction === 'asc' ? <FaArrowUp /> : <FaArrowDown />;
+  };
+  
   const handleOpenEditModal = (supply) => {
     setSupplyToEdit(supply);
     setIsEditModalOpen(true);
@@ -84,9 +132,7 @@ const SuppliesPage = () => {
     setIsSaving(false);
   };
 
-  const filteredSupplies = supplies.filter(s => 
-    s.name.toLowerCase().includes(debouncedSearchTerm.toLowerCase())
-  );
+  const totalPages = Math.ceil(totalCount / ITEMS_PER_PAGE);
 
   return (
     <div className={styles.container}>
@@ -118,12 +164,15 @@ const SuppliesPage = () => {
         <table className={styles.table}>
           <thead>
             <tr>
-              <th>Nome do Material</th><th>Descrição</th><th>Estoque Atual</th><th>Ações</th>
+              <th className={styles.sortableHeader} onClick={() => requestSort('name')}>Nome do Material {getSortIcon('name')}</th>
+              <th className={styles.sortableHeader} onClick={() => requestSort('description')}>Descrição {getSortIcon('description')}</th>
+              <th className={styles.sortableHeader} onClick={() => requestSort('stock')}>Estoque Atual {getSortIcon('stock')}</th>
+              <th>Ações</th>
             </tr>
           </thead>
           <tbody>
             {loading ? (<tr><td colSpan="4">A carregar...</td></tr>) 
-            : filteredSupplies.map(supply => (
+            : supplies.map(supply => (
               <tr key={supply.id}>
                 <td data-label="Nome">{supply.name}</td>
                 <td data-label="Descrição">{supply.description || 'N/A'}</td>
@@ -153,6 +202,20 @@ const SuppliesPage = () => {
           </tbody>
         </table>
       </div>
+
+      {totalPages > 1 && (
+        <div className={styles.pagination}>
+          <Button onClick={() => setPage(p => p - 1)} disabled={page === 0}>
+            <FaArrowLeft /> Anterior
+          </Button>
+          <span className={styles.pageInfo}>
+            Página {page + 1} de {totalPages}
+          </span>
+          <Button onClick={() => setPage(p => p + 1)} disabled={page + 1 >= totalPages}>
+            Próxima <FaArrowRight />
+          </Button>
+        </div>
+      )}
     </div>
   );
 };
