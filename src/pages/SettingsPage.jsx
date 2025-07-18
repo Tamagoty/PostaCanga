@@ -6,34 +6,53 @@ import toast from 'react-hot-toast';
 import styles from './SettingsPage.module.css';
 import Button from '../components/Button';
 import Input from '../components/Input'; // Importando o Input
-import { FaTrash, FaSave } from 'react-icons/fa';
+import AppSettingForm from '../components/AppSettingForm';
+import Modal from '../components/Modal';
+import { FaTrash, FaEdit, FaPlus, FaSave } from 'react-icons/fa';
 
 const SettingsPage = () => {
   const { theme, applyTheme, resetToDefault, defaultTheme } = useTheme();
   const [savedThemes, setSavedThemes] = useState([]);
   const [currentColors, setCurrentColors] = useState(theme);
-  // Novos estados para as configurações gerais
-  const [agencyName, setAgencyName] = useState('');
+  const [appSettings, setAppSettings] = useState([]);
+  const [isThemeModalOpen, setIsThemeModalOpen] = useState(false); // Modal para temas
+  const [isSettingModalOpen, setIsSettingModalOpen] = useState(false); // Modal para configurações
+  const [settingToEdit, setSettingToEdit] = useState(null);
   const [loading, setLoading] = useState(false);
 
-  // Função unificada para buscar todas as configurações
   const fetchSettings = useCallback(async () => {
-    // Busca os temas do usuário
+    setLoading(true);
     const { data: themes } = await supabase.from('user_themes').select('*');
     setSavedThemes(themes || []);
-    
-    // Busca o nome da agência
-    const { data: agency } = await supabase.from('app_settings').select('value').eq('key', 'agency_name').single();
-    if (agency) setAgencyName(agency.value);
+    const { data: settings } = await supabase.from('app_settings').select('*').order('key');
+    setAppSettings(settings || []);
+    setLoading(false);
   }, []);
 
-  useEffect(() => {
-    fetchSettings();
-  }, [fetchSettings]);
+  useEffect(() => { fetchSettings(); }, [fetchSettings]);
+  useEffect(() => { setCurrentColors(theme); }, [theme]);
 
-  useEffect(() => {
-    setCurrentColors(theme);
-  }, [theme]);
+  const handleOpenSettingModal = (setting = null) => {
+    setSettingToEdit(setting);
+    setIsSettingModalOpen(true);
+  };
+
+  const handleSaveSetting = async (formData) => {
+    setLoading(true);
+    const { error } = await supabase.rpc('create_or_update_app_setting', {
+      p_key: formData.key, p_value: formData.value, p_description: formData.description
+    });
+    if (error) toast.error('Erro ao salvar configuração.');
+    else { toast.success('Configuração salva!'); setIsSettingModalOpen(false); fetchSettings(); }
+    setLoading(false);
+  };
+
+  const handleDeleteSetting = async (key) => {
+    if (!window.confirm(`Tem certeza que deseja apagar a configuração "${key}"?`)) return;
+    const { error } = await supabase.rpc('delete_app_setting', { p_key: key });
+    if (error) toast.error(`Erro ao apagar: ${error.message}`);
+    else { toast.success('Configuração apagada.'); fetchSettings(); }
+  };
 
   const handleColorChange = (e) => {
     const { name, value } = e.target;
@@ -61,31 +80,38 @@ const SettingsPage = () => {
     else { toast.success('Tema apagado.'); fetchSettings(); }
   };
 
-  // Nova função para salvar o nome da agência
-  const handleSaveAgencyName = async () => {
-    setLoading(true);
-    const { error } = await supabase.rpc('update_app_setting', { p_key: 'agency_name', p_value: agencyName });
-    if (error) toast.error('Erro ao salvar nome da agência.');
-    else toast.success('Nome da agência salvo!');
-    setLoading(false);
-  };
-
   const colorInputs = Object.keys(defaultTheme).filter(key => !key.includes('hover'));
 
   return (
     <div className={styles.container}>
+      <Modal isOpen={isSettingModalOpen} onClose={() => setIsSettingModalOpen(false)} title={settingToEdit ? 'Editar Configuração' : 'Nova Configuração'}>
+        <AppSettingForm onSave={handleSaveSetting} onClose={() => setIsSettingModalOpen(false)} settingToEdit={settingToEdit} loading={loading} />
+      </Modal>
+
       <h1>Configurações</h1>
       
-      {/* Nova seção para Configurações Gerais */}
       <div className={styles.section}>
-        <h2>Configurações Gerais</h2>
-        <div className={styles.generalSettings}>
-          <Input id="agencyName" label="Nome da Agência" value={agencyName} onChange={(e) => setAgencyName(e.target.value)} />
-          <Button onClick={handleSaveAgencyName} loading={loading}><FaSave /> Salvar Nome</Button>
+        <div className={styles.sectionHeader}>
+            <h2>Configurações da Agência</h2>
+            <Button onClick={() => handleOpenSettingModal()}><FaPlus /> Nova</Button>
+        </div>
+        <div className={styles.settingsList}>
+            {appSettings.map(setting => (
+                <div key={setting.key} className={styles.settingItem}>
+                    <div className={styles.settingInfo}>
+                        <strong>{setting.key}</strong>
+                        <span>{setting.value}</span>
+                        <em>{setting.description}</em>
+                    </div>
+                    <div className={styles.settingActions}>
+                        <button onClick={() => handleOpenSettingModal(setting)}><FaEdit /></button>
+                        <button onClick={() => handleDeleteSetting(setting.key)} className={styles.deleteButton}><FaTrash /></button>
+                    </div>
+                </div>
+            ))}
         </div>
       </div>
 
-      {/* Seção de Aparência do Tema (código original preservado) */}
       <div className={styles.section}>
         <h2>Editor de Tema</h2>
         <div className={styles.colorGrid}>
@@ -102,7 +128,6 @@ const SettingsPage = () => {
         </div>
       </div>
 
-      {/* Seção de Temas Salvos (código original preservado) */}
       <div className={styles.section}>
         <h2>Meus Temas Salvos</h2>
         <div className={styles.savedThemesGrid}>

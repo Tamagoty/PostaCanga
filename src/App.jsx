@@ -14,7 +14,10 @@ import SuppliesPage from './pages/SuppliesPage';
 import StockLogPage from './pages/StockLogPage';
 import SettingsPage from './pages/SettingsPage';
 import EmployeesPage from './pages/EmployeesPage';
-import TrackingRulesPage from './pages/TrackingRulesPage'; // Nova página
+import TrackingRulesPage from './pages/TrackingRulesPage';
+import ObjectTypesPage from './pages/ObjectTypesPage';
+import TasksPage from './pages/TasksPage';
+import ManageTasksPage from './pages/ManageTasksPage'; // Nova página
 
 function App() {
   const { session, loading } = useAuth();
@@ -34,7 +37,10 @@ function App() {
           <Route path="supplies/:supplyId/log" element={<StockLogPage />} />
           <Route path="employees" element={<EmployeesPage />} />
           <Route path="settings" element={<SettingsPage />} />
-          <Route path="tracking-rules" element={<TrackingRulesPage />} /> {/* Nova rota */}
+          <Route path="tracking-rules" element={<TrackingRulesPage />} />
+          <Route path="object-types" element={<ObjectTypesPage />} />
+          <Route path="tasks" element={<TasksPage />} />
+          <Route path="tasks/manage" element={<ManageTasksPage />} /> {/* Nova rota */}
           <Route path="*" element={<Navigate to="/" />} />
         </Route>
       </Routes>

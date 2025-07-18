@@ -38,20 +38,19 @@
   color: var(--text-secondary);
 }
 
-/* Novo grupo para o CEP com botão */
 .cepGroup {
   display: flex;
   align-items: flex-end;
   gap: 0.5rem;
-  margin-bottom: 1rem; /* Espaço antes do dropdown */
+  margin-bottom: 1rem;
 }
 
-.cepGroup > div { /* O wrapper do Input */
+.cepGroup > div {
   flex-grow: 1;
 }
 
 .cepButton {
-  height: 46px; /* Alinha a altura com o input */
+  height: 46px;
   flex-shrink: 0;
   width: 46px;
   padding: 0;
@@ -87,7 +86,51 @@
   margin-top: 1rem;
 }
 
-/* Responsividade para o grid */
+/* Novos estilos para a busca de contatos */
+.searchWrapper {
+  position: relative;
+}
+.searchResults {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  background-color: var(--bg-tertiary);
+  border: 1px solid var(--border-color);
+  border-top: none;
+  border-radius: 0 0 var(--border-radius) var(--border-radius);
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  z-index: 10;
+  max-height: 150px;
+  overflow-y: auto;
+}
+.searchResults li {
+  padding: 0.75rem 1rem;
+  cursor: pointer;
+}
+.searchResults li:hover {
+  background-color: var(--accent-primary);
+  color: white;
+}
+.selectedContact {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background-color: var(--bg-tertiary);
+  padding: 0.75rem 1rem;
+  border-radius: var(--border-radius);
+}
+.selectedContact button {
+  background: none;
+  border: none;
+  color: var(--accent-danger);
+  cursor: pointer;
+  font-size: 0.8rem;
+  text-decoration: underline;
+}
+
 @media (max-width: 580px) {
   .grid {
     grid-template-columns: 1fr;
