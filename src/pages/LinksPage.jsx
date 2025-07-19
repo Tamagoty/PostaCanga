@@ -1,11 +1,11 @@
 // Arquivo: src/pages/LinksPage.jsx
-// MELHORIA (v1.3): Adicionada paginação e ordenação.
+// MELHORIA (v1.4): Adicionado feedback de busca aprimorado com o componente EmptyState.
 
 import React, { useState, useEffect, useCallback } from 'react';
 import { supabase } from '../lib/supabaseClient';
 import toast from 'react-hot-toast';
 import styles from './LinksPage.module.css';
-import { FaSearch, FaPlus, FaExternalLinkAlt, FaEdit, FaTrashAlt, FaInfoCircle, FaArrowLeft, FaArrowRight, FaSortAlphaDown, FaSortAlphaUp } from 'react-icons/fa';
+import { FaSearch, FaPlus, FaExternalLinkAlt, FaEdit, FaTrashAlt, FaInfoCircle, FaArrowLeft, FaArrowRight, FaSortAlphaDown, FaSortAlphaUp, FaLink } from 'react-icons/fa';
 import Input from '../components/Input';
 import Button from '../components/Button';
 import Modal from '../components/Modal';
@@ -15,6 +15,7 @@ import DetailsModal from '../components/DetailsModal';
 import { handleSupabaseError } from '../utils/errorHandler';
 import useDebounce from '../hooks/useDebounce';
 import { ITEMS_PER_PAGE } from '../constants';
+import EmptyState from '../components/EmptyState';
 
 const LinksPage = () => {
   const [links, setLinks] = useState([]);
@@ -27,8 +28,6 @@ const LinksPage = () => {
   const [linkToDelete, setLinkToDelete] = useState(null);
   const [detailsToShow, setDetailsToShow] = useState(null);
   const debouncedSearchTerm = useDebounce(searchTerm, 300);
-
-  // --- Estados para Paginação e Ordenação ---
   const [page, setPage] = useState(0);
   const [totalCount, setTotalCount] = useState(0);
   const [sortConfig, setSortConfig] = useState({ key: 'name', direction: 'asc' });
@@ -173,7 +172,17 @@ const LinksPage = () => {
               </div>
             </div>
           ))
-        ) : (<p>Nenhum link encontrado.</p>)}
+        ) : (
+          <EmptyState
+            icon={FaLink}
+            title={debouncedSearchTerm ? "Nenhum resultado" : "Nenhum link"}
+            message={
+              debouncedSearchTerm
+                ? <>Nenhum link encontrado para a busca <strong>"{debouncedSearchTerm}"</strong>.</>
+                : "Ainda não há links úteis cadastrados."
+            }
+          />
+        )}
       </div>
 
       {totalPages > 1 && (

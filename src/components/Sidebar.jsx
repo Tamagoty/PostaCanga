@@ -1,5 +1,5 @@
 // Arquivo: src/components/Sidebar.jsx
-// MELHORIA (v2): Adicionado o link para a nova página de Links Úteis.
+// MELHORIA (v3): Adicionado o link para a nova página de Relatórios.
 
 import React from "react";
 import { NavLink } from "react-router-dom";
@@ -8,7 +8,7 @@ import styles from "./Sidebar.module.css";
 import {
   FaTachometerAlt, FaBoxOpen, FaUsers, FaClipboardList, FaSignOutAlt,
   FaCog, FaTimes, FaUserCog, FaMapMarkedAlt, FaRulerCombined, FaTags,
-  FaTasks, FaLink, // 1. Importar o ícone de link
+  FaTasks, FaLink, FaChartPie, // 1. Importar o ícone de relatórios
 } from "react-icons/fa";
 
 const Sidebar = ({ onLogout, isOpen, toggleSidebar }) => {
@@ -22,7 +22,7 @@ const Sidebar = ({ onLogout, isOpen, toggleSidebar }) => {
     { to: "/customers", icon: FaUsers, label: "Clientes" },
     { to: "/addresses", icon: FaMapMarkedAlt, label: "Endereços" },
     { to: "/supplies", icon: FaClipboardList, label: "Expediente" },
-    { to: "/links", icon: FaLink, label: "Links Úteis" }, // 2. Adicionar o novo item de menu
+    { to: "/links", icon: FaLink, label: "Links Úteis" },
   ];
 
   return (
@@ -63,6 +63,15 @@ const Sidebar = ({ onLogout, isOpen, toggleSidebar }) => {
         ))}
         {isAdmin && (
           <>
+            <NavLink
+              to="/reports" // 2. Adicionar o novo item de menu para admin
+              className={({ isActive }) =>
+                `${styles.navLink} ${isActive ? styles.active : ""}`
+              }
+            >
+              <FaChartPie className={styles.navIcon} />
+              <span className={styles.navLabel}>Relatórios</span>
+            </NavLink>
             <NavLink
               to="/tasks"
               className={({ isActive }) =>

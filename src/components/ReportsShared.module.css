@@ -1,0 +1,57 @@
+/* Arquivo: src/components/ReportsShared.module.css */
+/* Estilos compartilhados para os componentes de relatório */
+
+.reportContainer {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+.reportHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 1rem;
+}
+
+.reportHeader h3 {
+  margin: 0;
+  color: var(--text-primary);
+}
+
+.reportHeader button {
+  width: auto;
+}
+
+.chartWrapper {
+  padding: 1rem;
+  background-color: var(--bg-primary); /* Fundo um pouco mais escuro para o gráfico */
+  border-radius: var(--border-radius);
+}
+
+.tableWrapper {
+  overflow-x: auto;
+}
+
+.reportTable {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.reportTable th, .reportTable td {
+  padding: 0.75rem 1rem;
+  text-align: left;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.reportTable th {
+  color: var(--text-secondary);
+  font-size: 0.8rem;
+  text-transform: uppercase;
+}
+
+.suggestionCell {
+  font-weight: bold;
+  color: var(--accent-secondary);
+}

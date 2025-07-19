@@ -1,0 +1,87 @@
+/* Arquivo: src/pages/ReportsPage.module.css */
+
+.container {
+  display: flex;
+  flex-direction: column;
+  gap: 2rem;
+}
+
+.header h1 {
+  font-size: 2rem;
+  color: var(--text-primary);
+  margin: 0;
+}
+
+.filterSection {
+  background-color: var(--bg-secondary);
+  padding: 1.5rem;
+  border-radius: var(--border-radius);
+  border: 1px solid var(--border-color);
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+.reportSelector {
+  display: flex;
+  gap: 0.5rem;
+  background-color: var(--bg-primary);
+  padding: 0.5rem;
+  border-radius: var(--border-radius);
+  align-self: flex-start;
+}
+
+.reportSelector button {
+    border: none !important;
+}
+
+.filterGroup {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
+.filterGroup label {
+  font-weight: 500;
+  color: var(--text-secondary);
+}
+
+.yearInput, .periodSelect {
+  background-color: var(--bg-tertiary);
+  border: 1px solid var(--border-color);
+  border-radius: var(--border-radius);
+  color: var(--text-primary);
+  padding: 0.75rem;
+  font-size: 1rem;
+}
+
+.yearInput {
+  width: 100px;
+}
+
+.periodSelect {
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' fill='%23a0a0a0' viewBox='0 0 16 16'%3E%3Cpath fill-rule='evenodd' d='M1.646 4.646a.5.5 0 0 1 .708 0L8 10.293l5.646-5.647a.5.5 0 0 1 .708.708l-6 6a.5.5 0 0 1-.708 0l-6-6a.5.5 0 0 1 0-.708z'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 1rem center;
+  padding-right: 2.5rem;
+}
+
+.reportDisplay {
+  background-color: var(--bg-secondary);
+  padding: 2rem 1rem 1rem 0;
+  border-radius: var(--border-radius);
+  border: 1px solid var(--border-color);
+  min-height: 450px;
+}
+
+@media (min-width: 768px) {
+  .filterSection {
+    flex-direction: row;
+    justify-content: space-between;
+    align-items: center;
+  }
+}

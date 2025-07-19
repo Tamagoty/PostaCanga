@@ -1,11 +1,11 @@
 // Arquivo: src/pages/CustomersPage.jsx
-// MELHORIA (v3): Implementado o `handleSupabaseError` para exibir mensagens de erro amigáveis.
+// MELHORIA (v4): Adicionado feedback de busca aprimorado com o componente EmptyState.
 
 import React, { useState, useEffect, useCallback } from 'react';
 import { supabase } from '../lib/supabaseClient';
 import toast from 'react-hot-toast';
 import styles from './CustomersPage.module.css';
-import { FaSearch, FaPlus, FaEye, FaUserCircle, FaPhoneAlt, FaArrowLeft, FaArrowRight, FaFileCsv } from 'react-icons/fa';
+import { FaSearch, FaPlus, FaEye, FaUserCircle, FaPhoneAlt, FaArrowLeft, FaArrowRight, FaFileCsv, FaUsers } from 'react-icons/fa';
 import Input from '../components/Input';
 import Button from '../components/Button';
 import Modal from '../components/Modal';
@@ -15,6 +15,7 @@ import { useNavigate } from 'react-router-dom';
 import useDebounce from '../hooks/useDebounce';
 import { ITEMS_PER_PAGE } from '../constants';
 import { handleSupabaseError } from '../utils/errorHandler';
+import EmptyState from '../components/EmptyState'; // 1. Importar o novo componente
 
 const CustomersPage = () => {
   const [customers, setCustomers] = useState([]);
@@ -170,7 +171,18 @@ const CustomersPage = () => {
               </div>
             </div>
           ))
-        ) : (<p>Nenhum cliente encontrado para os filtros selecionados.</p>)}
+        ) : (
+          // 2. Lógica para exibir a mensagem correta
+          <EmptyState
+            icon={FaUsers}
+            title={debouncedSearchTerm ? "Nenhum resultado" : "Nenhum cliente"}
+            message={
+              debouncedSearchTerm
+                ? <>Nenhum cliente encontrado para a busca <strong>"{debouncedSearchTerm}"</strong>.</>
+                : "Ainda não há clientes cadastrados ou nenhum corresponde ao filtro selecionado."
+            }
+          />
+        )}
       </div>
 
       {totalPages > 1 && (

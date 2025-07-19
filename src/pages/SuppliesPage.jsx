@@ -1,11 +1,11 @@
 // Arquivo: src/pages/SuppliesPage.jsx
-// MELHORIA (v4): Adicionada paginação e ordenação clicável em todas as colunas.
+// MELHORIA (v5): Adicionado feedback de busca aprimorado com o componente EmptyState.
 
 import React, { useState, useEffect, useCallback } from 'react';
 import { supabase } from '../lib/supabaseClient';
 import toast from 'react-hot-toast';
 import styles from './SuppliesPage.module.css';
-import { FaSearch, FaPlus, FaEdit, FaPlusCircle, FaMinusCircle, FaHistory, FaArrowLeft, FaArrowRight, FaArrowUp, FaArrowDown } from 'react-icons/fa';
+import { FaSearch, FaPlus, FaEdit, FaPlusCircle, FaMinusCircle, FaHistory, FaArrowLeft, FaArrowRight, FaArrowUp, FaArrowDown, FaClipboardList } from 'react-icons/fa';
 import Input from '../components/Input';
 import Button from '../components/Button';
 import Modal from '../components/Modal';
@@ -15,6 +15,7 @@ import { useNavigate } from 'react-router-dom';
 import useDebounce from '../hooks/useDebounce';
 import { handleSupabaseError } from '../utils/errorHandler';
 import { ITEMS_PER_PAGE } from '../constants';
+import EmptyState from '../components/EmptyState';
 
 const SuppliesPage = () => {
   const [supplies, setSupplies] = useState([]);
@@ -28,8 +29,6 @@ const SuppliesPage = () => {
   const [adjustActionType, setAdjustActionType] = useState('add');
   const navigate = useNavigate();
   const debouncedSearchTerm = useDebounce(searchTerm, 300);
-
-  // --- Estados para Paginação e Ordenação ---
   const [page, setPage] = useState(0);
   const [totalCount, setTotalCount] = useState(0);
   const [sortConfig, setSortConfig] = useState({ key: 'name', direction: 'asc' });
@@ -37,7 +36,6 @@ const SuppliesPage = () => {
   const fetchSupplies = useCallback(async () => {
     setLoading(true);
     try {
-      // Busca o total de itens para a paginação (ignorando a busca por enquanto)
       const { data: count, error: countError } = await supabase.rpc('count_supplies');
       if (countError) throw countError;
       setTotalCount(count || 0);
@@ -47,12 +45,10 @@ const SuppliesPage = () => {
 
       let query = supabase.from('office_supplies').select('*');
       
-      // Aplica a busca (filtragem)
       if (debouncedSearchTerm) {
         query = query.ilike('name', `%${debouncedSearchTerm}%`);
       }
 
-      // Aplica a ordenação e paginação
       query = query.order(sortConfig.key, { ascending: sortConfig.direction === 'asc' }).range(from, to);
 
       const { data, error } = await query;
@@ -66,14 +62,8 @@ const SuppliesPage = () => {
     }
   }, [page, sortConfig, debouncedSearchTerm]);
 
-  useEffect(() => {
-    fetchSupplies();
-  }, [fetchSupplies]);
-
-  // Reseta a página ao buscar
-  useEffect(() => {
-    setPage(0);
-  }, [debouncedSearchTerm]);
+  useEffect(() => { fetchSupplies(); }, [fetchSupplies]);
+  useEffect(() => { setPage(0); }, [debouncedSearchTerm]);
 
   const requestSort = (key) => {
     let direction = 'asc';
@@ -172,7 +162,8 @@ const SuppliesPage = () => {
           </thead>
           <tbody>
             {loading ? (<tr><td colSpan="4">A carregar...</td></tr>) 
-            : supplies.map(supply => (
+            : supplies.length > 0 ? (
+              supplies.map(supply => (
               <tr key={supply.id}>
                 <td data-label="Nome">{supply.name}</td>
                 <td data-label="Descrição">{supply.description || 'N/A'}</td>
@@ -198,7 +189,21 @@ const SuppliesPage = () => {
                   </div>
                 </td>
               </tr>
-            ))}
+            ))) : (
+              <tr>
+                <td colSpan="4">
+                  <EmptyState
+                    icon={FaClipboardList}
+                    title={debouncedSearchTerm ? "Nenhum resultado" : "Nenhum material"}
+                    message={
+                      debouncedSearchTerm
+                        ? <>Nenhum material encontrado para a busca <strong>"{debouncedSearchTerm}"</strong>.</>
+                        : "Ainda não há materiais de expediente cadastrados."
+                    }
+                  />
+                </td>
+              </tr>
+            )}
           </tbody>
         </table>
       </div>
