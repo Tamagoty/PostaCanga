@@ -1,5 +1,5 @@
 // Arquivo: src/pages/EmployeesPage.jsx
-// MELHORIA (v3): Implementado o Skeleton Loader para a tabela.
+// MELHORIA (v3.1): Adicionada tradução para os nomes das permissões.
 
 import React, { useState, useEffect, useCallback } from 'react';
 import { supabase } from '../lib/supabaseClient';
@@ -14,6 +14,12 @@ import ConfirmationModal from '../components/ConfirmationModal';
 import { handleSupabaseError } from '../utils/errorHandler';
 import TableSkeleton from '../components/TableSkeleton';
 import EmptyState from '../components/EmptyState';
+
+// 1. Objeto para traduzir os papéis de permissão
+const roleLabels = {
+  admin: 'Administrador',
+  employee: 'Funcionário',
+};
 
 const EmployeesPage = () => {
   const { isAdmin, userProfile } = useAuth();
@@ -79,7 +85,7 @@ const EmployeesPage = () => {
   const confirmDeleteEmployee = async () => {
     if (!employeeToDelete) return;
     setIsDeleting(true);
-    const toastId = toast.loading('Apagando funcionário...');
+    const toastId = toast.loading('A apagar funcionário...');
     const { error } = await supabase.rpc('delete_employee', { p_user_id: employeeToDelete.id });
     if (error) {
       toast.error(handleSupabaseError(error), { id: toastId });
@@ -109,7 +115,7 @@ const EmployeesPage = () => {
         title="Confirmar Exclusão"
         loading={isDeleting}
       >
-        <p>Tem certeza que deseja apagar o funcionário <strong>{employeeToDelete?.full_name}</strong>?</p>
+        <p>Tem a certeza que deseja apagar o funcionário <strong>{employeeToDelete?.full_name}</strong>?</p>
         <p>Esta ação é irreversível.</p>
       </ConfirmationModal>
 
@@ -139,7 +145,9 @@ const EmployeesPage = () => {
                   <td data-label="E-mail">{emp.email}</td>
                   <td data-label="Permissão">
                     <span className={`${styles.role} ${styles[emp.role]}`}>
-                      {emp.role === 'admin' ? <FaUserShield /> : <FaUser />} {emp.role}
+                      {emp.role === 'admin' ? <FaUserShield /> : <FaUser />}
+                      {/* 2. Usar o objeto de tradução para exibir o nome em português */}
+                      {roleLabels[emp.role] || emp.role}
                     </span>
                   </td>
                   <td data-label="Ações">
