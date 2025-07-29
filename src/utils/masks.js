@@ -12,13 +12,13 @@ export const maskCPF = (value) => {
     .substring(0, 14); // Limita o tamanho
 };
 
-// Aplica a máscara de Celular ((##) #.####-####)
+// Aplica a máscara de Telemóvel ((##) #.####-####)
 export const maskPhone = (value) => {
   if (!value) return "";
   // Limpa o valor, deixando apenas os dígitos
   const digitsOnly = value.replace(/\D/g, '');
 
-  // Limita a 11 dígitos (DDD + 9 dígitos do celular)
+  // Limita a 11 dígitos (DDD + 9 dígitos do telemóvel)
   const truncatedDigits = digitsOnly.substring(0, 11);
 
   let formattedValue = truncatedDigits;

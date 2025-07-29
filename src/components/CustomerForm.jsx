@@ -1,5 +1,5 @@
 // Arquivo: src/components/CustomerForm.jsx
-// MELHORIA (v3): Implementada a máscara de formatação automática para os campos de CPF e Celular.
+// MELHORIA (v3): Implementada a máscara de formatação automática para os campos de CPF e Telemóvel.
 
 import React, { useState, useEffect, useCallback } from "react";
 import styles from "./CustomerForm.module.css";
@@ -147,7 +147,7 @@ const CustomerForm = ({ onSave, onClose, customerToEdit, loading }) => {
           <Input id="cpf" name="cpf" label="CPF" value={formData.cpf} onChange={handleChange} />
           <Input id="birth_date" name="birth_date" label="Data de Nascimento" type="date" value={formData.birth_date} onChange={handleChange} />
         </div>
-        <Input id="cellphone" name="cellphone" label="Celular" value={formData.cellphone} onChange={handleChange} />
+        <Input id="cellphone" name="cellphone" label="Telemóvel" value={formData.cellphone} onChange={handleChange} />
         <Input id="email" name="email" label="E-mail" type="email" value={formData.email} onChange={handleChange} />
 
         {!formData.cellphone && (
@@ -206,7 +206,7 @@ const CustomerForm = ({ onSave, onClose, customerToEdit, loading }) => {
           Cancelar
         </Button>
         <Button type="submit" loading={loading} disabled={loading}>
-          {loading ? "Salvando..." : "Salvar Cliente"}
+          {loading ? "A Guardar..." : "Guardar Cliente"}
         </Button>
       </div>
     </form>
