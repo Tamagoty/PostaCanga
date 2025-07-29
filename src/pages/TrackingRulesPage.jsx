@@ -1,16 +1,18 @@
 // Arquivo: src/pages/TrackingRulesPage.jsx
-// MELHORIA (v3): Implementado o `handleSupabaseError`.
+// MELHORIA (v4): Implementado o Skeleton Loader para a tabela.
 
 import React, { useState, useEffect, useCallback } from 'react';
 import { supabase } from '../lib/supabaseClient';
 import toast from 'react-hot-toast';
 import styles from './SuppliesPage.module.css';
-import { FaPlus, FaEdit, FaTrashAlt } from 'react-icons/fa';
+import { FaPlus, FaEdit, FaTrashAlt, FaRulerCombined } from 'react-icons/fa';
 import Button from '../components/Button';
 import Modal from '../components/Modal';
 import TrackingRuleForm from '../components/TrackingRuleForm';
 import ConfirmationModal from '../components/ConfirmationModal';
 import { handleSupabaseError } from '../utils/errorHandler';
+import TableSkeleton from '../components/TableSkeleton';
+import EmptyState from '../components/EmptyState';
 
 const TrackingRulesPage = () => {
   const [rules, setRules] = useState([]);
@@ -87,25 +89,35 @@ const TrackingRulesPage = () => {
       </header>
 
       <div className={styles.tableContainer}>
-        <table className={styles.table}>
-          <thead><tr><th>Prefixo</th><th>Tipo de Objeto</th><th>Prazo de Guarda</th><th>Ações</th></tr></thead>
-          <tbody>
-            {loading ? (<tr><td colSpan="4">A carregar...</td></tr>)
-            : rules.map(rule => (
-              <tr key={rule.id}>
-                <td data-label="Prefixo">{rule.prefix}</td>
-                <td data-label="Tipo de Objeto">{rule.object_type}</td>
-                <td data-label="Prazo de Guarda">{rule.storage_days} dias</td>
-                <td data-label="Ações">
-                  <div className={styles.actionButtons}>
-                    <button className={styles.actionButton} onClick={() => handleOpenModal(rule)}><FaEdit /></button>
-                    <button className={`${styles.actionButton} ${styles.removeStock}`} onClick={() => startDeleteRule(rule)}><FaTrashAlt /></button>
-                  </div>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+        {loading ? (
+          <TableSkeleton columns={4} rows={5} />
+        ) : (
+          <table className={styles.table}>
+            <thead><tr><th>Prefixo</th><th>Tipo de Objeto</th><th>Prazo de Guarda</th><th>Ações</th></tr></thead>
+            <tbody>
+              {rules.length > 0 ? (
+                rules.map(rule => (
+                <tr key={rule.id}>
+                  <td data-label="Prefixo">{rule.prefix}</td>
+                  <td data-label="Tipo de Objeto">{rule.object_type}</td>
+                  <td data-label="Prazo de Guarda">{rule.storage_days} dias</td>
+                  <td data-label="Ações">
+                    <div className={styles.actionButtons}>
+                      <button className={styles.actionButton} onClick={() => handleOpenModal(rule)}><FaEdit /></button>
+                      <button className={`${styles.actionButton} ${styles.removeStock}`} onClick={() => startDeleteRule(rule)}><FaTrashAlt /></button>
+                    </div>
+                  </td>
+                </tr>
+              ))) : (
+                <tr>
+                  <td colSpan="4">
+                    <EmptyState icon={FaRulerCombined} title="Nenhuma regra" message="Ainda não há regras de rastreamento cadastradas." />
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        )}
       </div>
     </div>
   );

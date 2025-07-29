@@ -2,20 +2,59 @@
 <html lang="pt-BR">
   <head>
     <meta charset="UTF-8" />
-    <!-- Link do favicon com um ID para ser selecionado via JavaScript -->
     <link id="favicon" rel="icon" type="image/svg+xml" href="/vite.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>PostaCanga - Gerenciador</title>
+    <style>
+      /* Estilos para o pré-carregador inicial */
+      body {
+        /* Garante que o tema escuro seja aplicado imediatamente */
+        background-color: #1a1d24;
+        margin: 0;
+      }
+
+      .initial-loader {
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        height: 100vh;
+        flex-direction: column;
+        gap: 1.5rem;
+        font-family: system-ui, sans-serif;
+      }
+
+      .initial-loader-logo {
+        width: 100px;
+        height: 100px;
+        animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+      }
+
+      .initial-loader-text {
+        color: #a0a0a0; /* Cor correspondente a --text-secondary */
+        font-weight: 500;
+      }
+
+      @keyframes pulse {
+        0%, 100% {
+          opacity: 1;
+        }
+        50% {
+          opacity: 0.6;
+        }
+      }
+    </style>
   </head>
   <body>
-    <div id="root"></div>
-    <!-- Adicionado para o portal do Modal -->
-    <div id="modal-root"></div> 
+    <div id="root">
+      <!-- Pré-carregador em HTML puro -->
+      <div class="initial-loader">
+        <img src="https://cdn.jsdelivr.net/gh/Tamagoty/meu-app-assets/favico_postaCanga.svg" alt="Logo do App" class="initial-loader-logo" />
+        <p class="initial-loader-text">A carregar sistema...</p>
+      </div>
+    </div>
     
-    <!-- 
-      REMOVIDO: As bibliotecas jsPDF e jspdf-autotable agora são importadas
-      diretamente no componente React, após serem instaladas via NPM.
-    -->
+    <!-- Div para o portal do Modal -->
+    <div id="modal-root"></div> 
 
     <script type="module" src="/src/main.jsx"></script>
   </body>

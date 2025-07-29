@@ -1,5 +1,6 @@
 // Arquivo: src/pages/CustomersPage.jsx
-// MELHORIA (v4): Adicionado feedback de busca aprimorado com o componente EmptyState.
+// MELHORIA (v7): Aplicada a máscara de telefone no card do cliente.
+// A busca de dados foi ajustada para incluir o telefone do contato associado.
 
 import React, { useState, useEffect, useCallback } from 'react';
 import { supabase } from '../lib/supabaseClient';
@@ -15,7 +16,9 @@ import { useNavigate } from 'react-router-dom';
 import useDebounce from '../hooks/useDebounce';
 import { ITEMS_PER_PAGE } from '../constants';
 import { handleSupabaseError } from '../utils/errorHandler';
-import EmptyState from '../components/EmptyState'; // 1. Importar o novo componente
+import EmptyState from '../components/EmptyState';
+import CardSkeleton from '../components/CardSkeleton';
+import { maskPhone } from '../utils/masks'; // 1. Importar a máscara
 
 const CustomersPage = () => {
   const [customers, setCustomers] = useState([]);
@@ -34,31 +37,35 @@ const CustomersPage = () => {
   const fetchCustomers = useCallback(async () => {
     setLoading(true);
     try {
-        const { data: count, error: countError } = await supabase.rpc('count_customers_filtered', {
-            p_search_term: debouncedSearchTerm, p_status_filter: statusFilter
-        });
-        if (countError) throw countError;
-        setTotalCount(count || 0);
+      const { data: count, error: countError } = await supabase.rpc('count_customers_filtered', { p_search_term: debouncedSearchTerm, p_status_filter: statusFilter });
+      if (countError) throw countError;
+      setTotalCount(count || 0);
 
-        const from = page * ITEMS_PER_PAGE;
-        const to = from + ITEMS_PER_PAGE - 1;
+      const from = page * ITEMS_PER_PAGE;
+      const to = from + ITEMS_PER_PAGE - 1;
 
-        let dataQuery = supabase.from('customers')
-            .select('*, addresses(*, city:cities(name, state:states(uf))), contact:contact_customer_id(full_name)');
+      // 2. Query ajustada para buscar o 'cellphone' do contato associado
+      let dataQuery = supabase
+        .from('customers')
+        .select('*, addresses(*, city:cities(name, state:states(uf))), contact:contact_customer_id(full_name, cellphone)');
 
-        if (debouncedSearchTerm) {
-            dataQuery = dataQuery.or(`full_name.ilike.%${debouncedSearchTerm}%,cpf.ilike.%${debouncedSearchTerm}%,cellphone.ilike.%${debouncedSearchTerm}%`);
-        }
-        if (statusFilter !== 'all') {
-            dataQuery = dataQuery.eq('is_active', statusFilter === 'active');
-        }
+      if (debouncedSearchTerm) {
+        const { data: idResults, error: idError } = await supabase.rpc('filter_customer_ids', { p_search_term: debouncedSearchTerm });
+        if (idError) throw idError;
+        const customerIds = idResults.map(r => r.customer_id);
+        dataQuery = dataQuery.in('id', customerIds);
+      }
+      
+      if (statusFilter !== 'all') {
+          dataQuery = dataQuery.eq('is_active', statusFilter === 'active');
+      }
 
-        dataQuery = dataQuery.range(from, to).order('full_name', { ascending: true });
+      dataQuery = dataQuery.range(from, to).order('full_name', { ascending: true });
 
-        const { data, error: dataError } = await dataQuery;
-        if (dataError) throw dataError;
+      const { data, error: dataError } = await dataQuery;
+      if (dataError) throw dataError;
 
-        setCustomers(data || []);
+      setCustomers(data || []);
     } catch (error) {
         toast.error(handleSupabaseError(error));
     } finally {
@@ -93,13 +100,7 @@ const CustomersPage = () => {
 
   const handleExportCSV = async () => {
     const toastId = toast.loading('Preparando exportação...');
-    
-    const { data: allActiveCustomers, error } = await supabase
-      .from('customers')
-      .select('full_name, cellphone')
-      .eq('is_active', true)
-      .not('cellphone', 'is', null);
-
+    const { data: allActiveCustomers, error } = await supabase.from('customers').select('full_name, cellphone').eq('is_active', true).not('cellphone', 'is', null);
     if (error || !allActiveCustomers || allActiveCustomers.length === 0) {
       toast.error(error ? handleSupabaseError(error) : 'Nenhum cliente ativo com telefone para exportar.', { id: toastId });
       return;
@@ -134,13 +135,7 @@ const CustomersPage = () => {
         <h1>Gerenciamento de Clientes</h1>
         <div className={styles.actions}>
           <div className={styles.searchInputWrapper}>
-            <Input 
-                id="search" 
-                placeholder="Buscar por nome, CPF ou celular..." 
-                icon={FaSearch} 
-                value={searchTerm} 
-                onChange={(e) => setSearchTerm(e.target.value)} 
-            />
+            <Input id="search" placeholder="Buscar por nome, CPF ou celular..." icon={FaSearch} value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} />
           </div>
           <div className={styles.filterGroup}>
             <Button variant={statusFilter === 'active' ? 'primary' : 'secondary'} onClick={() => setStatusFilter('active')}>Ativos</Button>
@@ -153,15 +148,17 @@ const CustomersPage = () => {
       </header>
 
       <div className={styles.grid}>
-        {loading ? (<p>A carregar clientes...</p>) 
-        : customers.length > 0 ? (
+        {loading ? (
+          Array.from({ length: 6 }).map((_, index) => <CardSkeleton key={index} />)
+        ) : customers.length > 0 ? (
           customers.map(customer => (
             <div key={customer.id} className={`${styles.card} ${!customer.is_active ? styles.inactive : ''}`}>
               <div className={styles.cardHeader}><FaUserCircle className={styles.cardIcon} /><h3 className={styles.cardTitle}>{customer.full_name}</h3></div>
               <div className={styles.cardBody}>
                 <p><strong>CPF:</strong> {customer.cpf || 'Não informado'}</p>
-                {customer.cellphone ? (<p><strong>Celular:</strong> {customer.cellphone}</p>) 
-                : customer.contact ? (<p className={styles.contactInfo}><FaPhoneAlt /> <span>Contato por: <strong>{customer.contact.full_name}</strong></span></p>) 
+                {/* 3. Aplicar a máscara de telefone */}
+                {customer.cellphone ? (<p><strong>Celular:</strong> {maskPhone(customer.cellphone)}</p>) 
+                : customer.contact ? (<p className={styles.contactInfo}><FaPhoneAlt /> <span>Contato por: <strong>{customer.contact.full_name}</strong> ({maskPhone(customer.contact.cellphone)})</span></p>) 
                 : (<p><strong>Celular:</strong> Não informado</p>)}
                 <p><strong>Endereço:</strong> {customer.addresses ? `${customer.addresses.street_name}, ${customer.address_number || 'S/N'}` : 'Não informado'}</p>
               </div>
@@ -172,7 +169,6 @@ const CustomersPage = () => {
             </div>
           ))
         ) : (
-          // 2. Lógica para exibir a mensagem correta
           <EmptyState
             icon={FaUsers}
             title={debouncedSearchTerm ? "Nenhum resultado" : "Nenhum cliente"}

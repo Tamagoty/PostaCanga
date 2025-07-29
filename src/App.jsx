@@ -1,5 +1,6 @@
 // Arquivo: src/App.jsx
-// MELHORIA (v3): Adicionada a rota para a nova página de Relatórios.
+// CORREÇÃO (v5.1): Removida a importação e o uso do componente InitialLoading.jsx,
+// que agora é tratado diretamente no index.html.
 
 import React from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
@@ -21,11 +22,14 @@ import ObjectTypesPage from './pages/ObjectTypesPage';
 import TasksPage from './pages/TasksPage';
 import ManageTasksPage from './pages/ManageTasksPage';
 import LinksPage from './pages/LinksPage';
-import ReportsPage from './pages/ReportsPage'; // 1. Importar a nova página
+import ReportsPage from './pages/ReportsPage';
 
 function App() {
-  const { session, loading } = useAuth();
-  if (loading) return <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh' }}>Carregando...</div>;
+  const { session } = useAuth();
+
+  // A lógica de "loading" foi removida, pois o AuthContext já garante
+  // que o app só renderize após a verificação da sessão, e o index.html
+  // exibe o pré-carregador.
   return (
     <>
       <Toaster position="top-right" toastOptions={{ style: { background: 'var(--bg-secondary)', color: 'var(--text-primary)', border: '1px solid var(--border-color)' } }} />
@@ -46,7 +50,7 @@ function App() {
           <Route path="tasks" element={<TasksPage />} />
           <Route path="tasks/manage" element={<ManageTasksPage />} />
           <Route path="links" element={<LinksPage />} />
-          <Route path="reports" element={<ReportsPage />} /> {/* 2. Adicionar a nova rota */}
+          <Route path="reports" element={<ReportsPage />} />
           <Route path="*" element={<Navigate to="/" />} />
         </Route>
       </Routes>

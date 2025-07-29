@@ -1,0 +1,79 @@
+/* Arquivo: src/components/Skeleton.module.css */
+/* Estilos para os componentes de Skeleton Loader */
+
+@keyframes shimmer {
+  0% { background-position: -1000px 0; }
+  100% { background-position: 1000px 0; }
+}
+
+.skeletonAnimation {
+  animation: shimmer 2s infinite linear;
+  background: linear-gradient(to right, var(--bg-tertiary) 8%, #4b5563 18%, var(--bg-tertiary) 33%);
+  background-size: 2000px 100%;
+}
+
+.skeletonLine {
+  width: 100%;
+  height: 16px;
+  border-radius: var(--border-radius);
+}
+
+.skeletonCircle {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+}
+
+/* Esqueleto de Card (baseado em CustomersPage.module.css) */
+.card {
+  background-color: var(--bg-secondary);
+  border-radius: var(--border-radius);
+  border: 1px solid var(--border-color);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.cardHeader {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  padding: 1rem 1.5rem;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.cardBody {
+  padding: 1.5rem;
+  flex-grow: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.cardFooter {
+  padding: 1rem 1.5rem;
+  background-color: var(--bg-tertiary);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+/* Esqueleto de Tabela (baseado em SuppliesPage.module.css) */
+.table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.table th, .table td {
+  padding: 1rem;
+  text-align: left;
+  border-bottom: 1px solid var(--border-color);
+  vertical-align: middle;
+}
+
+.table th .skeletonLine { height: 20px; }
+.table td .skeletonLine { height: 16px; }
+
+.table tbody tr:last-child td {
+  border-bottom: none;
+}

@@ -1,5 +1,5 @@
 // Arquivo: src/pages/AddressesPage.jsx
-// MELHORIA (v5): Adicionada ordenação clicável em todas as colunas da tabela.
+// MELHORIA (v6): Implementado o Skeleton Loader para a tabela.
 
 import React, { useState, useEffect, useCallback } from 'react';
 import { supabase } from '../lib/supabaseClient';
@@ -12,6 +12,8 @@ import AddressForm from '../components/AddressForm';
 import ConfirmationModal from '../components/ConfirmationModal';
 import { handleSupabaseError } from '../utils/errorHandler';
 import { ITEMS_PER_PAGE } from '../constants';
+import TableSkeleton from '../components/TableSkeleton';
+import EmptyState from '../components/EmptyState';
 
 const AddressesPage = () => {
   const [addresses, setAddresses] = useState([]);
@@ -24,8 +26,6 @@ const AddressesPage = () => {
   const [isDeleting, setIsDeleting] = useState(false);
   const [page, setPage] = useState(0);
   const [totalCount, setTotalCount] = useState(0);
-
-  // --- Estado para a ordenação ---
   const [sortConfig, setSortConfig] = useState({ key: 'street_name', direction: 'asc', referencedTable: null });
 
   const fetchAddresses = useCallback(async () => {
@@ -38,7 +38,6 @@ const AddressesPage = () => {
       const from = page * ITEMS_PER_PAGE;
       const to = from + ITEMS_PER_PAGE - 1;
 
-      // Query agora inclui a lógica de ordenação dinâmica
       const { data, error } = await supabase
         .from('addresses')
         .select('*, city:cities(name, state:states(uf))')
@@ -56,21 +55,19 @@ const AddressesPage = () => {
     } finally {
       setLoading(false);
     }
-  }, [page, sortConfig]); // A busca agora depende da página e da ordenação
+  }, [page, sortConfig]);
 
   useEffect(() => { fetchAddresses(); }, [fetchAddresses]);
 
-  // Função para mudar a ordenação
   const requestSort = (key, referencedTable = null) => {
     let direction = 'asc';
     if (sortConfig.key === key && sortConfig.direction === 'asc') {
       direction = 'desc';
     }
     setSortConfig({ key, direction, referencedTable });
-    setPage(0); // Volta para a primeira página ao reordenar
+    setPage(0);
   };
 
-  // Função para exibir o ícone de ordenação
   const getSortIcon = (name) => {
     if (sortConfig.key !== name) {
       return null;
@@ -140,42 +137,53 @@ const AddressesPage = () => {
       </header>
 
       <div className={styles.tableContainer}>
-        <table className={styles.table}>
-          <thead>
-            <tr>
-              <th className={styles.sortableHeader} onClick={() => requestSort('street_name')}>
-                Logradouro {getSortIcon('street_name')}
-              </th>
-              <th className={styles.sortableHeader} onClick={() => requestSort('neighborhood')}>
-                Bairro {getSortIcon('neighborhood')}
-              </th>
-              <th className={styles.sortableHeader} onClick={() => requestSort('name', 'cities')}>
-                Cidade/UF {getSortIcon('name')}
-              </th>
-              <th className={styles.sortableHeader} onClick={() => requestSort('cep')}>
-                CEP {getSortIcon('cep')}
-              </th>
-              <th>Ações</th>
-            </tr>
-          </thead>
-          <tbody>
-            {loading ? (<tr><td colSpan="5">A carregar...</td></tr>)
-            : addresses.map(addr => (
-              <tr key={addr.id}>
-                <td data-label="Logradouro">{addr.street_name}</td>
-                <td data-label="Bairro">{addr.neighborhood || '-'}</td>
-                <td data-label="Cidade/UF">{addr.city ? `${addr.city.name}/${addr.city.state.uf}` : 'N/A'}</td>
-                <td data-label="CEP">{addr.cep || '-'}</td>
-                <td data-label="Ações">
-                  <div className={styles.actionButtons}>
-                    <button className={styles.actionButton} onClick={() => handleOpenModal(addr)}><FaEdit /></button>
-                    <button className={`${styles.actionButton} ${styles.removeStock}`} onClick={() => startDeleteAddress(addr)}><FaTrashAlt /></button>
-                  </div>
-                </td>
+        {loading ? (
+          <TableSkeleton columns={5} rows={ITEMS_PER_PAGE} />
+        ) : (
+          <table className={styles.table}>
+            <thead>
+              <tr>
+                <th className={styles.sortableHeader} onClick={() => requestSort('street_name')}>
+                  Logradouro {getSortIcon('street_name')}
+                </th>
+                <th className={styles.sortableHeader} onClick={() => requestSort('neighborhood')}>
+                  Bairro {getSortIcon('neighborhood')}
+                </th>
+                <th className={styles.sortableHeader} onClick={() => requestSort('name', 'cities')}>
+                  Cidade/UF {getSortIcon('name')}
+                </th>
+                <th className={styles.sortableHeader} onClick={() => requestSort('cep')}>
+                  CEP {getSortIcon('cep')}
+                </th>
+                <th>Ações</th>
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {addresses.length > 0 ? (
+                addresses.map(addr => (
+                  <tr key={addr.id}>
+                    <td data-label="Logradouro">{addr.street_name}</td>
+                    <td data-label="Bairro">{addr.neighborhood || '-'}</td>
+                    <td data-label="Cidade/UF">{addr.city ? `${addr.city.name}/${addr.city.state.uf}` : 'N/A'}</td>
+                    <td data-label="CEP">{addr.cep || '-'}</td>
+                    <td data-label="Ações">
+                      <div className={styles.actionButtons}>
+                        <button className={styles.actionButton} onClick={() => handleOpenModal(addr)}><FaEdit /></button>
+                        <button className={`${styles.actionButton} ${styles.removeStock}`} onClick={() => startDeleteAddress(addr)}><FaTrashAlt /></button>
+                      </div>
+                    </td>
+                  </tr>
+                ))
+              ) : (
+                <tr>
+                  <td colSpan="5">
+                    <EmptyState title="Nenhum endereço" message="Ainda não há endereços cadastrados." />
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        )}
       </div>
 
       {totalPages > 1 && (

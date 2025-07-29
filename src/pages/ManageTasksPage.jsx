@@ -1,17 +1,19 @@
 // Arquivo: src/pages/ManageTasksPage.jsx
-// MELHORIA (v3): Implementado o `handleSupabaseError`.
+// MELHORIA (v3.2): Implementado o Skeleton Loader para a tabela.
 
 import React, { useState, useEffect, useCallback } from 'react';
 import { supabase } from '../lib/supabaseClient';
 import toast from 'react-hot-toast';
 import styles from './SuppliesPage.module.css';
-import { FaPlus, FaEdit, FaTrashAlt } from 'react-icons/fa';
+import { FaPlus, FaEdit, FaTrashAlt, FaTasks } from 'react-icons/fa';
 import Button from '../components/Button';
 import Modal from '../components/Modal';
 import TaskForm from '../components/TaskForm';
 import ConfirmationModal from '../components/ConfirmationModal';
 import { useNavigate } from 'react-router-dom';
 import { handleSupabaseError } from '../utils/errorHandler';
+import TableSkeleton from '../components/TableSkeleton';
+import EmptyState from '../components/EmptyState';
 
 const ManageTasksPage = () => {
   const [tasks, setTasks] = useState([]);
@@ -41,7 +43,11 @@ const ManageTasksPage = () => {
 
   const handleSaveTask = async (formData) => {
     setIsSaving(true);
-    const { error } = await supabase.rpc('create_or_update_task', formData);
+    const payload = {
+      p_task_id: taskToEdit?.id || null, p_title: formData.title, p_description: formData.description,
+      p_frequency_type: formData.frequency_type, p_due_date: formData.due_date || null
+    };
+    const { error } = await supabase.rpc('create_or_update_task', payload);
     if (error) toast.error(handleSupabaseError(error));
     else { toast.success('Tarefa salva!'); setIsFormModalOpen(false); fetchTasks(); }
     setIsSaving(false);
@@ -98,24 +104,34 @@ const ManageTasksPage = () => {
       </header>
 
       <div className={styles.tableContainer}>
-        <table className={styles.table}>
-          <thead><tr><th>Título</th><th>Frequência</th><th>Ações</th></tr></thead>
-          <tbody>
-            {loading ? (<tr><td colSpan="3">A carregar...</td></tr>)
-            : tasks.map(task => (
-              <tr key={task.id}>
-                <td data-label="Título">{task.title}</td>
-                <td data-label="Frequência">{frequencyLabels[task.frequency_type] || task.frequency_type}</td>
-                <td data-label="Ações">
-                  <div className={styles.actionButtons}>
-                    <button className={styles.actionButton} onClick={() => handleOpenModal(task)}><FaEdit /></button>
-                    <button className={`${styles.actionButton} ${styles.removeStock}`} onClick={() => startDeleteTask(task)}><FaTrashAlt /></button>
-                  </div>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+        {loading ? (
+          <TableSkeleton columns={3} rows={5} />
+        ) : (
+          <table className={styles.table}>
+            <thead><tr><th>Título</th><th>Frequência</th><th>Ações</th></tr></thead>
+            <tbody>
+              {tasks.length > 0 ? (
+                tasks.map(task => (
+                <tr key={task.id}>
+                  <td data-label="Título">{task.title}</td>
+                  <td data-label="Frequência">{frequencyLabels[task.frequency_type] || task.frequency_type}</td>
+                  <td data-label="Ações">
+                    <div className={styles.actionButtons}>
+                      <button className={styles.actionButton} onClick={() => handleOpenModal(task)}><FaEdit /></button>
+                      <button className={`${styles.actionButton} ${styles.removeStock}`} onClick={() => startDeleteTask(task)}><FaTrashAlt /></button>
+                    </div>
+                  </td>
+                </tr>
+              ))) : (
+                <tr>
+                  <td colSpan="3">
+                    <EmptyState icon={FaTasks} title="Nenhuma tarefa" message="Ainda não há tarefas de gestão cadastradas." />
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        )}
       </div>
     </div>
   );

@@ -1,5 +1,6 @@
 // Arquivo: src/pages/LinksPage.jsx
-// MELHORIA (v1.4): Adicionado feedback de busca aprimorado com o componente EmptyState.
+// MELHORIA (v1.6): A busca agora é feita no banco de dados, garantindo
+// que a paginação e os resultados sejam sempre precisos.
 
 import React, { useState, useEffect, useCallback } from 'react';
 import { supabase } from '../lib/supabaseClient';
@@ -16,6 +17,7 @@ import { handleSupabaseError } from '../utils/errorHandler';
 import useDebounce from '../hooks/useDebounce';
 import { ITEMS_PER_PAGE } from '../constants';
 import EmptyState from '../components/EmptyState';
+import CardSkeleton from '../components/CardSkeleton';
 
 const LinksPage = () => {
   const [links, setLinks] = useState([]);
@@ -35,7 +37,8 @@ const LinksPage = () => {
   const fetchLinks = useCallback(async () => {
     setLoading(true);
     try {
-      const { data: count, error: countError } = await supabase.rpc('count_links');
+      // 1. A contagem agora passa o termo da busca para o backend.
+      const { data: count, error: countError } = await supabase.rpc('count_links', { p_search_term: debouncedSearchTerm });
       if (countError) throw countError;
       setTotalCount(count || 0);
 
@@ -44,6 +47,7 @@ const LinksPage = () => {
 
       let query = supabase.from('system_links').select('*');
 
+      // 2. A filtragem também é feita no backend.
       if (debouncedSearchTerm) {
         query = query.or(`name.ilike.%${debouncedSearchTerm}%,description.ilike.%${debouncedSearchTerm}%`);
       }
@@ -148,8 +152,9 @@ const LinksPage = () => {
       </header>
 
       <div className={styles.grid}>
-        {loading ? (<p>A carregar links...</p>) 
-        : links.length > 0 ? (
+        {loading ? (
+          Array.from({ length: 3 }).map((_, index) => <CardSkeleton key={index} />)
+        ) : links.length > 0 ? (
           links.map(link => (
             <div key={link.id} className={styles.card}>
               <div className={styles.cardHeader}>

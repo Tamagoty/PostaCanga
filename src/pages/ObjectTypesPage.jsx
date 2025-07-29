@@ -1,16 +1,18 @@
 // Arquivo: src/pages/ObjectTypesPage.jsx
-// MELHORIA (v3): Implementado o `handleSupabaseError`.
+// MELHORIA (v4): Implementado o Skeleton Loader para a tabela.
 
 import React, { useState, useEffect, useCallback } from 'react';
 import { supabase } from '../lib/supabaseClient';
 import toast from 'react-hot-toast';
 import styles from './SuppliesPage.module.css';
-import { FaPlus, FaEdit, FaTrashAlt } from 'react-icons/fa';
+import { FaPlus, FaEdit, FaTrashAlt, FaTags } from 'react-icons/fa';
 import Button from '../components/Button';
 import Modal from '../components/Modal';
 import ObjectTypeForm from '../components/ObjectTypeForm';
 import ConfirmationModal from '../components/ConfirmationModal';
 import { handleSupabaseError } from '../utils/errorHandler';
+import TableSkeleton from '../components/TableSkeleton';
+import EmptyState from '../components/EmptyState';
 
 const ObjectTypesPage = () => {
   const [types, setTypes] = useState([]);
@@ -87,24 +89,34 @@ const ObjectTypesPage = () => {
       </header>
 
       <div className={styles.tableContainer}>
-        <table className={styles.table}>
-          <thead><tr><th>Nome</th><th>Prazo de Guarda Padrão</th><th>Ações</th></tr></thead>
-          <tbody>
-            {loading ? (<tr><td colSpan="3">A carregar...</td></tr>)
-            : types.map(type => (
-              <tr key={type.id}>
-                <td data-label="Nome">{type.name}</td>
-                <td data-label="Prazo de Guarda">{type.default_storage_days} dias</td>
-                <td data-label="Ações">
-                  <div className={styles.actionButtons}>
-                    <button className={styles.actionButton} onClick={() => handleOpenModal(type)}><FaEdit /></button>
-                    <button className={`${styles.actionButton} ${styles.removeStock}`} onClick={() => startDeleteType(type)}><FaTrashAlt /></button>
-                  </div>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+        {loading ? (
+          <TableSkeleton columns={3} rows={5} />
+        ) : (
+          <table className={styles.table}>
+            <thead><tr><th>Nome</th><th>Prazo de Guarda Padrão</th><th>Ações</th></tr></thead>
+            <tbody>
+              {types.length > 0 ? (
+                types.map(type => (
+                <tr key={type.id}>
+                  <td data-label="Nome">{type.name}</td>
+                  <td data-label="Prazo de Guarda">{type.default_storage_days} dias</td>
+                  <td data-label="Ações">
+                    <div className={styles.actionButtons}>
+                      <button className={styles.actionButton} onClick={() => handleOpenModal(type)}><FaEdit /></button>
+                      <button className={`${styles.actionButton} ${styles.removeStock}`} onClick={() => startDeleteType(type)}><FaTrashAlt /></button>
+                    </div>
+                  </td>
+                </tr>
+              ))) : (
+                <tr>
+                  <td colSpan="3">
+                    <EmptyState icon={FaTags} title="Nenhum tipo" message="Ainda não há tipos de objeto cadastrados." />
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        )}
       </div>
     </div>
   );

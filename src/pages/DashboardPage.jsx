@@ -1,5 +1,5 @@
 // Arquivo: src/pages/DashboardPage.jsx
-// MELHORIA (v3): Adicionado o componente de Tarefas Pendentes para administradores.
+// MELHORIA (v4): Implementado o Skeleton Loader para o Dashboard.
 
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabaseClient';
@@ -8,12 +8,13 @@ import styles from './DashboardPage.module.css';
 import DashboardStats from '../components/DashboardStats';
 import RecentObjects from '../components/RecentObjects';
 import UpcomingBirthdays from '../components/UpcomingBirthdays';
-import PendingTasks from '../components/PendingTasks'; // 1. Importa o novo componente
-import { useAuth } from '../context/AuthContext'; // 2. Importa o hook de autenticação
+import PendingTasks from '../components/PendingTasks';
+import { useAuth } from '../context/AuthContext';
 import { handleSupabaseError } from '../utils/errorHandler';
+import DashboardSkeleton from '../components/DashboardSkeleton'; // 1. Importar o esqueleto
 
 const DashboardPage = () => {
-  const { isAdmin } = useAuth(); // 3. Pega o status de admin
+  const { isAdmin } = useAuth();
   const [dashboardData, setDashboardData] = useState(null);
   const [loading, setLoading] = useState(true);
 
@@ -33,8 +34,9 @@ const DashboardPage = () => {
     fetchDashboardData();
   }, []);
 
+  // 2. Lógica de renderização do Skeleton
   if (loading) {
-    return <div className={styles.loading}>Carregando dashboard...</div>;
+    return <DashboardSkeleton />;
   }
 
   if (!dashboardData) {
@@ -46,7 +48,6 @@ const DashboardPage = () => {
       <h1 className={styles.title}>Dashboard</h1>
       <DashboardStats stats={dashboardData} />
 
-      {/* 4. Renderiza o componente de tarefas apenas se o usuário for admin e houver tarefas */}
       {isAdmin && dashboardData.pending_tasks && (
         <PendingTasks tasks={dashboardData.pending_tasks} />
       )}

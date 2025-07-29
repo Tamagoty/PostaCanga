@@ -1,6 +1,5 @@
 // Arquivo: src/pages/ObjectsPage.jsx
-// MELHORIA (v2.1): A função de gerar a página de notificações agora força o download do arquivo HTML
-// em vez de abri-lo em uma nova aba, atendendo ao fluxo de trabalho do usuário.
+// MELHORIA (v2.2): Implementado o Skeleton Loader para a tabela.
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { supabase } from '../lib/supabaseClient';
@@ -15,6 +14,9 @@ import BulkObjectForm from '../components/BulkObjectForm';
 import BulkRegisteredForm from '../components/BulkRegisteredForm';
 import ProgressBar from '../components/ProgressBar';
 import { handleSupabaseError } from '../utils/errorHandler';
+import TableSkeleton from '../components/TableSkeleton';
+import EmptyState from '../components/EmptyState';
+import { ITEMS_PER_PAGE } from '../constants';
 
 const getWhatsAppMessage = (object) => {
   const agencyName = "Correio de América Dourada";
@@ -202,16 +204,14 @@ const ObjectsPage = () => {
     
     const fullHtml = `<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8" /><title>Notificações WhatsApp</title><style>body{background:linear-gradient(to bottom left,#1a1d24,#272b35);min-height:100vh;font-family:sans-serif;padding:20px;margin:0}.grid-container{display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:20px}.container{cursor:pointer;text-align:center;transition:opacity .3s,transform .3s}.imagem{position:relative;display:inline-block}img{width:120px;border-radius:15px;box-shadow:0 4px 15px rgba(0,0,0,.4)}.texto{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);color:#fff;font-size:1.5rem;font-weight:700;text-shadow:2px 2px 4px rgba(0,0,0,.7)}a{text-decoration:none}.hidden{opacity:.2;transform:scale(.9);pointer-events:none}</style></head><body><div class="grid-container">${linksHTML}</div><script>function ocultarDiv(e){e.classList.add("hidden")}</script></body></html>`;
     
-    // --- LÓGICA DE DOWNLOAD ---
     const blob = new Blob([fullHtml], { type: 'text/html' });
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
-    link.setAttribute('download', 'notificacoes_whatsapp.html'); // Define o nome do arquivo
+    link.setAttribute('download', 'notificacoes_whatsapp.html');
     document.body.appendChild(link);
-    link.click(); // Simula o clique para iniciar o download
+    link.click();
     
-    // Limpeza
     document.body.removeChild(link);
     URL.revokeObjectURL(url);
     toast.success('Arquivo de notificações gerado!');
@@ -299,52 +299,69 @@ const ObjectsPage = () => {
       </header>
       
       <div className={styles.tableContainer}>
-        <table className={styles.table}>
-          <thead>
-            <tr>
-              {!showArchived && <th className={styles.checkboxCell}><input type="checkbox" onChange={handleSelectAll} /></th>}
-              <th onClick={() => requestSort('control_number')} className={styles.sortableHeader}>N° Controle {getSortIcon('control_number')}</th>
-              <th onClick={() => requestSort('recipient_name')} className={styles.sortableHeader}>Destinatário {getSortIcon('recipient_name')}</th>
-              <th>Endereço</th>
-              <th>Prazo de Guarda</th>
-              <th>Ações</th>
-            </tr>
-          </thead>
-          <tbody>
-            {loading ? (<tr><td colSpan={showArchived ? 5 : 6}>A carregar...</td></tr>) 
-            : filteredObjects.length > 0 ? (
-              filteredObjects.map(obj => {
-                const hasContact = !!contactMap[obj.recipient_name];
-                const addressText = obj.addresses ? obj.addresses.street_name : 'Não informado';
-                return (
-                  <tr key={obj.control_number} className={selectedObjects.has(obj.control_number) ? styles.selectedRow : ''}>
-                    {!showArchived && <td className={styles.checkboxCell}>{obj.status === 'Aguardando Retirada' && <input type="checkbox" checked={selectedObjects.has(obj.control_number)} onChange={() => handleSelectObject(obj.control_number)} />}</td>}
-                    <td data-label="N° Controle">{obj.control_number}</td>
-                    <td data-label="Destinatário">
-                      <div className={styles.recipientInfo}>
-                        <span className={styles.recipientName}>{hasContact ? <FaPhone className={styles.contactIcon} /> : <FaPhoneSlash className={`${styles.contactIcon} ${styles.noContact}`} />}{obj.recipient_name}</span>
-                        <span className={styles.recipientSub}>{obj.tracking_code || obj.object_type}</span>
-                      </div>
-                    </td>
-                    <td data-label="Endereço">{addressText}</td>
-                    <td data-label="Prazo de Guarda"><ProgressBar startDate={obj.arrival_date} endDate={obj.storage_deadline} status={obj.status} /></td>
-                    <td data-label="Ações">
-                      <div className={styles.actionButtons}>
-                        {obj.is_archived ? (<button className={styles.actionButton} title="Recuperar Objeto" onClick={() => handleUnarchive(obj.control_number)}><FaHistory /></button>) : (
-                          <>
-                            {hasContact && obj.status === 'Aguardando Retirada' && (<button className={`${styles.actionButton} ${styles.whatsapp}`} title="Notificar via WhatsApp" onClick={() => handleIndividualNotify(obj)}><FaWhatsapp /></button>)}
-                            <button className={styles.actionButton} title="Editar" onClick={() => { setObjectToEdit(obj); setIsModalOpen(true); }}><FaEdit /></button>
-                            {obj.status === 'Aguardando Retirada' && (<><button className={`${styles.actionButton} ${styles.deliver}`} title="Entregar" onClick={() => updateObjectStatus(obj.control_number, 'deliver')}><FaCheckCircle /></button><button className={`${styles.actionButton} ${styles.return}`} title="Devolver" onClick={() => updateObjectStatus(obj.control_number, 'return')}><FaUndoAlt /></button></>)}
-                          </>
-                        )}
-                      </div>
-                    </td>
-                  </tr>
-                )
-              })
-            ) : (<tr><td colSpan={showArchived ? 5 : 6}>Nenhum objeto encontrado.</td></tr>)}
-          </tbody>
-        </table>
+        {loading ? (
+          <TableSkeleton columns={showArchived ? 5 : 6} rows={ITEMS_PER_PAGE} />
+        ) : (
+          <table className={styles.table}>
+            <thead>
+              <tr>
+                {!showArchived && <th className={styles.checkboxCell}><input type="checkbox" onChange={handleSelectAll} /></th>}
+                <th onClick={() => requestSort('control_number')} className={styles.sortableHeader}>N° Controle {getSortIcon('control_number')}</th>
+                <th onClick={() => requestSort('recipient_name')} className={styles.sortableHeader}>Destinatário {getSortIcon('recipient_name')}</th>
+                <th>Endereço</th>
+                <th>Prazo de Guarda</th>
+                <th>Ações</th>
+              </tr>
+            </thead>
+            <tbody>
+              {filteredObjects.length > 0 ? (
+                filteredObjects.map(obj => {
+                  const hasContact = !!contactMap[obj.recipient_name];
+                  const addressText = obj.addresses ? obj.addresses.street_name : 'Não informado';
+                  return (
+                    <tr key={obj.control_number} className={selectedObjects.has(obj.control_number) ? styles.selectedRow : ''}>
+                      {!showArchived && <td className={styles.checkboxCell}>{obj.status === 'Aguardando Retirada' && <input type="checkbox" checked={selectedObjects.has(obj.control_number)} onChange={() => handleSelectObject(obj.control_number)} />}</td>}
+                      <td data-label="N° Controle">{obj.control_number}</td>
+                      <td data-label="Destinatário">
+                        <div className={styles.recipientInfo}>
+                          <span className={styles.recipientName}>{hasContact ? <FaPhone className={styles.contactIcon} /> : <FaPhoneSlash className={`${styles.contactIcon} ${styles.noContact}`} />}{obj.recipient_name}</span>
+                          <span className={styles.recipientSub}>{obj.tracking_code || obj.object_type}</span>
+                        </div>
+                      </td>
+                      <td data-label="Endereço">{addressText}</td>
+                      <td data-label="Prazo de Guarda"><ProgressBar startDate={obj.arrival_date} endDate={obj.storage_deadline} status={obj.status} /></td>
+                      <td data-label="Ações">
+                        <div className={styles.actionButtons}>
+                          {obj.is_archived ? (<button className={styles.actionButton} title="Recuperar Objeto" onClick={() => handleUnarchive(obj.control_number)}><FaHistory /></button>) : (
+                            <>
+                              {hasContact && obj.status === 'Aguardando Retirada' && (<button className={`${styles.actionButton} ${styles.whatsapp}`} title="Notificar via WhatsApp" onClick={() => handleIndividualNotify(obj)}><FaWhatsapp /></button>)}
+                              <button className={styles.actionButton} title="Editar" onClick={() => { setObjectToEdit(obj); setIsModalOpen(true); }}><FaEdit /></button>
+                              {obj.status === 'Aguardando Retirada' && (<><button className={`${styles.actionButton} ${styles.deliver}`} title="Entregar" onClick={() => updateObjectStatus(obj.control_number, 'deliver')}><FaCheckCircle /></button><button className={`${styles.actionButton} ${styles.return}`} title="Devolver" onClick={() => updateObjectStatus(obj.control_number, 'return')}><FaUndoAlt /></button></>)}
+                            </>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  )
+                })
+              ) : (
+                <tr>
+                  <td colSpan={showArchived ? 5 : 6}>
+                    <EmptyState 
+                      icon={FaBoxOpen}
+                      title={searchTerm ? "Nenhum resultado" : "Nenhum objeto"}
+                      message={
+                        searchTerm
+                          ? <>Nenhum objeto encontrado para a busca <strong>"{searchTerm}"</strong>.</>
+                          : "Ainda não há objetos nesta seção."
+                      }
+                    />
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        )}
       </div>
     </div>
   );

@@ -1,5 +1,6 @@
 // Arquivo: src/pages/SuppliesPage.jsx
-// MELHORIA (v5): Adicionado feedback de busca aprimorado com o componente EmptyState.
+// MELHORIA (v7): A busca agora é feita no banco de dados, garantindo
+// que a paginação e os resultados sejam sempre precisos.
 
 import React, { useState, useEffect, useCallback } from 'react';
 import { supabase } from '../lib/supabaseClient';
@@ -16,6 +17,7 @@ import useDebounce from '../hooks/useDebounce';
 import { handleSupabaseError } from '../utils/errorHandler';
 import { ITEMS_PER_PAGE } from '../constants';
 import EmptyState from '../components/EmptyState';
+import TableSkeleton from '../components/TableSkeleton';
 
 const SuppliesPage = () => {
   const [supplies, setSupplies] = useState([]);
@@ -36,7 +38,8 @@ const SuppliesPage = () => {
   const fetchSupplies = useCallback(async () => {
     setLoading(true);
     try {
-      const { data: count, error: countError } = await supabase.rpc('count_supplies');
+      // 1. A contagem agora passa o termo da busca para o backend.
+      const { data: count, error: countError } = await supabase.rpc('count_supplies', { p_search_term: debouncedSearchTerm });
       if (countError) throw countError;
       setTotalCount(count || 0);
 
@@ -45,6 +48,7 @@ const SuppliesPage = () => {
 
       let query = supabase.from('office_supplies').select('*');
       
+      // 2. A filtragem também é feita no backend.
       if (debouncedSearchTerm) {
         query = query.ilike('name', `%${debouncedSearchTerm}%`);
       }
@@ -93,7 +97,7 @@ const SuppliesPage = () => {
   const handleSaveSupply = async (formData) => {
     setIsSaving(true);
     const { error } = await supabase.rpc('create_or_update_supply', {
-      p_supply_id: formData.p_supply_id, p_name: formData.name,
+      p_supply_id: supplyToEdit?.id || null, p_name: formData.name,
       p_description: formData.description, p_initial_stock: formData.initial_stock,
     });
     if (error) toast.error(handleSupabaseError(error));
@@ -151,61 +155,64 @@ const SuppliesPage = () => {
       </header>
 
       <div className={styles.tableContainer}>
-        <table className={styles.table}>
-          <thead>
-            <tr>
-              <th className={styles.sortableHeader} onClick={() => requestSort('name')}>Nome do Material {getSortIcon('name')}</th>
-              <th className={styles.sortableHeader} onClick={() => requestSort('description')}>Descrição {getSortIcon('description')}</th>
-              <th className={styles.sortableHeader} onClick={() => requestSort('stock')}>Estoque Atual {getSortIcon('stock')}</th>
-              <th>Ações</th>
-            </tr>
-          </thead>
-          <tbody>
-            {loading ? (<tr><td colSpan="4">A carregar...</td></tr>) 
-            : supplies.length > 0 ? (
-              supplies.map(supply => (
-              <tr key={supply.id}>
-                <td data-label="Nome">{supply.name}</td>
-                <td data-label="Descrição">{supply.description || 'N/A'}</td>
-                <td data-label="Estoque">
-                  <div className={styles.stockCell}>
-                    <button className={`${styles.actionButton} ${styles.removeStock}`} title="Remover Estoque" onClick={() => handleOpenAdjustModal(supply, 'remove')} disabled={supply.stock <= 0}>
-                      <FaMinusCircle />
-                    </button>
-                    <span className={styles.stockValue}>{supply.stock}</span>
-                    <button className={`${styles.actionButton} ${styles.addStock}`} title="Adicionar Estoque" onClick={() => handleOpenAdjustModal(supply, 'add')}>
-                      <FaPlusCircle />
-                    </button>
-                  </div>
-                </td>
-                <td data-label="Ações">
-                  <div className={styles.actionButtons}>
-                    <button className={styles.actionButton} title="Ver Histórico" onClick={() => navigate(`/supplies/${supply.id}/log`)}>
-                      <FaHistory />
-                    </button>
-                    <button className={styles.actionButton} title="Editar Detalhes" onClick={() => handleOpenEditModal(supply)}>
-                      <FaEdit />
-                    </button>
-                  </div>
-                </td>
-              </tr>
-            ))) : (
+        {loading ? (
+          <TableSkeleton columns={4} rows={ITEMS_PER_PAGE} />
+        ) : (
+          <table className={styles.table}>
+            <thead>
               <tr>
-                <td colSpan="4">
-                  <EmptyState
-                    icon={FaClipboardList}
-                    title={debouncedSearchTerm ? "Nenhum resultado" : "Nenhum material"}
-                    message={
-                      debouncedSearchTerm
-                        ? <>Nenhum material encontrado para a busca <strong>"{debouncedSearchTerm}"</strong>.</>
-                        : "Ainda não há materiais de expediente cadastrados."
-                    }
-                  />
-                </td>
+                <th className={styles.sortableHeader} onClick={() => requestSort('name')}>Nome do Material {getSortIcon('name')}</th>
+                <th className={styles.sortableHeader} onClick={() => requestSort('description')}>Descrição {getSortIcon('description')}</th>
+                <th className={styles.sortableHeader} onClick={() => requestSort('stock')}>Estoque Atual {getSortIcon('stock')}</th>
+                <th>Ações</th>
               </tr>
-            )}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {supplies.length > 0 ? (
+                supplies.map(supply => (
+                <tr key={supply.id}>
+                  <td data-label="Nome">{supply.name}</td>
+                  <td data-label="Descrição">{supply.description || 'N/A'}</td>
+                  <td data-label="Estoque">
+                    <div className={styles.stockCell}>
+                      <button className={`${styles.actionButton} ${styles.removeStock}`} title="Remover Estoque" onClick={() => handleOpenAdjustModal(supply, 'remove')} disabled={supply.stock <= 0}>
+                        <FaMinusCircle />
+                      </button>
+                      <span className={styles.stockValue}>{supply.stock}</span>
+                      <button className={`${styles.actionButton} ${styles.addStock}`} title="Adicionar Estoque" onClick={() => handleOpenAdjustModal(supply, 'add')}>
+                        <FaPlusCircle />
+                      </button>
+                    </div>
+                  </td>
+                  <td data-label="Ações">
+                    <div className={styles.actionButtons}>
+                      <button className={styles.actionButton} title="Ver Histórico" onClick={() => navigate(`/supplies/${supply.id}/log`)}>
+                        <FaHistory />
+                      </button>
+                      <button className={styles.actionButton} title="Editar Detalhes" onClick={() => handleOpenEditModal(supply)}>
+                        <FaEdit />
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              ))) : (
+                <tr>
+                  <td colSpan="4">
+                    <EmptyState
+                      icon={FaClipboardList}
+                      title={debouncedSearchTerm ? "Nenhum resultado" : "Nenhum material"}
+                      message={
+                        debouncedSearchTerm
+                          ? <>Nenhum material encontrado para a busca <strong>"{debouncedSearchTerm}"</strong>.</>
+                          : "Ainda não há materiais de expediente cadastrados."
+                      }
+                    />
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        )}
       </div>
 
       {totalPages > 1 && (

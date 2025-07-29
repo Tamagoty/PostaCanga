@@ -1,5 +1,5 @@
 // Arquivo: src/components/CustomerForm.jsx
-// MELHORIA (v2): Implementado o `handleSupabaseError`.
+// MELHORIA (v3): Implementada a máscara de formatação automática para os campos de CPF e Celular.
 
 import React, { useState, useEffect, useCallback } from "react";
 import styles from "./CustomerForm.module.css";
@@ -9,6 +9,7 @@ import toast from "react-hot-toast";
 import { supabase } from "../lib/supabaseClient";
 import { FaSearch } from "react-icons/fa";
 import { handleSupabaseError } from '../utils/errorHandler';
+import { maskCPF, maskPhone } from '../utils/masks'; // 1. Importar as funções de máscara
 
 const CustomerForm = ({ onSave, onClose, customerToEdit, loading }) => {
   const initialFormData = {
@@ -115,8 +116,16 @@ const CustomerForm = ({ onSave, onClose, customerToEdit, loading }) => {
     }
   };
 
+  // 2. Atualizar a função handleChange para aplicar as máscaras
   const handleChange = (e) => {
-    setFormData((prev) => ({ ...prev, [e.target.name]: e.target.value }));
+    const { name, value } = e.target;
+    if (name === 'cpf') {
+      setFormData((prev) => ({ ...prev, [name]: maskCPF(value) }));
+    } else if (name === 'cellphone') {
+      setFormData((prev) => ({ ...prev, [name]: maskPhone(value) }));
+    } else {
+      setFormData((prev) => ({ ...prev, [name]: value }));
+    }
   };
 
   const handleSubmit = (e) => {

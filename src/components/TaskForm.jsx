@@ -1,4 +1,6 @@
 // Arquivo: src/components/TaskForm.jsx
+// MELHORIA (v2): Removida a lógica de construção do payload.
+
 import React, { useState, useEffect } from 'react';
 import styles from './EmployeeForm.module.css';
 import Input from './Input';
@@ -18,6 +20,8 @@ const TaskForm = ({ onSave, onClose, taskToEdit, loading }) => {
         frequency_type: taskToEdit.frequency_type || 'daily',
         due_date: taskToEdit.due_date ? new Date(taskToEdit.due_date).toISOString().split('T')[0] : null
       });
+    } else {
+      setFormData({ title: '', description: '', frequency_type: 'daily', due_date: null });
     }
   }, [taskToEdit]);
 
@@ -32,8 +36,8 @@ const TaskForm = ({ onSave, onClose, taskToEdit, loading }) => {
       toast.error('O título da tarefa é obrigatório.');
       return;
     }
-    const payload = { ...formData, p_task_id: taskToEdit?.id || null };
-    onSave(payload);
+    // Apenas devolve os dados puros
+    onSave(formData);
   };
 
   const frequencyOptions = [

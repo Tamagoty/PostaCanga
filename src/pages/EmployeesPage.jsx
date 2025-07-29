@@ -1,5 +1,5 @@
 // Arquivo: src/pages/EmployeesPage.jsx
-// MELHORIA (v2): Implementado o `handleSupabaseError`.
+// MELHORIA (v3): Implementado o Skeleton Loader para a tabela.
 
 import React, { useState, useEffect, useCallback } from 'react';
 import { supabase } from '../lib/supabaseClient';
@@ -12,6 +12,8 @@ import Modal from '../components/Modal';
 import EmployeeForm from '../components/EmployeeForm';
 import ConfirmationModal from '../components/ConfirmationModal';
 import { handleSupabaseError } from '../utils/errorHandler';
+import TableSkeleton from '../components/TableSkeleton';
+import EmptyState from '../components/EmptyState';
 
 const EmployeesPage = () => {
   const { isAdmin, userProfile } = useAuth();
@@ -29,9 +31,7 @@ const EmployeesPage = () => {
       return;
     }
     setLoading(true);
-
     const { data, error } = await supabase.functions.invoke('get-employees');
-
     if (error) {
       toast.error(handleSupabaseError(error));
       setEmployees([]);
@@ -41,9 +41,7 @@ const EmployeesPage = () => {
     setLoading(false);
   }, [isAdmin]);
 
-  useEffect(() => {
-    fetchEmployees();
-  }, [fetchEmployees]);
+  useEffect(() => { fetchEmployees(); }, [fetchEmployees]);
 
   const handleCreateEmployee = async (formData) => {
     setIsSaving(true);
@@ -51,23 +49,17 @@ const EmployeesPage = () => {
       email: formData.email,
       password: formData.password,
     });
-
     if (authError) {
       toast.error(handleSupabaseError(authError));
       setIsSaving(false);
       return;
     }
-
     if (user) {
-      const { error: profileError } = await supabase
-        .from('employees')
-        .update({
-          full_name: formData.full_name,
-          registration_number: formData.registration_number,
-          role: formData.role,
-        })
-        .eq('id', user.id);
-
+      const { error: profileError } = await supabase.from('employees').update({
+        full_name: formData.full_name,
+        registration_number: formData.registration_number,
+        role: formData.role,
+      }).eq('id', user.id);
       if (profileError) {
         toast.error(handleSupabaseError(profileError));
       } else {
@@ -88,9 +80,7 @@ const EmployeesPage = () => {
     if (!employeeToDelete) return;
     setIsDeleting(true);
     const toastId = toast.loading('Apagando funcionário...');
-    
     const { error } = await supabase.rpc('delete_employee', { p_user_id: employeeToDelete.id });
-
     if (error) {
       toast.error(handleSupabaseError(error), { id: toastId });
     } else {
@@ -131,40 +121,45 @@ const EmployeesPage = () => {
       </header>
 
       <div className={styles.tableContainer}>
-        <table className={styles.table}>
-          <thead>
-            <tr>
-              <th>Nome Completo</th>
-              <th>Matrícula</th>
-              <th>E-mail</th>
-              <th>Permissão</th>
-              <th>Ações</th>
-            </tr>
-          </thead>
-          <tbody>
-            {loading ? (
-              <tr><td colSpan="5">A carregar funcionários...</td></tr>
-            ) : employees.map(emp => (
-              <tr key={emp.id}>
-                <td data-label="Nome">{emp.full_name}</td>
-                <td data-label="Matrícula">{emp.registration_number}</td>
-                <td data-label="E-mail">{emp.email}</td>
-                <td data-label="Permissão">
-                  <span className={`${styles.role} ${styles[emp.role]}`}>
-                    {emp.role === 'admin' ? <FaUserShield /> : <FaUser />} {emp.role}
-                  </span>
-                </td>
-                <td data-label="Ações">
-                  {userProfile?.id !== emp.id && (
-                    <button className={styles.deleteButton} onClick={() => startDeleteEmployee(emp)}>
-                      <FaTrashAlt />
-                    </button>
-                  )}
-                </td>
+        {loading ? (
+          <TableSkeleton columns={5} rows={5} />
+        ) : (
+          <table className={styles.table}>
+            <thead>
+              <tr>
+                <th>Nome Completo</th><th>Matrícula</th><th>E-mail</th><th>Permissão</th><th>Ações</th>
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {employees.length > 0 ? (
+                employees.map(emp => (
+                <tr key={emp.id}>
+                  <td data-label="Nome">{emp.full_name}</td>
+                  <td data-label="Matrícula">{emp.registration_number}</td>
+                  <td data-label="E-mail">{emp.email}</td>
+                  <td data-label="Permissão">
+                    <span className={`${styles.role} ${styles[emp.role]}`}>
+                      {emp.role === 'admin' ? <FaUserShield /> : <FaUser />} {emp.role}
+                    </span>
+                  </td>
+                  <td data-label="Ações">
+                    {userProfile?.id !== emp.id && (
+                      <button className={styles.deleteButton} onClick={() => startDeleteEmployee(emp)}>
+                        <FaTrashAlt />
+                      </button>
+                    )}
+                  </td>
+                </tr>
+              ))) : (
+                <tr>
+                  <td colSpan="5">
+                    <EmptyState title="Nenhum funcionário" message="Ainda não há funcionários cadastrados." />
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        )}
       </div>
     </div>
   );
