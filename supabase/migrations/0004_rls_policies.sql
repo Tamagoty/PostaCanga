@@ -1,12 +1,9 @@
--- Arquivo: supabase/migrations/004_rls_policies.sql
+-- supabase/migrations/0004_rls_policies.sql
 -- Descrição: Habilita o RLS e cria todas as políticas de segurança da aplicação.
 
 --------------------------------------------------------------------------------
--- 7. POLÍTICAS DE SEGURANÇA (RLS)
+-- 1. HABILITAR RLS
 --------------------------------------------------------------------------------
-CREATE OR REPLACE FUNCTION is_admin(p_user_id UUID) RETURNS BOOLEAN LANGUAGE plpgsql SECURITY DEFINER AS $$ BEGIN RETURN EXISTS (SELECT 1 FROM public.employees WHERE id = p_user_id AND role = 'admin'); END; $$;
-
--- Habilitar RLS em todas as tabelas
 ALTER TABLE public.states ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.cities ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.addresses ENABLE ROW LEVEL SECURITY;
@@ -24,8 +21,17 @@ ALTER TABLE public.tasks ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.task_completions ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.system_links ENABLE ROW LEVEL SECURITY;
 
--- Apagar políticas antigas para garantir um estado limpo
+--------------------------------------------------------------------------------
+-- 2. LIMPAR POLÍTICAS ANTIGAS (GARANTIR IDEMPOTÊNCIA)
+--------------------------------------------------------------------------------
 DO $$ DECLARE r RECORD; BEGIN FOR r IN (SELECT policyname, tablename FROM pg_policies WHERE schemaname = 'public') LOOP EXECUTE 'DROP POLICY IF EXISTS ' || quote_ident(r.policyname) || ' ON ' || quote_ident(r.tablename) || ';'; END LOOP; END $$;
+
+--------------------------------------------------------------------------------
+-- 3. CRIAR NOVAS POLÍTICAS
+--------------------------------------------------------------------------------
+
+-- Função auxiliar para RLS
+CREATE OR REPLACE FUNCTION is_admin(p_user_id UUID) RETURNS BOOLEAN LANGUAGE plpgsql SECURITY DEFINER AS $$ BEGIN RETURN EXISTS (SELECT 1 FROM public.employees WHERE id = p_user_id AND role = 'admin'); END; $$;
 
 -- Políticas Gerais
 CREATE POLICY "Allow read access to all authenticated users" ON public.states FOR SELECT TO authenticated USING (true);

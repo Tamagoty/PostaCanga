@@ -1,77 +1,36 @@
--- Arquivo: supabase/migrations/000_consolidated_schema_final.sql
+-- supabase/migrations/0000_banco_de_dados_completo.sql
 -- Descrição: Script único e definitivo para inicializar todo o banco de dados do PostaCanga do zero.
 -- Contém todas as tabelas, funções, gatilhos e políticas de segurança na sua versão mais recente.
--- Versão: FINAL
 
 --------------------------------------------------------------------------------
--- 1. EXTENSÕES
+-- 1. EXTENSÕES E SCHEMA
 --------------------------------------------------------------------------------
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 CREATE EXTENSION IF NOT EXISTS "unaccent";
 
---------------------------------------------------------------------------------
--- 2. TABELAS
---------------------------------------------------------------------------------
-
-CREATE TABLE IF NOT EXISTS public.states (
-    id SERIAL PRIMARY KEY, name VARCHAR(100) NOT NULL, uf CHAR(2) NOT NULL UNIQUE
-);
-CREATE TABLE IF NOT EXISTS public.cities (
-    id SERIAL PRIMARY KEY, name VARCHAR(255) NOT NULL, state_id INT NOT NULL REFERENCES public.states(id)
-);
-CREATE TABLE IF NOT EXISTS public.addresses (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(), cep VARCHAR(9), street_name TEXT NOT NULL, neighborhood TEXT, city_id INT REFERENCES public.cities(id), created_at TIMESTAMPTZ DEFAULT NOW(), updated_at TIMESTAMPTZ DEFAULT NOW(), UNIQUE(street_name, city_id, cep)
-);
-CREATE TABLE IF NOT EXISTS public.customers (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(), full_name TEXT NOT NULL, cpf VARCHAR(14) UNIQUE, cellphone VARCHAR(20) UNIQUE, email VARCHAR(255) UNIQUE, birth_date DATE, is_active BOOLEAN NOT NULL DEFAULT TRUE, address_id UUID REFERENCES public.addresses(id) ON DELETE SET NULL, address_number VARCHAR(20), address_complement VARCHAR(100), contact_customer_id UUID REFERENCES public.customers(id) ON DELETE SET NULL, created_at TIMESTAMPTZ DEFAULT NOW(), updated_at TIMESTAMPTZ DEFAULT NOW(), CONSTRAINT chk_self_contact CHECK (id <> contact_customer_id)
-);
-CREATE TABLE IF NOT EXISTS public.employees (
-    id UUID PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE, full_name TEXT NOT NULL, registration_number VARCHAR(50) UNIQUE NOT NULL, role TEXT NOT NULL DEFAULT 'employee', created_at TIMESTAMPTZ DEFAULT NOW()
-);
-CREATE TABLE IF NOT EXISTS public.object_types (
-    id SERIAL PRIMARY KEY, name TEXT NOT NULL UNIQUE, default_storage_days INT NOT NULL DEFAULT 20
-);
-CREATE TABLE IF NOT EXISTS public.objects (
-    control_number SERIAL PRIMARY KEY, recipient_name TEXT NOT NULL, customer_id UUID REFERENCES public.customers(id) ON DELETE SET NULL, delivery_address_id UUID REFERENCES public.addresses(id) ON DELETE SET NULL, tracking_code VARCHAR(100), object_type VARCHAR(100) NOT NULL, arrival_date DATE NOT NULL DEFAULT CURRENT_DATE, storage_deadline DATE NOT NULL, status VARCHAR(50) DEFAULT 'Aguardando Retirada', is_archived BOOLEAN NOT NULL DEFAULT FALSE, created_at TIMESTAMPTZ DEFAULT NOW(), updated_at TIMESTAMPTZ DEFAULT NOW()
-);
-CREATE TABLE IF NOT EXISTS public.office_supplies (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(), name VARCHAR(150) UNIQUE NOT NULL, stock INT NOT NULL DEFAULT 0 CHECK (stock >= 0), description TEXT, created_at TIMESTAMPTZ DEFAULT NOW(), updated_at TIMESTAMPTZ DEFAULT NOW()
-);
-CREATE TABLE IF NOT EXISTS public.supply_stock_log (
-    id BIGSERIAL PRIMARY KEY, supply_id UUID NOT NULL REFERENCES public.office_supplies(id) ON DELETE CASCADE, user_id UUID REFERENCES auth.users(id) ON DELETE SET NULL, quantity_changed INT NOT NULL, new_stock_total INT NOT NULL, reason TEXT, created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-);
-CREATE TABLE IF NOT EXISTS public.user_themes (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(), user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE, theme_name VARCHAR(50) NOT NULL, theme_colors JSONB NOT NULL, created_at TIMESTAMPTZ DEFAULT NOW(), UNIQUE(user_id, theme_name)
-);
-CREATE TABLE IF NOT EXISTS public.tracking_code_rules (
-    id SERIAL PRIMARY KEY, prefix VARCHAR(10) NOT NULL UNIQUE, object_type VARCHAR(100) NOT NULL, storage_days INT NOT NULL DEFAULT 7, created_at TIMESTAMPTZ DEFAULT NOW()
-);
-CREATE TABLE IF NOT EXISTS public.bulk_import_reports (
-    id BIGSERIAL PRIMARY KEY, report_data JSONB NOT NULL, user_id UUID REFERENCES auth.users(id) ON DELETE SET NULL, created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-);
-CREATE TABLE IF NOT EXISTS public.app_settings (
-    key TEXT PRIMARY KEY, value TEXT NOT NULL, description TEXT, label TEXT
-);
-CREATE TABLE IF NOT EXISTS public.tasks (
-    id SERIAL PRIMARY KEY, title TEXT NOT NULL, description TEXT, frequency_type TEXT NOT NULL, due_date DATE, is_active BOOLEAN NOT NULL DEFAULT TRUE, created_at TIMESTAMPTZ DEFAULT NOW()
-);
-CREATE TABLE IF NOT EXISTS public.task_completions (
-    id BIGSERIAL PRIMARY KEY, task_id INT NOT NULL REFERENCES public.tasks(id) ON DELETE CASCADE, user_id UUID REFERENCES auth.users(id) ON DELETE SET NULL, completed_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-);
-CREATE TABLE IF NOT EXISTS public.system_links (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(), name TEXT NOT NULL, url TEXT NOT NULL, description TEXT, details TEXT, created_at TIMESTAMPTZ DEFAULT NOW(), updated_at TIMESTAMPTZ DEFAULT NOW()
-);
+CREATE TABLE IF NOT EXISTS public.states (id SERIAL PRIMARY KEY, name VARCHAR(100) NOT NULL, uf CHAR(2) NOT NULL UNIQUE);
+CREATE TABLE IF NOT EXISTS public.cities (id SERIAL PRIMARY KEY, name VARCHAR(255) NOT NULL, state_id INT NOT NULL REFERENCES public.states(id));
+CREATE TABLE IF NOT EXISTS public.addresses (id UUID PRIMARY KEY DEFAULT uuid_generate_v4(), cep VARCHAR(9), street_name TEXT NOT NULL, neighborhood TEXT, city_id INT REFERENCES public.cities(id), created_at TIMESTAMPTZ DEFAULT NOW(), updated_at TIMESTAMPTZ DEFAULT NOW(), UNIQUE(street_name, city_id, cep));
+CREATE TABLE IF NOT EXISTS public.customers (id UUID PRIMARY KEY DEFAULT uuid_generate_v4(), full_name TEXT NOT NULL, cpf VARCHAR(14) UNIQUE, cellphone VARCHAR(20) UNIQUE, email VARCHAR(255) UNIQUE, birth_date DATE, is_active BOOLEAN NOT NULL DEFAULT TRUE, address_id UUID REFERENCES public.addresses(id) ON DELETE SET NULL, address_number VARCHAR(20), address_complement VARCHAR(100), contact_customer_id UUID REFERENCES public.customers(id) ON DELETE SET NULL, created_at TIMESTAMPTZ DEFAULT NOW(), updated_at TIMESTAMPTZ DEFAULT NOW(), CONSTRAINT chk_self_contact CHECK (id <> contact_customer_id));
+CREATE TABLE IF NOT EXISTS public.employees (id UUID PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE, full_name TEXT NOT NULL, registration_number VARCHAR(50) UNIQUE NOT NULL, role TEXT NOT NULL DEFAULT 'employee', created_at TIMESTAMPTZ DEFAULT NOW());
+CREATE TABLE IF NOT EXISTS public.object_types (id SERIAL PRIMARY KEY, name TEXT NOT NULL UNIQUE, default_storage_days INT NOT NULL DEFAULT 20);
+CREATE TABLE IF NOT EXISTS public.objects (control_number SERIAL PRIMARY KEY, recipient_name TEXT NOT NULL, customer_id UUID REFERENCES public.customers(id) ON DELETE SET NULL, delivery_address_id UUID REFERENCES public.addresses(id) ON DELETE SET NULL, tracking_code VARCHAR(100), object_type VARCHAR(100) NOT NULL, arrival_date DATE NOT NULL DEFAULT CURRENT_DATE, storage_deadline DATE NOT NULL, status VARCHAR(50) DEFAULT 'Aguardando Retirada', is_archived BOOLEAN NOT NULL DEFAULT FALSE, created_at TIMESTAMPTZ DEFAULT NOW(), updated_at TIMESTAMPTZ DEFAULT NOW());
+CREATE TABLE IF NOT EXISTS public.office_supplies (id UUID PRIMARY KEY DEFAULT uuid_generate_v4(), name VARCHAR(150) UNIQUE NOT NULL, stock INT NOT NULL DEFAULT 0 CHECK (stock >= 0), description TEXT, created_at TIMESTAMPTZ DEFAULT NOW(), updated_at TIMESTAMPTZ DEFAULT NOW());
+CREATE TABLE IF NOT EXISTS public.supply_stock_log (id BIGSERIAL PRIMARY KEY, supply_id UUID NOT NULL REFERENCES public.office_supplies(id) ON DELETE CASCADE, user_id UUID REFERENCES auth.users(id) ON DELETE SET NULL, quantity_changed INT NOT NULL, new_stock_total INT NOT NULL, reason TEXT, created_at TIMESTAMPTZ NOT NULL DEFAULT NOW());
+CREATE TABLE IF NOT EXISTS public.user_themes (id UUID PRIMARY KEY DEFAULT uuid_generate_v4(), user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE, theme_name VARCHAR(50) NOT NULL, theme_colors JSONB NOT NULL, created_at TIMESTAMPTZ DEFAULT NOW(), UNIQUE(user_id, theme_name));
+CREATE TABLE IF NOT EXISTS public.tracking_code_rules (id SERIAL PRIMARY KEY, prefix VARCHAR(10) NOT NULL UNIQUE, object_type VARCHAR(100) NOT NULL, storage_days INT NOT NULL DEFAULT 7, created_at TIMESTAMPTZ DEFAULT NOW());
+CREATE TABLE IF NOT EXISTS public.bulk_import_reports (id BIGSERIAL PRIMARY KEY, report_data JSONB NOT NULL, user_id UUID REFERENCES auth.users(id) ON DELETE SET NULL, created_at TIMESTAMPTZ NOT NULL DEFAULT NOW());
+CREATE TABLE IF NOT EXISTS public.app_settings (key TEXT PRIMARY KEY, value TEXT NOT NULL, description TEXT, label TEXT);
+CREATE TABLE IF NOT EXISTS public.tasks (id SERIAL PRIMARY KEY, title TEXT NOT NULL, description TEXT, frequency_type TEXT NOT NULL, due_date DATE, is_active BOOLEAN NOT NULL DEFAULT TRUE, created_at TIMESTAMPTZ DEFAULT NOW());
+CREATE TABLE IF NOT EXISTS public.task_completions (id BIGSERIAL PRIMARY KEY, task_id INT NOT NULL REFERENCES public.tasks(id) ON DELETE CASCADE, user_id UUID REFERENCES auth.users(id) ON DELETE SET NULL, completed_at TIMESTAMPTZ NOT NULL DEFAULT NOW());
+CREATE TABLE IF NOT EXISTS public.system_links (id UUID PRIMARY KEY DEFAULT uuid_generate_v4(), name TEXT NOT NULL, url TEXT NOT NULL, description TEXT, details TEXT, created_at TIMESTAMPTZ DEFAULT NOW(), updated_at TIMESTAMPTZ DEFAULT NOW());
 
 --------------------------------------------------------------------------------
--- 3. DADOS INICIAIS (SEMENTES)
+-- 2. DADOS INICIAIS E TIPOS
 --------------------------------------------------------------------------------
 INSERT INTO public.object_types (name, default_storage_days) VALUES
 ('Encomenda PAC', 7), ('SEDEX', 7), ('Carta Registrada', 20), ('Carta Simples', 20), ('Revista', 20), ('Cartão', 20), ('Telegrama', 7), ('Cartão Registrado', 20), ('Registrado', 7), ('Outro', 7)
 ON CONFLICT (name) DO NOTHING;
-
-INSERT INTO public.tracking_code_rules (prefix, object_type, storage_days) VALUES
-('AC', 'Encomenda PAC', 7), ('QB', 'Encomenda PAC', 7), ('SS', 'SEDEX', 7), ('BR', 'Carta Registrada', 20), ('YD', 'Cartão Registrado', 20)
-ON CONFLICT (prefix) DO NOTHING;
 
 INSERT INTO public.app_settings (key, value, description, label) VALUES
 ('agency_name', 'Correio de América Dourada', 'Nome da agência exibido no sistema.', 'Nome da Agência'),
@@ -88,9 +47,6 @@ INSERT INTO public.tasks (title, description, frequency_type) VALUES
 ('Backup do Sistema', 'Realizar o backup dos dados importantes.', 'monthly')
 ON CONFLICT DO NOTHING;
 
---------------------------------------------------------------------------------
--- 4. TIPOS CUSTOMIZADOS
---------------------------------------------------------------------------------
 DO $$ BEGIN
     IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'simple_object_input') THEN
         CREATE TYPE simple_object_input AS (recipient_name TEXT, street_name TEXT);
@@ -104,7 +60,7 @@ DO $$ BEGIN
 END $$;
 
 --------------------------------------------------------------------------------
--- 5. FUNÇÕES (RPC)
+-- 3. FUNÇÕES E TRIGGERS
 --------------------------------------------------------------------------------
 
 -- Funções Auxiliares
@@ -177,15 +133,13 @@ CREATE OR REPLACE FUNCTION get_notifications() RETURNS JSON LANGUAGE plpgsql AS 
 CREATE OR REPLACE FUNCTION get_monthly_objects_report(p_year INT) RETURNS JSON LANGUAGE plpgsql AS $$ DECLARE report_data JSON; BEGIN IF (SELECT get_my_role()) <> 'admin' THEN RETURN '[]'::json; END IF; WITH months AS (SELECT generate_series(make_date(p_year, 1, 1), make_date(p_year, 12, 1), '1 month')::date AS month_start), monthly_stats AS (SELECT date_trunc('month', o.created_at)::date AS month, COUNT(*) AS criados, COUNT(*) FILTER (WHERE o.status = 'Entregue') AS entregues, COUNT(*) FILTER (WHERE o.status = 'Devolvido') AS devolvidos FROM public.objects o WHERE EXTRACT(YEAR FROM o.created_at) = p_year GROUP BY month) SELECT json_agg(t.*) INTO report_data FROM (SELECT to_char(m.month_start, 'Mon') AS mes, COALESCE(ms.criados, 0)::int AS criados, COALESCE(ms.entregues, 0)::int AS entregues, COALESCE(ms.devolvidos, 0)::int AS devolvidos FROM months m LEFT JOIN monthly_stats ms ON m.month_start = ms.month ORDER BY m.month_start) t; RETURN COALESCE(report_data, '[]'::json); END; $$;
 CREATE OR REPLACE FUNCTION get_supplies_usage_report(p_months INT DEFAULT 3) RETURNS JSON LANGUAGE plpgsql AS $$ DECLARE report_data JSON; v_start_date DATE; BEGIN IF (SELECT get_my_role()) <> 'admin' THEN RETURN '[]'::json; END IF; v_start_date := (NOW() - (p_months || ' months')::INTERVAL)::DATE; WITH usage_stats AS (SELECT l.supply_id, SUM(ABS(l.quantity_changed)) AS total_consumed FROM public.supply_stock_log l WHERE l.quantity_changed < 0 AND l.created_at >= v_start_date GROUP BY l.supply_id) SELECT json_agg(t.*) INTO report_data FROM (SELECT s.name AS supply_name, COALESCE(us.total_consumed, 0)::int AS total_consumed, s.stock AS current_stock, (COALESCE(us.total_consumed, 0) / p_months)::decimal(10, 2) AS monthly_avg, GREATEST(0, CEIL((COALESCE(us.total_consumed, 0) / p_months) * 3) - s.stock)::int AS suggestion FROM public.office_supplies s LEFT JOIN usage_stats us ON s.id = us.supply_id ORDER BY total_consumed DESC) t; RETURN COALESCE(report_data, '[]'::json); END; $$;
 
---------------------------------------------------------------------------------
--- 6. TRIGGERS
---------------------------------------------------------------------------------
+-- Triggers
 CREATE OR REPLACE FUNCTION public.handle_new_user() RETURNS TRIGGER LANGUAGE plpgsql SECURITY DEFINER AS $$ BEGIN INSERT INTO public.employees (id, full_name, registration_number, role) VALUES (new.id, 'Novo Usuário', new.id::text, 'employee'); RETURN new; END; $$;
 DROP TRIGGER IF EXISTS on_auth_user_created ON auth.users;
 CREATE TRIGGER on_auth_user_created AFTER INSERT ON auth.users FOR EACH ROW EXECUTE PROCEDURE public.handle_new_user();
 
 --------------------------------------------------------------------------------
--- 7. POLÍTICAS DE SEGURANÇA (RLS)
+-- 4. POLÍTICAS DE SEGURANÇA (RLS)
 --------------------------------------------------------------------------------
 CREATE OR REPLACE FUNCTION is_admin(p_user_id UUID) RETURNS BOOLEAN LANGUAGE plpgsql SECURITY DEFINER AS $$ BEGIN RETURN EXISTS (SELECT 1 FROM public.employees WHERE id = p_user_id AND role = 'admin'); END; $$;
 
@@ -206,14 +160,10 @@ ALTER TABLE public.tasks ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.task_completions ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.system_links ENABLE ROW LEVEL SECURITY;
 
--- Apagar políticas antigas para garantir um estado limpo
 DO $$ DECLARE r RECORD; BEGIN FOR r IN (SELECT policyname, tablename FROM pg_policies WHERE schemaname = 'public') LOOP EXECUTE 'DROP POLICY IF EXISTS ' || quote_ident(r.policyname) || ' ON ' || quote_ident(r.tablename) || ';'; END LOOP; END $$;
 
--- Políticas Gerais
 CREATE POLICY "Allow read access to all authenticated users" ON public.states FOR SELECT TO authenticated USING (true);
 CREATE POLICY "Allow read access to all authenticated users" ON public.cities FOR SELECT TO authenticated USING (true);
-
--- Políticas de Acesso Total para Funcionários
 CREATE POLICY "Employees can manage data" ON public.addresses FOR ALL TO authenticated USING (true) WITH CHECK (true);
 CREATE POLICY "Employees can manage data" ON public.customers FOR ALL TO authenticated USING (true) WITH CHECK (true);
 CREATE POLICY "Employees can manage data" ON public.objects FOR ALL TO authenticated USING (true) WITH CHECK (true);
@@ -221,8 +171,6 @@ CREATE POLICY "Employees can manage data" ON public.office_supplies FOR ALL TO a
 CREATE POLICY "Employees can manage data" ON public.supply_stock_log FOR ALL TO authenticated USING (true) WITH CHECK (true);
 CREATE POLICY "Employees can manage data" ON public.bulk_import_reports FOR ALL TO authenticated USING (true) WITH CHECK (true);
 CREATE POLICY "Employees can manage data" ON public.system_links FOR ALL TO authenticated USING (true) WITH CHECK (true);
-
--- Políticas Específicas
 CREATE POLICY "Users can manage their own themes" ON public.user_themes FOR ALL TO authenticated USING (user_id = auth.uid()) WITH CHECK (user_id = auth.uid());
 CREATE POLICY "Employees can view their own data" ON public.employees FOR SELECT TO authenticated USING (auth.uid() = id);
 CREATE POLICY "Admins can manage employees" ON public.employees FOR ALL TO authenticated USING (is_admin(auth.uid())) WITH CHECK (is_admin(auth.uid()));
@@ -235,3 +183,7 @@ CREATE POLICY "Allow read access to app settings" ON public.app_settings FOR SEL
 CREATE POLICY "Admins can manage tasks" ON public.tasks FOR ALL TO authenticated USING (is_admin(auth.uid())) WITH CHECK (is_admin(auth.uid()));
 CREATE POLICY "Admins can manage task completions" ON public.task_completions FOR ALL TO authenticated USING (is_admin(auth.uid())) WITH CHECK (is_admin(auth.uid()));
 
+--------------------------------------------------------------------------------
+-- 5. ARQUIVO VAZIO (PARA FUTURAS MIGRAÇÕES)
+--------------------------------------------------------------------------------
+-- Este arquivo pode ser usado para futuras alterações no schema.

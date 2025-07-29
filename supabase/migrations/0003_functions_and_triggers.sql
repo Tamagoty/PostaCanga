@@ -1,8 +1,8 @@
--- Arquivo: supabase/migrations/003_functions_and_triggers.sql
+-- supabase/migrations/0003_functions_and_triggers.sql
 -- Descrição: Cria todas as funções (RPC) e os gatilhos (Triggers) da aplicação.
 
 --------------------------------------------------------------------------------
--- 5. FUNÇÕES (RPC)
+-- 1. FUNÇÕES (RPC)
 --------------------------------------------------------------------------------
 
 -- Funções Auxiliares
@@ -76,7 +76,7 @@ CREATE OR REPLACE FUNCTION get_monthly_objects_report(p_year INT) RETURNS JSON L
 CREATE OR REPLACE FUNCTION get_supplies_usage_report(p_months INT DEFAULT 3) RETURNS JSON LANGUAGE plpgsql AS $$ DECLARE report_data JSON; v_start_date DATE; BEGIN IF (SELECT get_my_role()) <> 'admin' THEN RETURN '[]'::json; END IF; v_start_date := (NOW() - (p_months || ' months')::INTERVAL)::DATE; WITH usage_stats AS (SELECT l.supply_id, SUM(ABS(l.quantity_changed)) AS total_consumed FROM public.supply_stock_log l WHERE l.quantity_changed < 0 AND l.created_at >= v_start_date GROUP BY l.supply_id) SELECT json_agg(t.*) INTO report_data FROM (SELECT s.name AS supply_name, COALESCE(us.total_consumed, 0)::int AS total_consumed, s.stock AS current_stock, (COALESCE(us.total_consumed, 0) / p_months)::decimal(10, 2) AS monthly_avg, GREATEST(0, CEIL((COALESCE(us.total_consumed, 0) / p_months) * 3) - s.stock)::int AS suggestion FROM public.office_supplies s LEFT JOIN usage_stats us ON s.id = us.supply_id ORDER BY total_consumed DESC) t; RETURN COALESCE(report_data, '[]'::json); END; $$;
 
 --------------------------------------------------------------------------------
--- 6. TRIGGERS
+-- 2. TRIGGERS
 --------------------------------------------------------------------------------
 CREATE OR REPLACE FUNCTION public.handle_new_user() RETURNS TRIGGER LANGUAGE plpgsql SECURITY DEFINER AS $$ BEGIN INSERT INTO public.employees (id, full_name, registration_number, role) VALUES (new.id, 'Novo Usuário', new.id::text, 'employee'); RETURN new; END; $$;
 DROP TRIGGER IF EXISTS on_auth_user_created ON auth.users;

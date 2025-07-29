@@ -1,5 +1,6 @@
 // Arquivo: src/pages/ObjectsPage.jsx
-// MELHORIA (v2): Implementado o `handleSupabaseError`.
+// MELHORIA (v2.1): A função de gerar a página de notificações agora força o download do arquivo HTML
+// em vez de abri-lo em uma nova aba, atendendo ao fluxo de trabalho do usuário.
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { supabase } from '../lib/supabaseClient';
@@ -197,12 +198,23 @@ const ObjectsPage = () => {
         linksHTML += `<div id="${object.control_number}" class="container" onclick="ocultarDiv(this)"><a href="${url}" target="_blank"><div class="imagem"><img src="https://i.imgur.com/S5h76II.png" alt="Ícone de mensagem" /><div class="texto">${object.control_number}</div></div></a></div>`;
       }
     });
-    if (!linksHTML) { toast.error('Nenhum contato válido encontrado.'); return; }
-    const fullHtml = `<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8" /><title>Notificações</title><style>body{background:linear-gradient(to bottom left,#1a1d24,#272b35);min-height:100vh;font-family:sans-serif;padding:20px;margin:0}.grid-container{display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:20px}.container{cursor:pointer;text-align:center;transition:opacity .3s,transform .3s}.imagem{position:relative;display:inline-block}img{width:120px;border-radius:15px;box-shadow:0 4px 15px rgba(0,0,0,.4)}.texto{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);color:#fff;font-size:1.5rem;font-weight:700;text-shadow:2px 2px 4px rgba(0,0,0,.7)}a{text-decoration:none}.hidden{opacity:.2;transform:scale(.9);pointer-events:none}</style></head><body><div class="grid-container">${linksHTML}</div><script>function ocultarDiv(e){e.classList.add("hidden")}</script></body></html>`;
+    if (!linksHTML) { toast.error('Nenhum contato válido encontrado para os objetos selecionados.'); return; }
+    
+    const fullHtml = `<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8" /><title>Notificações WhatsApp</title><style>body{background:linear-gradient(to bottom left,#1a1d24,#272b35);min-height:100vh;font-family:sans-serif;padding:20px;margin:0}.grid-container{display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:20px}.container{cursor:pointer;text-align:center;transition:opacity .3s,transform .3s}.imagem{position:relative;display:inline-block}img{width:120px;border-radius:15px;box-shadow:0 4px 15px rgba(0,0,0,.4)}.texto{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);color:#fff;font-size:1.5rem;font-weight:700;text-shadow:2px 2px 4px rgba(0,0,0,.7)}a{text-decoration:none}.hidden{opacity:.2;transform:scale(.9);pointer-events:none}</style></head><body><div class="grid-container">${linksHTML}</div><script>function ocultarDiv(e){e.classList.add("hidden")}</script></body></html>`;
+    
+    // --- LÓGICA DE DOWNLOAD ---
     const blob = new Blob([fullHtml], { type: 'text/html' });
     const url = URL.createObjectURL(blob);
-    window.open(url, '_blank');
+    const link = document.createElement('a');
+    link.href = url;
+    link.setAttribute('download', 'notificacoes_whatsapp.html'); // Define o nome do arquivo
+    document.body.appendChild(link);
+    link.click(); // Simula o clique para iniciar o download
+    
+    // Limpeza
+    document.body.removeChild(link);
     URL.revokeObjectURL(url);
+    toast.success('Arquivo de notificações gerado!');
   };
 
   const requestSort = (key) => {

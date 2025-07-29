@@ -1,16 +1,12 @@
--- Arquivo: supabase/migrations/002_data.sql
+-- supabase/migrations/0002_data_and_types.sql
 -- Descrição: Insere os dados iniciais (sementes) e cria os tipos customizados.
 
 --------------------------------------------------------------------------------
--- 3. DADOS INICIAIS (SEMENTES)
+-- 1. DADOS INICIAIS (SEMENTES)
 --------------------------------------------------------------------------------
 INSERT INTO public.object_types (name, default_storage_days) VALUES
 ('Encomenda PAC', 7), ('SEDEX', 7), ('Carta Registrada', 20), ('Carta Simples', 20), ('Revista', 20), ('Cartão', 20), ('Telegrama', 7), ('Cartão Registrado', 20), ('Registrado', 7), ('Outro', 7)
 ON CONFLICT (name) DO NOTHING;
-
-INSERT INTO public.tracking_code_rules (prefix, object_type, storage_days) VALUES
-('AC', 'Encomenda PAC', 7), ('QB', 'Encomenda PAC', 7), ('SS', 'SEDEX', 7), ('BR', 'Carta Registrada', 20), ('YD', 'Cartão Registrado', 20)
-ON CONFLICT (prefix) DO NOTHING;
 
 INSERT INTO public.app_settings (key, value, description, label) VALUES
 ('agency_name', 'Correio de América Dourada', 'Nome da agência exibido no sistema.', 'Nome da Agência'),
@@ -28,7 +24,7 @@ INSERT INTO public.tasks (title, description, frequency_type) VALUES
 ON CONFLICT DO NOTHING;
 
 --------------------------------------------------------------------------------
--- 4. TIPOS CUSTOMIZADOS
+-- 2. TIPOS CUSTOMIZADOS
 --------------------------------------------------------------------------------
 DO $$ BEGIN
     IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'simple_object_input') THEN
