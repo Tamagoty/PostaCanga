@@ -315,8 +315,56 @@ CREATE OR REPLACE FUNCTION get_monthly_objects_report(p_year INT) RETURNS JSON L
 DROP FUNCTION IF EXISTS get_supplies_usage_report(INT);
 CREATE OR REPLACE FUNCTION get_supplies_usage_report(p_months INT DEFAULT 3) RETURNS JSON LANGUAGE plpgsql AS $$ DECLARE report_data JSON; v_start_date DATE; BEGIN IF (SELECT get_my_role()) <> 'admin' THEN RETURN '[]'::json; END IF; v_start_date := (NOW() - (p_months || ' months')::INTERVAL)::DATE; WITH usage_stats AS (SELECT l.supply_id, SUM(ABS(l.quantity_changed)) AS total_consumed FROM public.supply_stock_log l WHERE l.quantity_changed < 0 AND l.created_at >= v_start_date GROUP BY l.supply_id) SELECT json_agg(t.*) INTO report_data FROM (SELECT s.name AS supply_name, COALESCE(us.total_consumed, 0)::int AS total_consumed, s.stock AS current_stock, (COALESCE(us.total_consumed, 0) / p_months)::decimal(10, 2) AS monthly_avg, GREATEST(0, CEIL((COALESCE(us.total_consumed, 0) / p_months) * 3) - s.stock)::int AS suggestion FROM public.office_supplies s LEFT JOIN usage_stats us ON s.id = us.supply_id ORDER BY total_consumed DESC) t; RETURN COALESCE(report_data, '[]'::json); END; $$;
 
-DROP FUNCTION IF EXISTS get_customers_for_export();
-CREATE OR REPLACE FUNCTION get_customers_for_export() RETURNS TABLE (full_name TEXT, cellphone TEXT, is_active BOOLEAN, contact_name TEXT) LANGUAGE plpgsql AS $$ BEGIN RETURN QUERY SELECT c.full_name::TEXT, c.cellphone::TEXT, c.is_active, contact.full_name::TEXT AS contact_name FROM public.customers c LEFT JOIN public.customers contact ON c.contact_customer_id = contact.id WHERE c.cellphone IS NOT NULL AND c.cellphone <> ''; END; $$;
+DROP FUNCTION IF EXISTS public.get_customers_for_export();
+
+CREATE OR REPLACE FUNCTION get_customers_for_export()
+RETURNS TABLE (
+    full_name TEXT,
+    cellphone TEXT,
+    is_active BOOLEAN,
+    birth_date DATE,
+    email TEXT,
+    street_name TEXT,
+    address_number TEXT,
+    neighborhood TEXT,
+    city_name TEXT,
+    state_uf TEXT,
+    cep TEXT,
+    associated_contacts TEXT
+)
+LANGUAGE plpgsql
+AS $$
+BEGIN
+    RETURN QUERY
+    SELECT
+        c.full_name::TEXT,
+        c.cellphone::TEXT,
+        c.is_active,
+        c.birth_date,
+        c.email::TEXT,
+        a.street_name::TEXT,
+        c.address_number::TEXT,
+        a.neighborhood::TEXT,
+        ci.name::TEXT AS city_name,
+        s.uf::TEXT AS state_uf,
+        a.cep::TEXT,
+        (
+            SELECT STRING_AGG(dependent.full_name, ', ')
+            FROM public.customers dependent
+            WHERE dependent.contact_customer_id = c.id
+        ) AS associated_contacts
+    FROM
+        public.customers c
+    LEFT JOIN
+        public.addresses a ON c.address_id = a.id
+    LEFT JOIN
+        public.cities ci ON a.city_id = ci.id
+    LEFT JOIN
+        public.states s ON ci.state_id = s.id
+    WHERE
+        c.cellphone IS NOT NULL AND c.cellphone <> '';
+END;
+$$;
 
 -- Triggers
 DROP FUNCTION IF EXISTS public.handle_new_user() CASCADE;

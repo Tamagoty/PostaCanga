@@ -21,9 +21,19 @@ CREATE TABLE IF NOT EXISTS public.user_themes (id UUID PRIMARY KEY DEFAULT uuid_
 CREATE TABLE IF NOT EXISTS public.tracking_code_rules (id SERIAL PRIMARY KEY, prefix VARCHAR(10) NOT NULL UNIQUE, object_type VARCHAR(100) NOT NULL, storage_days INT NOT NULL DEFAULT 7, created_at TIMESTAMPTZ DEFAULT NOW());
 CREATE TABLE IF NOT EXISTS public.bulk_import_reports (id BIGSERIAL PRIMARY KEY, report_data JSONB NOT NULL, user_id UUID REFERENCES auth.users(id) ON DELETE SET NULL, created_at TIMESTAMPTZ NOT NULL DEFAULT NOW());
 CREATE TABLE IF NOT EXISTS public.app_settings (key TEXT PRIMARY KEY, value TEXT NOT NULL, description TEXT, label TEXT);
-CREATE TABLE IF NOT EXISTS public.tasks (id SERIAL PRIMARY KEY, title TEXT NOT NULL UNIQUE, description TEXT, frequency_type TEXT NOT NULL, due_date DATE, is_active BOOLEAN NOT NULL DEFAULT TRUE, created_at TIMESTAMPTZ DEFAULT NOW());
+CREATE TABLE IF NOT EXISTS public.tasks (id SERIAL PRIMARY KEY, title TEXT NOT NULL, description TEXT, frequency_type TEXT NOT NULL, due_date DATE, is_active BOOLEAN NOT NULL DEFAULT TRUE, created_at TIMESTAMPTZ DEFAULT NOW());
 CREATE TABLE IF NOT EXISTS public.task_completions (id BIGSERIAL PRIMARY KEY, task_id INT NOT NULL REFERENCES public.tasks(id) ON DELETE CASCADE, user_id UUID REFERENCES auth.users(id) ON DELETE SET NULL, completed_at TIMESTAMPTZ NOT NULL DEFAULT NOW());
 CREATE TABLE IF NOT EXISTS public.system_links (id UUID PRIMARY KEY DEFAULT uuid_generate_v4(), name TEXT NOT NULL, url TEXT NOT NULL, description TEXT, details TEXT, created_at TIMESTAMPTZ DEFAULT NOW(), updated_at TIMESTAMPTZ DEFAULT NOW());
+
+-- Garante a restrição UNIQUE na tabela de tarefas para idempotência
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conrelid = 'public.tasks'::regclass AND conname = 'tasks_title_unique') THEN
+        DELETE FROM public.tasks a USING public.tasks b WHERE a.id > b.id AND a.title = b.title;
+        ALTER TABLE public.tasks ADD CONSTRAINT tasks_title_unique UNIQUE (title);
+    END IF;
+END;
+$$;
 
 --------------------------------------------------------------------------------
 -- 2. DADOS INICIAIS E TIPOS
@@ -36,7 +46,7 @@ INSERT INTO public.app_settings (key, value, description, label) VALUES
 ('agency_name', 'Correio de América Dourada', 'Nome da agência exibido no sistema.', 'Nome da Agência'),
 ('agency_dh', '10h05', 'Horario limite de postagem', 'Horario Limite'),
 ('agency_mcu', '00002678', 'MCU (Unidade de Correios) da Agência', 'MCU'),
-('agency_sto', '80882226', 'STO (Setor de Triagem e Operações)', 'STO'),
+('agency_sto', '08301026', 'STO (Setor de Triagem e Operações)', 'STO'),
 ('agency_address', 'Avenida Romão Gramacho, sn - Centro, América Dourada/BA', 'Endereço completo da agência', 'Endereço')
 ON CONFLICT (key) DO NOTHING;
 
@@ -98,11 +108,11 @@ CREATE OR REPLACE FUNCTION set_customer_status(p_customer_id UUID, p_is_active B
 DROP FUNCTION IF EXISTS count_customers_filtered(TEXT,TEXT);
 CREATE OR REPLACE FUNCTION count_customers_filtered(p_search_term TEXT, p_status_filter TEXT) RETURNS INT LANGUAGE plpgsql AS $$ DECLARE v_count INT; v_query TEXT; v_search_pattern TEXT; v_cleaned_search_term TEXT; BEGIN v_query := 'SELECT COUNT(*) FROM public.customers WHERE TRUE'; IF p_search_term IS NOT NULL AND p_search_term <> '' THEN v_search_pattern := '%' || p_search_term || '%'; v_cleaned_search_term := regexp_replace(p_search_term, '[^0-9]', '', 'g'); v_cleaned_search_term := '%' || v_cleaned_search_term || '%'; v_query := v_query || format(' AND (unaccent(full_name) ILIKE unaccent(%L) OR regexp_replace(cpf, ''[^0-9]'', '''', ''g'') ILIKE %L OR regexp_replace(cellphone, ''[^0-9]'', '''', ''g'') ILIKE %L)', v_search_pattern, v_cleaned_search_term, v_cleaned_search_term); END IF; IF p_status_filter = 'active' THEN v_query := v_query || ' AND is_active = TRUE'; ELSIF p_status_filter = 'inactive' THEN v_query := v_query || ' AND is_active = FALSE'; END IF; EXECUTE v_query INTO v_count; RETURN v_count; END; $$;
 
-DROP FUNCTION IF EXISTS filter_customer_ids(TEXT);
-CREATE OR REPLACE FUNCTION filter_customer_ids(p_search_term TEXT) RETURNS TABLE(customer_id UUID) LANGUAGE plpgsql AS $$ DECLARE v_search_pattern TEXT; v_cleaned_search_term TEXT; BEGIN v_search_pattern := '%' || p_search_term || '%'; v_cleaned_search_term := regexp_replace(p_search_term, '[^0-9]', '', 'g'); v_cleaned_search_term := '%' || v_cleaned_search_term || '%'; RETURN QUERY SELECT id AS customer_id FROM public.customers WHERE unaccent(full_name) ILIKE unaccent(v_search_pattern) OR regexp_replace(cpf, '[^0-9]', '', 'g') ILIKE v_cleaned_search_term OR regexp_replace(cellphone, '[^0-9]', '', 'g') ILIKE v_cleaned_search_term; END; $$;
-
 DROP FUNCTION IF EXISTS search_contacts(TEXT);
 CREATE OR REPLACE FUNCTION search_contacts(p_search_term TEXT) RETURNS TABLE (id UUID, full_name TEXT) LANGUAGE plpgsql SECURITY DEFINER AS $$ BEGIN RETURN QUERY SELECT c.id, c.full_name FROM public.customers c WHERE c.is_active = TRUE AND c.cellphone IS NOT NULL AND normalize_text(c.full_name) ILIKE normalize_text('%' || p_search_term || '%') ORDER BY c.full_name LIMIT 20; END; $$;
+
+DROP FUNCTION IF EXISTS public.get_paginated_customers_with_details(text, text, integer, integer);
+CREATE OR REPLACE FUNCTION get_paginated_customers_with_details(p_search_term TEXT, p_status_filter TEXT, p_offset INT, p_limit INT) RETURNS JSON LANGUAGE plpgsql AS $$ DECLARE v_results JSON; v_query TEXT; v_search_pattern TEXT; v_cleaned_search_term TEXT; BEGIN v_query := ' SELECT json_agg(t) FROM ( SELECT c.*, ( SELECT row_to_json(a_sub) FROM ( SELECT ad.street_name, ( SELECT row_to_json(ci_sub) FROM ( SELECT ci.name, (SELECT row_to_json(s_sub) FROM (SELECT s.uf) AS s_sub) AS state FROM public.cities ci LEFT JOIN public.states s ON ci.state_id = s.id WHERE ci.id = ad.city_id ) AS ci_sub ) AS city FROM public.addresses ad WHERE ad.id = c.address_id ) AS a_sub ) AS addresses, ( SELECT row_to_json(con_sub) FROM ( SELECT con.full_name, con.cellphone FROM public.customers con WHERE con.id = c.contact_customer_id ) AS con_sub ) AS contact FROM public.customers c WHERE TRUE'; IF p_search_term IS NOT NULL AND p_search_term <> '' THEN v_search_pattern := '%' || p_search_term || '%'; v_cleaned_search_term := regexp_replace(p_search_term, '[^0-9]', '', 'g'); v_query := v_query || format(' AND (unaccent(c.full_name) ILIKE unaccent(%L)', v_search_pattern); IF v_cleaned_search_term <> '' THEN v_cleaned_search_term := '%' || v_cleaned_search_term || '%'; v_query := v_query || format(' OR regexp_replace(c.cpf, ''[^0-9]'', '''', ''g'') ILIKE %L OR regexp_replace(c.cellphone, ''[^0-9]'', '''', ''g'') ILIKE %L', v_cleaned_search_term, v_cleaned_search_term); END IF; v_query := v_query || ')'; END IF; IF p_status_filter = 'active' THEN v_query := v_query || ' AND c.is_active = TRUE'; ELSIF p_status_filter = 'inactive' THEN v_query := v_query || ' AND c.is_active = FALSE'; END IF; v_query := v_query || ' ORDER BY c.full_name ASC LIMIT ' || p_limit || ' OFFSET ' || p_offset; v_query := v_query || ') t'; EXECUTE v_query INTO v_results; RETURN COALESCE(v_results, '[]'::json); END; $$;
 
 -- Funções de Gestão de Objetos
 DROP FUNCTION IF EXISTS create_or_update_object(TEXT,TEXT,TEXT,INT,TEXT,TEXT,TEXT,TEXT,TEXT,TEXT);
@@ -218,8 +228,61 @@ CREATE OR REPLACE FUNCTION get_monthly_objects_report(p_year INT) RETURNS JSON L
 DROP FUNCTION IF EXISTS get_supplies_usage_report(INT);
 CREATE OR REPLACE FUNCTION get_supplies_usage_report(p_months INT DEFAULT 3) RETURNS JSON LANGUAGE plpgsql AS $$ DECLARE report_data JSON; v_start_date DATE; BEGIN IF (SELECT get_my_role()) <> 'admin' THEN RETURN '[]'::json; END IF; v_start_date := (NOW() - (p_months || ' months')::INTERVAL)::DATE; WITH usage_stats AS (SELECT l.supply_id, SUM(ABS(l.quantity_changed)) AS total_consumed FROM public.supply_stock_log l WHERE l.quantity_changed < 0 AND l.created_at >= v_start_date GROUP BY l.supply_id) SELECT json_agg(t.*) INTO report_data FROM (SELECT s.name AS supply_name, COALESCE(us.total_consumed, 0)::int AS total_consumed, s.stock AS current_stock, (COALESCE(us.total_consumed, 0) / p_months)::decimal(10, 2) AS monthly_avg, GREATEST(0, CEIL((COALESCE(us.total_consumed, 0) / p_months) * 3) - s.stock)::int AS suggestion FROM public.office_supplies s LEFT JOIN usage_stats us ON s.id = us.supply_id ORDER BY total_consumed DESC) t; RETURN COALESCE(report_data, '[]'::json); END; $$;
 
-DROP FUNCTION IF EXISTS get_customers_for_export();
-CREATE OR REPLACE FUNCTION get_customers_for_export() RETURNS TABLE (full_name TEXT, cellphone TEXT, is_active BOOLEAN, contact_name TEXT) LANGUAGE plpgsql AS $$ BEGIN RETURN QUERY SELECT c.full_name::TEXT, c.cellphone::TEXT, c.is_active, contact.full_name::TEXT AS contact_name FROM public.customers c LEFT JOIN public.customers contact ON c.contact_customer_id = contact.id WHERE c.cellphone IS NOT NULL AND c.cellphone <> ''; END; $$;
+DROP FUNCTION IF EXISTS public.get_customers_for_export();
+
+CREATE OR REPLACE FUNCTION get_customers_for_export()
+RETURNS TABLE (
+    full_name TEXT,
+    cellphone_to_use TEXT,
+    is_active BOOLEAN,
+    birth_date DATE,
+    email TEXT,
+    street_name TEXT,
+    address_number TEXT,
+    neighborhood TEXT,
+    city_name TEXT,
+    state_uf TEXT,
+    cep TEXT,
+    associated_contacts TEXT
+)
+LANGUAGE plpgsql
+AS $$
+BEGIN
+    RETURN QUERY
+    SELECT
+        c.full_name::TEXT,
+        -- Usa o telemóvel do cliente, se existir; caso contrário, usa o do contato.
+        COALESCE(c.cellphone, contact.cellphone)::TEXT AS cellphone_to_use,
+        c.is_active,
+        c.birth_date,
+        c.email::TEXT,
+        a.street_name::TEXT,
+        c.address_number::TEXT,
+        a.neighborhood::TEXT,
+        ci.name::TEXT AS city_name,
+        s.uf::TEXT AS state_uf,
+        a.cep::TEXT,
+        -- Busca os nomes dos clientes que dependem DESTE cliente como contato.
+        (
+            SELECT STRING_AGG(dependent.full_name, ', ')
+            FROM public.customers dependent
+            WHERE dependent.contact_customer_id = c.id
+        )::TEXT AS associated_contacts
+    FROM
+        public.customers c
+    LEFT JOIN
+        public.customers contact ON c.contact_customer_id = contact.id
+    LEFT JOIN
+        public.addresses a ON c.address_id = a.id
+    LEFT JOIN
+        public.cities ci ON a.city_id = ci.id
+    LEFT JOIN
+        public.states s ON ci.state_id = s.id
+    -- Garante que apenas exportamos registos que terão um número de telemóvel válido.
+    WHERE
+        c.cellphone IS NOT NULL OR contact.cellphone IS NOT NULL;
+END;
+$$;
 
 -- Triggers
 DROP FUNCTION IF EXISTS public.handle_new_user() CASCADE;

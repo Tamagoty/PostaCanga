@@ -1,6 +1,6 @@
 // Arquivo: src/pages/CustomersPage.jsx
-// MELHORIA (v11): Aprimorada a exportação de CSV para o formato Google Contacts,
-// incluindo status, aniversário, contatos associados, email e endereço completo.
+// CORREÇÃO (v12.1): Adicionado um limite explícito à chamada RPC de exportação
+// para garantir que todos os contatos sejam buscados, ultrapassando o limite padrão de 1000.
 
 import React, { useState, useEffect, useCallback } from 'react';
 import { supabase } from '../lib/supabaseClient';
@@ -42,26 +42,14 @@ const CustomersPage = () => {
       setTotalCount(count || 0);
 
       const from = page * ITEMS_PER_PAGE;
-      const to = from + ITEMS_PER_PAGE - 1;
 
-      let dataQuery = supabase
-        .from('customers')
-        .select('*, addresses(*, city:cities(name, state:states(uf))), contact:contact_customer_id(full_name, cellphone)');
+      const { data, error: dataError } = await supabase.rpc('get_paginated_customers_with_details', {
+        p_search_term: debouncedSearchTerm,
+        p_status_filter: statusFilter,
+        p_offset: from,
+        p_limit: ITEMS_PER_PAGE
+      });
 
-      if (debouncedSearchTerm) {
-        const { data: idResults, error: idError } = await supabase.rpc('filter_customer_ids', { p_search_term: debouncedSearchTerm });
-        if (idError) throw idError;
-        const customerIds = idResults.map(r => r.customer_id);
-        dataQuery = dataQuery.in('id', customerIds);
-      }
-      
-      if (statusFilter !== 'all') {
-          dataQuery = dataQuery.eq('is_active', statusFilter === 'active');
-      }
-
-      dataQuery = dataQuery.range(from, to).order('full_name', { ascending: true });
-
-      const { data, error: dataError } = await dataQuery;
       if (dataError) throw dataError;
 
       setCustomers(data || []);
@@ -100,26 +88,32 @@ const CustomersPage = () => {
   const handleExportCSV = async () => {
     const toastId = toast.loading('A preparar exportação...');
     
-    const { data: customersToExport, error } = await supabase.rpc('get_customers_for_export');
+    // --- CORREÇÃO APLICADA AQUI ---
+    // Adicionamos .limit(20000) para garantir que a chamada busque até 20.000 registos,
+    // ultrapassando o limite padrão de 1000 da Supabase.
+    const { data: customersToExport, error } = await supabase.rpc('get_customers_for_export').limit(20000);
 
     if (error || !customersToExport || customersToExport.length === 0) {
       toast.error(error ? handleSupabaseError(error) : 'Nenhum cliente com telefone para exportar.', { id: toastId });
       return;
     }
     
-    // 1. Cabeçalhos no formato Google Contacts simplificado
     const headers = "First Name,Birthday,Notes,Labels,E-mail 1 - Label,E-mail 1 - Value,Phone 1 - Label,Phone 1 - Value,Address 1 - Label,Address 1 - Street,Address 1 - Extended Address,Address 1 - City,Address 1 - Region,Address 1 - Postal Code,Address 1 - Country";
     
     const rows = customersToExport.map(c => {
-      // 2. Mapeamento dos dados para as novas colunas
       const firstName = `${c.full_name} ${c.is_active ? '✅' : '❌'}`;
       const birthday = c.birth_date ? new Date(c.birth_date).toLocaleDateString('pt-BR', { timeZone: 'UTC' }) : '';
       const notes = c.associated_contacts || '';
-      const labels = 'AC AD'; // Rótulo estático
+      const labels = 'AC AD';
       const emailLabel = 'Home';
       const emailValue = c.email || '';
       const phoneLabel = 'Mobile';
-      const phoneValue = c.cellphone.replace(/\D/g, '');
+      
+      let phoneValue = (c.cellphone_to_use || '').replace(/\D/g, '');
+      if (phoneValue.length === 11 && !phoneValue.startsWith('0')) {
+        phoneValue = `0${phoneValue}`;
+      }
+
       const addressLabel = 'Home';
       const street = `${c.street_name || ''}, ${c.address_number || 'SN'}`;
       const extendedAddress = c.neighborhood || '';
@@ -128,7 +122,6 @@ const CustomersPage = () => {
       const postalCode = c.cep || '';
       const country = 'Brasil';
 
-      // 3. Montagem da linha do CSV, garantindo que as vírgulas dentro dos campos sejam tratadas
       const fields = [firstName, birthday, notes, labels, emailLabel, emailValue, phoneLabel, phoneValue, addressLabel, street, extendedAddress, city, region, postalCode, country];
       return fields.map(field => `"${(field || '').toString().replace(/"/g, '""')}"`).join(',');
     });
