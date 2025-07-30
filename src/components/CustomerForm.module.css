@@ -42,18 +42,27 @@
   display: flex;
   align-items: flex-end;
   gap: 0.5rem;
-  margin-bottom: 1rem;
 }
 
 .cepGroup > div {
   flex-grow: 1;
 }
 
-.cepButton {
-  height: 46px;
-  flex-shrink: 0;
-  width: 46px;
-  padding: 0;
+.loader {
+  width: 24px;
+  height: 24px;
+  border: 3px solid var(--border-color);
+  border-bottom-color: transparent;
+  border-radius: 50%;
+  display: inline-block;
+  box-sizing: border-box;
+  animation: rotation 1s linear infinite;
+  margin-bottom: 0.5rem;
+}
+
+@keyframes rotation {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
 }
 
 .select {
@@ -65,6 +74,7 @@
   color: var(--text-primary);
   font-size: 1rem;
   transition: border-color 0.2s, box-shadow 0.2s;
+  font-family: inherit;
   -webkit-appearance: none;
   -moz-appearance: none;
   appearance: none;
@@ -76,7 +86,7 @@
 .select:focus {
   outline: none;
   border-color: var(--accent-primary);
-  box-shadow: 0 0 0 2px var(--accent-primary-hover);
+  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.5);
 }
 
 .formActions {
@@ -86,7 +96,7 @@
   margin-top: 1rem;
 }
 
-/* Novos estilos para a busca de contatos */
+/* Novos estilos */
 .searchWrapper {
   position: relative;
 }
@@ -103,7 +113,7 @@
   margin: 0;
   padding: 0;
   z-index: 10;
-  max-height: 150px;
+  max-height: 200px;
   overflow-y: auto;
 }
 .searchResults li {
@@ -127,12 +137,15 @@
   border: none;
   color: var(--accent-danger);
   cursor: pointer;
-  font-size: 0.8rem;
-  text-decoration: underline;
 }
-
-@media (max-width: 580px) {
-  .grid {
-    grid-template-columns: 1fr;
-  }
+.foundAddressDisplay {
+  background-color: var(--bg-primary);
+  border: 1px solid var(--border-color);
+  border-radius: var(--border-radius);
+  padding: 0.75rem 1rem;
+  color: var(--text-secondary);
+  font-style: italic;
+  font-size: 0.9rem;
+  margin-top: -0.5rem;
+  margin-bottom: 1rem;
 }

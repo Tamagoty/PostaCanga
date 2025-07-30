@@ -27,24 +27,121 @@ CREATE TABLE IF NOT EXISTS public.system_links (id UUID PRIMARY KEY DEFAULT uuid
 
 --------------------------------------------------------------------------------
 -- 2. DADOS INICIAIS E TIPOS
+DO $$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM public.object_types WHERE name = 'PAC') THEN
+    INSERT INTO public.object_types (name, default_storage_days) VALUES ('PAC', 7);
+  END IF;
+END $$;
+
+DO $$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM public.object_types WHERE name = 'SEDEX') THEN
+    INSERT INTO public.object_types (name, default_storage_days) VALUES ('SEDEX', 7);
+  END IF;
+END $$;
+
+DO $$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM public.object_types WHERE name = 'Carta Registrada') THEN
+    INSERT INTO public.object_types (name, default_storage_days) VALUES ('Carta Registrada', 20);
+  END IF;
+END $$;
+
+DO $$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM public.object_types WHERE name = 'Carta Simples') THEN
+    INSERT INTO public.object_types (name, default_storage_days) VALUES ('Carta Simples', 20);
+  END IF;
+END $$;
+
+DO $$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM public.object_types WHERE name = 'Revista') THEN
+    INSERT INTO public.object_types (name, default_storage_days) VALUES ('Revista', 20);
+  END IF;
+END $$;
+
+DO $$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM public.object_types WHERE name = 'Cartão') THEN
+    INSERT INTO public.object_types (name, default_storage_days) VALUES ('Cartão', 20);
+  END IF;
+END $$;
+
+DO $$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM public.object_types WHERE name = 'Telegrama') THEN
+    INSERT INTO public.object_types (name, default_storage_days) VALUES ('Telegrama', 7);
+  END IF;
+END $$;
+
+DO $$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM public.object_types WHERE name = 'Cartão Registrado') THEN
+    INSERT INTO public.object_types (name, default_storage_days) VALUES ('Cartão Registrado', 20);
+  END IF;
+END $$;
+
+DO $$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM public.object_types WHERE name = 'Registrado') THEN
+    INSERT INTO public.object_types (name, default_storage_days) VALUES ('Registrado', 7);
+  END IF;
+END $$;
+
+DO $$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM public.object_types WHERE name = 'Outro') THEN
+    INSERT INTO public.object_types (name, default_storage_days) VALUES ('Outro', 7);
+  END IF;
+END $$;
+
+DO $$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM public.app_settings WHERE key = 'agency_name') THEN
+    INSERT INTO public.app_settings (key, value) VALUES ('agency_name', 'Correio de América Dourada');
+  END IF;
+END $$;
+
+DO $$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM public.app_settings WHERE key = 'agency_dh') THEN
+    INSERT INTO public.app_settings (key, value) VALUES ('agency_dh', '10h05');
+  END IF;
+END $$;
+
+DO $$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM public.app_settings WHERE key = 'agency_mcu') THEN
+    INSERT INTO public.app_settings (key, value) VALUES ('agency_mcu', '00002678');
+  END IF;
+END $$;
+
+DO $$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM public.app_settings WHERE key = 'agency_sto') THEN
+    INSERT INTO public.app_settings (key, value) VALUES ('agency_sto', '80882226');
+  END IF;
+END $$;
+
+DO $$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM public.app_settings WHERE key = 'agency_address') THEN
+    INSERT INTO public.app_settings (key, value) VALUES ('agency_address', 'Avenida Romão Gramacho, sn - Centro, América Dourada/BA');
+  END IF;
+END $$;
+
+DO $$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM public.tasks WHERE title = 'Verificar Caixa de E-mails') THEN
+    INSERT INTO public.tasks (title, description, frequency_type) VALUES ('Verificar Caixa de E-mails', 'Responder e organizar os e-mails da agência.', 'daily');
+  END IF;
+END $$;
+
+DO $$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM public.tasks WHERE title = 'Conferir Estoque Mínimo') THEN
+    INSERT INTO public.tasks (title, description, frequency_type) VALUES ('Conferir Estoque Mínimo', 'Verificar se algum material de expediente precisa de ser reabastecido.', 'weekly');
+  END IF;
+END $$;
+
+DO $$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM public.tasks WHERE title = 'Relatório Mensal de Objetos') THEN
+    INSERT INTO public.tasks (title, description, frequency_type) VALUES ('Relatório Mensal de Objetos', 'Analisar o fluxo de objetos do último mês.', 'monthly');
+  END IF;
+END $$;
+
+
 --------------------------------------------------------------------------------
-INSERT INTO public.object_types (name, default_storage_days) VALUES
-('PAC', 7), ('SEDEX', 7), ('Carta Registrada', 20), ('Carta Simples', 20), ('Revista', 20), ('Cartão', 20), ('Telegrama', 7), ('Cartão Registrado', 20), ('Registrado', 7), ('Outro', 7)
-ON CONFLICT (name) DO NOTHING;
 
-INSERT INTO public.app_settings (key, value, description, label) VALUES
-('agency_name', 'Correio de América Dourada', 'Nome da agência exibido no sistema.', 'Nome da Agência'),
-('agency_dh', '10h05', 'Horario limite de postagem', 'Horario Limite'),
-('agency_mcu', '00002678', 'MCU (Unidade de Correios) da Agência', 'MCU'),
-('agency_sto', '80882226', 'STO (Setor de Triagem e Operações)', 'STO'),
-('agency_address', 'Avenida Romão Gramacho, sn - Centro, América Dourada/BA', 'Endereço completo da agência', 'Endereço')
-ON CONFLICT (key) DO NOTHING;
 
-INSERT INTO public.tasks (title, description, frequency_type) VALUES
-('Verificar Caixa de E-mails', 'Responder e organizar os e-mails da agência.', 'daily'),
-('Conferir Estoque Mínimo', 'Verificar se algum material de expediente precisa de ser reabastecido.', 'weekly'),
-('Relatório Mensal de Objetos', 'Analisar o fluxo de objetos do último mês.', 'monthly')
-ON CONFLICT (title) DO NOTHING;
+
+
+
 
 DO $$ BEGIN
     IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'simple_object_input') THEN

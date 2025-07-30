@@ -1,5 +1,6 @@
 // Arquivo: src/components/CustomerForm.jsx
-// MELHORIA (v3): Implementada a máscara de formatação automática para os campos de CPF e Telemóvel.
+// MELHORIA (v4.2): Refatorada a busca de contatos para usar useDebounce,
+// adicionado um indicador de carregamento e corrigido o reset do estado.
 
 import React, { useState, useEffect, useCallback } from "react";
 import styles from "./CustomerForm.module.css";
@@ -7,9 +8,9 @@ import Input from "./Input";
 import Button from "./Button";
 import toast from "react-hot-toast";
 import { supabase } from "../lib/supabaseClient";
-import { FaSearch } from "react-icons/fa";
 import { handleSupabaseError } from '../utils/errorHandler';
-import { maskCPF, maskPhone } from '../utils/masks'; // 1. Importar as funções de máscara
+import { maskCPF, maskPhone } from '../utils/masks';
+import useDebounce from '../hooks/useDebounce';
 
 const CustomerForm = ({ onSave, onClose, customerToEdit, loading }) => {
   const initialFormData = {
@@ -23,6 +24,11 @@ const CustomerForm = ({ onSave, onClose, customerToEdit, loading }) => {
   const [contactSearch, setContactSearch] = useState("");
   const [contactResults, setContactResults] = useState([]);
   const [selectedContactName, setSelectedContactName] = useState("");
+  const [foundAddress, setFoundAddress] = useState(null);
+  const [isSearchingContacts, setIsSearchingContacts] = useState(false); // Estado de carregamento para a busca
+
+  const debouncedCep = useDebounce(cep, 500);
+  const debouncedContactSearch = useDebounce(contactSearch, 500); // Debounce para a busca de contatos
 
   const fetchAddressOptions = useCallback(async () => {
     const { data: addresses, error } = await supabase
@@ -33,6 +39,67 @@ const CustomerForm = ({ onSave, onClose, customerToEdit, loading }) => {
     else if (addresses) setAddressOptions(addresses);
   }, []);
 
+  // Efeito para buscar o endereço automaticamente
+  useEffect(() => {
+    const autoFetchAddress = async () => {
+      const cleanedCep = debouncedCep.replace(/\D/g, "");
+      if (cleanedCep.length !== 8) {
+        setFoundAddress(null);
+        return;
+      }
+      
+      setCepLoading(true);
+      setFoundAddress(null);
+      try {
+        const response = await fetch(`https://viacep.com.br/ws/${cleanedCep}/json/`);
+        const data = await response.json();
+        if (data.erro) {
+          toast.error("CEP não encontrado.");
+        } else {
+          const { data: addressId, error } = await supabase.rpc("find_or_create_address_by_cep", {
+              p_cep: data.cep, p_street_name: data.logradouro, p_neighborhood: data.bairro,
+              p_city_name: data.localidade, p_state_uf: data.uf,
+          });
+          if (error) throw error;
+          
+          await fetchAddressOptions();
+          setFormData((prev) => ({ ...prev, address_id: addressId }));
+          setFoundAddress({ street: data.logradouro, city: data.localidade, state: data.uf });
+          toast.success("Endereço encontrado e selecionado!");
+        }
+      } catch (error) {
+        toast.error(handleSupabaseError(error));
+      } finally {
+        setCepLoading(false);
+      }
+    };
+
+    if (debouncedCep) {
+        autoFetchAddress();
+    }
+  }, [debouncedCep, fetchAddressOptions]);
+
+  // Efeito para buscar contatos automaticamente
+  useEffect(() => {
+    const searchContacts = async () => {
+      if (debouncedContactSearch.length < 2) {
+        setContactResults([]);
+        return;
+      }
+      setIsSearchingContacts(true);
+      const { data, error } = await supabase.rpc("search_contacts", { p_search_term: debouncedContactSearch });
+      if (error) {
+        toast.error(handleSupabaseError(error));
+        setContactResults([]);
+      } else {
+        setContactResults(data || []);
+      }
+      setIsSearchingContacts(false);
+    };
+    
+    searchContacts();
+  }, [debouncedContactSearch]);
+
   useEffect(() => {
     fetchAddressOptions();
   }, [fetchAddressOptions]);
@@ -40,16 +107,20 @@ const CustomerForm = ({ onSave, onClose, customerToEdit, loading }) => {
   useEffect(() => {
     if (customerToEdit) {
       setFormData({
-        full_name: customerToEdit.full_name || "",
-        cpf: customerToEdit.cpf || "",
-        cellphone: customerToEdit.cellphone || "",
+        full_name: customerToEdit.full_name || "", cpf: customerToEdit.cpf || "", cellphone: customerToEdit.cellphone || "",
         birth_date: customerToEdit.birth_date ? new Date(customerToEdit.birth_date).toISOString().split("T")[0] : "",
-        email: customerToEdit.email || "",
-        contact_customer_id: customerToEdit.contact_customer_id || "",
-        address_id: customerToEdit.address_id || "",
-        address_number: customerToEdit.address_number || "",
+        email: customerToEdit.email || "", contact_customer_id: customerToEdit.contact_customer_id || "",
+        address_id: customerToEdit.address_id || "", address_number: customerToEdit.address_number || "",
         address_complement: customerToEdit.address_complement || "",
       });
+
+      if (customerToEdit.address_id) {
+        supabase.rpc('get_address_details_by_id', { p_address_id: customerToEdit.address_id }).then(({ data, error }) => {
+          if (!error && data.length > 0) {
+            setFoundAddress({ street: data[0].street_name, city: data[0].city_name, state: data[0].state_uf });
+          }
+        });
+      }
 
       if (customerToEdit.contact_customer_id) {
         supabase.from("customers").select("full_name").eq("id", customerToEdit.contact_customer_id).single()
@@ -59,26 +130,15 @@ const CustomerForm = ({ onSave, onClose, customerToEdit, loading }) => {
           });
       }
     } else {
+      // Garante que todos os estados são limpos ao criar um novo cliente
       setFormData(initialFormData);
+      setFoundAddress(null);
+      setCep('');
+      setContactSearch('');
+      setContactResults([]);
+      setSelectedContactName('');
     }
   }, [customerToEdit]);
-
-  useEffect(() => {
-    if (contactSearch.length < 2) {
-      setContactResults([]);
-      return;
-    }
-    const timer = setTimeout(async () => {
-      const { data, error } = await supabase.rpc("search_contacts", { p_search_term: contactSearch });
-      if (error) {
-        toast.error(handleSupabaseError(error));
-        setContactResults([]);
-      } else {
-        setContactResults(data || []);
-      }
-    }, 500);
-    return () => clearTimeout(timer);
-  }, [contactSearch]);
 
   const handleSelectContact = (contact) => {
     setFormData((prev) => ({ ...prev, contact_customer_id: contact.id }));
@@ -87,36 +147,6 @@ const CustomerForm = ({ onSave, onClose, customerToEdit, loading }) => {
     setContactResults([]);
   };
 
-  const handleCepSearch = async () => {
-    const cleanedCep = cep.replace(/\D/g, "");
-    if (cleanedCep.length !== 8) {
-      toast.error("Por favor, insira um CEP válido com 8 dígitos.");
-      return;
-    }
-    setCepLoading(true);
-    try {
-      const response = await fetch(`https://viacep.com.br/ws/${cleanedCep}/json/`);
-      const data = await response.json();
-      if (data.erro) {
-        toast.error("CEP não encontrado.");
-      } else {
-        const { data: addressId, error } = await supabase.rpc("find_or_create_address_by_cep", {
-            p_cep: data.cep, p_street_name: data.logradouro, p_neighborhood: data.bairro,
-            p_city_name: data.localidade, p_state_uf: data.uf,
-        });
-        if (error) throw error;
-        await fetchAddressOptions();
-        setFormData((prev) => ({ ...prev, address_id: addressId }));
-        toast.success("Endereço encontrado e selecionado!");
-      }
-    } catch (error) {
-      toast.error(handleSupabaseError(error));
-    } finally {
-      setCepLoading(false);
-    }
-  };
-
-  // 2. Atualizar a função handleChange para aplicar as máscaras
   const handleChange = (e) => {
     const { name, value } = e.target;
     if (name === 'cpf') {
@@ -163,6 +193,7 @@ const CustomerForm = ({ onSave, onClose, customerToEdit, loading }) => {
             ) : (
               <div className={styles.searchWrapper}>
                 <Input id="contact-search" placeholder="Digite para buscar um contato..." value={contactSearch} onChange={(e) => setContactSearch(e.target.value)} />
+                {isSearchingContacts && <div className={styles.loaderSmall}></div>}
                 {contactResults.length > 0 && (
                   <ul className={styles.searchResults}>
                     {contactResults.map((contact) => (
@@ -181,10 +212,15 @@ const CustomerForm = ({ onSave, onClose, customerToEdit, loading }) => {
         <legend>Endereço</legend>
         <div className={styles.cepGroup}>
           <Input id="cep-lookup" name="cep-lookup" label="Buscar Endereço por CEP" value={cep} onChange={(e) => setCep(e.target.value)} />
-          <Button type="button" onClick={handleCepSearch} loading={cepLoading} className={styles.cepButton}>
-            <FaSearch />
-          </Button>
+          {cepLoading && <div className={styles.loader}></div>}
         </div>
+
+        {foundAddress && (
+          <div className={styles.foundAddressDisplay}>
+            {foundAddress.street}, {foundAddress.city}/{foundAddress.state}
+          </div>
+        )}
+
         <div className={styles.formGroup}>
           <label htmlFor="address_id">Rua / Logradouro</label>
           <select id="address_id" name="address_id" value={formData.address_id} onChange={handleChange} className={styles.select}>

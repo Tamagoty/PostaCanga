@@ -1,5 +1,5 @@
 // Arquivo: src/components/AddressForm.jsx
-// MELHORIA (v3): Removida a lógica de construção do payload.
+// MELHORIA (v4): Busca de endereço por CEP agora é automática, sem botão.
 
 import React, { useState, useEffect, useCallback } from 'react';
 import styles from './CustomerForm.module.css';
@@ -7,8 +7,8 @@ import Input from './Input';
 import Button from './Button';
 import toast from 'react-hot-toast';
 import { supabase } from '../lib/supabaseClient';
-import { FaSearch } from 'react-icons/fa';
 import { handleSupabaseError } from '../utils/errorHandler';
+import useDebounce from '../hooks/useDebounce';
 
 const AddressForm = ({ onSave, onClose, addressToEdit, loading }) => {
   const initialFormData = { cep: '', street_name: '', neighborhood: '', city_id: '' };
@@ -17,7 +17,44 @@ const AddressForm = ({ onSave, onClose, addressToEdit, loading }) => {
   const [cities, setCities] = useState([]);
   const [selectedState, setSelectedState] = useState('');
   const [cepLoading, setCepLoading] = useState(false);
-  const [cityToSelect, setCityToSelect] = useState('');
+  const debouncedCep = useDebounce(formData.cep, 500);
+
+  useEffect(() => {
+    const autoFetchAddress = async () => {
+      const cleanedCep = debouncedCep.replace(/\D/g, '');
+      if (cleanedCep.length !== 8) return;
+
+      setCepLoading(true);
+      try {
+        const response = await fetch(`https://viacep.com.br/ws/${cleanedCep}/json/`);
+        const data = await response.json();
+        if (data.erro) {
+          toast.error('CEP não encontrado.');
+        } else {
+          const stateFound = states.find(s => s.uf === data.uf);
+          if (stateFound) {
+            setSelectedState(stateFound.id);
+            // A busca de cidades será acionada pelo useEffect de selectedState
+            // Após as cidades carregarem, o useEffect de cities/data.localidade irá selecionar a cidade
+            setFormData(prev => ({
+              ...prev,
+              street_name: data.logradouro,
+              neighborhood: data.bairro,
+              city_id: '' // Limpa para aguardar a seleção automática
+            }));
+            toast.success('Endereço encontrado!');
+          } else {
+            toast.error(`O estado "${data.uf}" não foi encontrado na nossa base de dados.`);
+          }
+        }
+      } catch (error) {
+        toast.error('Falha ao buscar o CEP. Verifique a sua conexão.');
+      } finally {
+        setCepLoading(false);
+      }
+    };
+    autoFetchAddress();
+  }, [debouncedCep, states]);
 
   useEffect(() => {
     supabase.from('states').select('*').order('uf').then(({ data, error }) => {
@@ -28,14 +65,25 @@ const AddressForm = ({ onSave, onClose, addressToEdit, loading }) => {
 
   useEffect(() => {
     if (selectedState) {
-      supabase.from('cities').select('*').eq('state_id', selectedState).order('name').then(({ data, error }) => {
+      supabase.from('cities').select('*').eq('state_id', selectedState).order('name').then(async ({ data, error }) => {
           if(error) toast.error(handleSupabaseError(error));
-          else setCities(data || []);
+          else {
+            setCities(data || []);
+            // Tenta selecionar a cidade que veio da API do ViaCEP
+            const response = await fetch(`https://viacep.com.br/ws/${debouncedCep.replace(/\D/g, '')}/json/`);
+            const cepData = await response.json();
+            if (cepData.localidade) {
+              const city = (data || []).find(c => c.name.toLowerCase() === cepData.localidade.toLowerCase());
+              if (city) {
+                setFormData(prev => ({ ...prev, city_id: city.id }));
+              }
+            }
+          }
       });
     } else {
       setCities([]);
     }
-  }, [selectedState]);
+  }, [selectedState, debouncedCep]);
 
   useEffect(() => {
     if (addressToEdit && addressToEdit.city_id) {
@@ -53,53 +101,6 @@ const AddressForm = ({ onSave, onClose, addressToEdit, loading }) => {
       setFormData(initialFormData);
     }
   }, [addressToEdit]);
-  
-  useEffect(() => {
-    if (cityToSelect && cities.length > 0) {
-      const city = cities.find(c => c.name.toLowerCase() === cityToSelect.toLowerCase());
-      if (city) {
-        setFormData(prev => ({ ...prev, city_id: city.id }));
-      } else {
-        toast.error(`A cidade "${cityToSelect}" não foi encontrada na nossa base de dados para este estado.`);
-      }
-      setCityToSelect('');
-    }
-  }, [cities, cityToSelect]);
-
-  const handleCepSearch = async () => {
-    const cep = formData.cep.replace(/\D/g, '');
-    if (cep.length !== 8) {
-      toast.error('Por favor, insira um CEP válido com 8 dígitos.');
-      return;
-    }
-    setCepLoading(true);
-    try {
-      const response = await fetch(`https://viacep.com.br/ws/${cep}/json/`);
-      const data = await response.json();
-      if (data.erro) {
-        toast.error('CEP não encontrado.');
-      } else {
-        const stateFound = states.find(s => s.uf === data.uf);
-        if (stateFound) {
-          setSelectedState(stateFound.id);
-          setCityToSelect(data.localidade);
-          setFormData(prev => ({
-            ...prev,
-            street_name: data.logradouro,
-            neighborhood: data.bairro,
-            city_id: ''
-          }));
-          toast.success('Endereço encontrado!');
-        } else {
-          toast.error(`O estado "${data.uf}" não foi encontrado na nossa base de dados.`);
-        }
-      }
-    } catch (error) {
-      toast.error('Falha ao buscar o CEP. Verifique a sua conexão.');
-    } finally {
-      setCepLoading(false);
-    }
-  };
 
   const handleChange = (e) => {
     setFormData(prev => ({ ...prev, [e.target.name]: e.target.value }));
@@ -116,7 +117,6 @@ const AddressForm = ({ onSave, onClose, addressToEdit, loading }) => {
       toast.error('Logradouro e Cidade são obrigatórios.');
       return;
     }
-    // Apenas devolve os dados puros do formulário
     onSave(formData);
   };
 
@@ -126,9 +126,7 @@ const AddressForm = ({ onSave, onClose, addressToEdit, loading }) => {
         <legend>Detalhes do Endereço</legend>
         <div className={styles.cepGroup}>
           <Input id="cep" name="cep" label="CEP" value={formData.cep} onChange={handleChange} />
-          <Button type="button" onClick={handleCepSearch} loading={cepLoading} className={styles.cepButton}>
-            <FaSearch />
-          </Button>
+          {cepLoading && <div className={styles.loader}></div>}
         </div>
         <Input id="street_name" name="street_name" label="Logradouro (Ex: Rua das Flores)" value={formData.street_name} onChange={handleChange} required />
         <Input id="neighborhood" name="neighborhood" label="Bairro" value={formData.neighborhood} onChange={handleChange} />
