@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gerador de SQL para Cidades</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+        }
+        .toast {
+            position: fixed;
+            bottom: -100px;
+            left: 50%;
+            transform: translateX(-50%);
+            padding: 12px 24px;
+            border-radius: 8px;
+            background-color: #10b981;
+            color: white;
+            font-weight: 500;
+            opacity: 0;
+            transition: opacity 0.3s ease, transform 0.3s ease, bottom 0.3s ease;
+            pointer-events: none;
+        }
+        .toast.show {
+            opacity: 1;
+            bottom: 20px;
+        }
+    </style>
+</head>
+<body class="bg-[#1a1d24] text-[#f0f0f0] flex items-center justify-center min-h-screen p-4">
+
+    <div class="w-full max-w-4xl bg-[#272b35] p-8 rounded-lg border border-[#4b5563] shadow-lg">
+        
+        <div class="text-center mb-8">
+            <h1 class="text-3xl font-bold text-white mb-2">Gerador de SQL para Cidades</h1>
+            <p class="text-[#a0a0a0]">Cole os dados da sua planilha para criar o script de inserção automaticamente.</p>
+        </div>
+
+        <!-- Passo 1: Entrada de Dados -->
+        <div class="mb-6">
+            <label for="dataInput" class="block text-lg font-semibold mb-2">Passo 1: Cole os dados da sua planilha aqui</label>
+            <p class="text-sm text-[#a0a0a0] mb-3">Formato esperado: Cada linha deve conter o <strong class="text-white">Nome da Cidade</strong>, um separador, e o <strong class="text-white">ID do Estado</strong>.</p>
+            <textarea id="dataInput" rows="10" class="w-full p-4 bg-[#3a404e] border border-[#4b5563] rounded-md focus:ring-2 focus:ring-[#3b82f6] focus:border-[#3b82f6] transition" placeholder="Exemplo:&#10;São Paulo,25&#10;Rio de Janeiro,19&#10;Salvador,5"></textarea>
+        </div>
+
+        <!-- Passo 2: Opções e Ação -->
+        <div class="flex flex-col sm:flex-row items-center justify-between mb-6 gap-4">
+            <div class="flex items-center gap-4">
+                <label class="font-semibold">Separador:</label>
+                <div class="flex items-center gap-2">
+                    <input type="radio" id="comma" name="delimiter" value="," checked class="form-radio text-[#3b82f6] bg-[#3a404e] border-[#4b5563]">
+                    <label for="comma">Vírgula (,)</label>
+                </div>
+                <div class="flex items-center gap-2">
+                    <input type="radio" id="tab" name="delimiter" value="	" class="form-radio text-[#3b82f6] bg-[#3a404e] border-[#4b5563]">
+                    <label for="tab">Tab (tabulação)</label>
+                </div>
+            </div>
+            <button onclick="generateSQL()" class="w-full sm:w-auto bg-[#3b82f6] hover:bg-[#2563eb] text-white font-bold py-3 px-6 rounded-lg transition duration-300 flex items-center justify-center gap-2">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-8.707l-3-3a1 1 0 00-1.414 1.414L10.586 9H7a1 1 0 100 2h3.586l-1.293 1.293a1 1 0 101.414 1.414l3-3a1 1 0 000-1.414z" clip-rule="evenodd" /></svg>
+                Gerar SQL
+            </button>
+        </div>
+
+        <!-- Passo 3: Saída do SQL -->
+        <div>
+            <label for="sqlOutput" class="block text-lg font-semibold mb-2">Passo 3: Script SQL Gerado</label>
+            <div class="relative">
+                <textarea id="sqlOutput" rows="12" readonly class="w-full p-4 bg-[#1a1d24] border border-[#4b5563] rounded-md font-mono text-sm"></textarea>
+                <button onclick="copySQL()" class="absolute top-3 right-3 bg-[#3a404e] hover:bg-[#4b5563] text-white font-semibold py-1 px-3 rounded-md text-xs transition">Copiar</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="toast" class="toast">SQL copiado!</div>
+
+    <script>
+        function generateSQL() {
+            const data = document.getElementById('dataInput').value;
+            const delimiter = document.querySelector('input[name="delimiter"]:checked').value;
+            const output = document.getElementById('sqlOutput');
+
+            if (!data.trim()) {
+                output.value = '-- Por favor, insira os dados da sua planilha na primeira caixa.';
+                return;
+            }
+
+            // --- CORREÇÃO APLICADA AQUI ---
+            // Usar .split('\n') para dividir as linhas corretamente.
+            const lines = data.trim().split('\n');
+            let sqlStatements = '-- Script gerado automaticamente para inserir cidades.\n';
+            sqlStatements += 'INSERT INTO public.cities (name, state_id) VALUES\n';
+
+            const values = [];
+            lines.forEach(line => {
+                if (!line.trim()) return;
+
+                const parts = line.split(delimiter);
+                if (parts.length === 2) {
+                    const cityName = parts[0].trim().replace(/'/g, "''");
+                    const stateId = parseInt(parts[1].trim(), 10);
+
+                    if (cityName && !isNaN(stateId)) {
+                        values.push(`    ('${cityName}', ${stateId})`);
+                    }
+                }
+            });
+            
+            if (values.length > 0) {
+                sqlStatements += values.join(',\n');
+                sqlStatements += '\nON CONFLICT DO NOTHING;';
+            } else {
+                sqlStatements = '-- Nenhum dado válido encontrado. Verifique se os dados estão no formato correto e se o separador está selecionado corretamente.';
+            }
+
+            output.value = sqlStatements;
+        }
+
+        function copySQL() {
+            const output = document.getElementById('sqlOutput');
+            if (!output.value.trim() || output.value.startsWith('--')) return;
+            
+            output.select();
+            document.execCommand('copy');
+            
+            showToast();
+        }
+
+        function showToast() {
+            const toast = document.getElementById('toast');
+            toast.classList.add('show');
+            setTimeout(() => {
+                toast.classList.remove('show');
+            }, 2000);
+        }
+    </script>
+
+</body>
+</html>

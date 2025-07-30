@@ -1,5 +1,6 @@
 // Arquivo: src/pages/ObjectTypesPage.jsx
-// MELHORIA (v4): Implementado o Skeleton Loader para a tabela.
+// CORREÇÃO (v4.1): Ajustado o payload da chamada RPC para corresponder
+// aos nomes dos parâmetros esperados pela função SQL.
 
 import React, { useState, useEffect, useCallback } from 'react';
 import { supabase } from '../lib/supabaseClient';
@@ -41,7 +42,13 @@ const ObjectTypesPage = () => {
 
   const handleSaveType = async (formData) => {
     setIsSaving(true);
-    const { error } = await supabase.rpc('create_or_update_object_type', formData);
+    // --- CORREÇÃO APLICADA AQUI ---
+    const payload = {
+      p_type_id: typeToEdit?.id || null,
+      p_name: formData.name,
+      p_default_storage_days: formData.default_storage_days
+    };
+    const { error } = await supabase.rpc('create_or_update_object_type', payload);
     if (error) toast.error(handleSupabaseError(error));
     else { toast.success('Tipo de objeto salvo!'); setIsFormModalOpen(false); fetchTypes(); }
     setIsSaving(false);
@@ -80,7 +87,7 @@ const ObjectTypesPage = () => {
         title="Confirmar Exclusão"
         loading={isDeleting}
       >
-        <p>Tem certeza que deseja apagar o tipo <strong>{typeToDelete?.name}</strong>?</p>
+        <p>Tem a certeza que deseja apagar o tipo <strong>{typeToDelete?.name}</strong>?</p>
       </ConfirmationModal>
 
       <header className={styles.header}>
