@@ -1,6 +1,5 @@
 // Arquivo: src/pages/CustomersPage.jsx
-// CORREÇÃO (v12.1): Adicionado um limite explícito à chamada RPC de exportação
-// para garantir que todos os contatos sejam buscados, ultrapassando o limite padrão de 1000.
+// CORREÇÃO: Adicionado o parâmetro 'p_full_name' em falta na chamada RPC para guardar o cliente.
 
 import React, { useState, useEffect, useCallback } from 'react';
 import { supabase } from '../lib/supabaseClient';
@@ -66,10 +65,17 @@ const CustomersPage = () => {
   const handleSaveCustomer = async (formData) => {
     setIsSaving(true);
     const payload = {
-      p_customer_id: customerToEdit?.id || null, p_full_name: formData.full_name,
-      p_cpf: formData.cpf || null, p_cellphone: formData.cellphone || null, p_birth_date: formData.birth_date || null,
-      p_contact_customer_id: formData.contact_customer_id || null, p_email: formData.email || null,
-      p_address_id: formData.address_id || null, p_address_number: formData.address_number || null, p_address_complement: formData.address_complement || null
+      p_customer_id: customerToEdit?.id || null,
+      // --- CORREÇÃO APLICADA AQUI ---
+      p_full_name: formData.full_name,
+      p_cpf: formData.cpf || null,
+      p_cellphone: formData.cellphone || null,
+      p_birth_date: formData.birth_date || null,
+      p_contact_customer_id: formData.contact_customer_id || null,
+      p_email: formData.email || null,
+      p_address_id: formData.address_id || null,
+      p_address_number: formData.address_number || null,
+      p_address_complement: formData.address_complement || null
     };
     const { error } = await supabase.rpc('create_or_update_customer', payload);
     if (error) { toast.error(handleSupabaseError(error)); }
@@ -88,9 +94,6 @@ const CustomersPage = () => {
   const handleExportCSV = async () => {
     const toastId = toast.loading('A preparar exportação...');
     
-    // --- CORREÇÃO APLICADA AQUI ---
-    // Adicionamos .limit(20000) para garantir que a chamada busque até 20.000 registos,
-    // ultrapassando o limite padrão de 1000 da Supabase.
     const { data: customersToExport, error } = await supabase.rpc('get_customers_for_export').limit(20000);
 
     if (error || !customersToExport || customersToExport.length === 0) {
