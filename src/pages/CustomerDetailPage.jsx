@@ -1,5 +1,5 @@
 // Arquivo: src/pages/CustomerDetailPage.jsx
-// MELHORIA (v2): Implementado o `handleSupabaseError`.
+// Versão Final Corrigida
 
 import React, { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
@@ -12,6 +12,7 @@ import ProgressBar from '../components/ProgressBar';
 import Modal from '../components/Modal';
 import CustomerForm from '../components/CustomerForm';
 import { handleSupabaseError } from '../utils/errorHandler';
+import { maskPhone } from '../utils/masks';
 
 const CustomerDetailPage = () => {
   const { customerId } = useParams();
@@ -33,13 +34,19 @@ const CustomerDetailPage = () => {
 
   const handleSaveCustomer = async (formData) => {
     setIsSaving(true);
-    const { error } = await supabase.rpc('create_or_update_customer', {
-      p_customer_id: formData.p_customer_id, p_full_name: formData.p_full_name, p_cpf: formData.p_cpf || null,
-      p_cellphone: formData.p_cellphone || null, p_birth_date: formData.p_birth_date || null,
-      p_contact_customer_id: formData.contact_customer_id || null, p_email: formData.email || null,
-      p_address_id: formData.address_id || null, p_address_number: formData.address_number || null,
+    const payload = {
+      p_customer_id: customerDetails?.profile.id || null,
+      p_full_name: formData.full_name,
+      p_cpf: formData.cpf || null,
+      p_cellphone: formData.cellphone || null,
+      p_birth_date: formData.birth_date || null,
+      p_contact_customer_id: formData.contact_customer_id || null,
+      p_email: formData.email || null,
+      p_address_id: formData.address_id || null,
+      p_address_number: formData.address_number || null,
       p_address_complement: formData.address_complement || null
-    });
+    };
+    const { error } = await supabase.rpc('create_or_update_customer', payload);
     if (error) { toast.error(handleSupabaseError(error)); }
     else { toast.success('Cliente atualizado!'); setIsModalOpen(false); fetchDetails(); }
     setIsSaving(false);
@@ -49,12 +56,13 @@ const CustomerDetailPage = () => {
   if (!customerDetails?.profile) return <div className={styles.loading}>Cliente não encontrado.</div>;
 
   const { profile, objects, this_customer_is_contact_for, contacts_for_this_customer, main_contact_associations } = customerDetails;
+  const customerToEdit = profile;
   const fullAddress = profile.address ? `${profile.address.street_name}, ${profile.address_number || 'S/N'} - ${profile.address.city}/${profile.address.state}` : 'Endereço não informado';
 
   return (
     <div className={styles.container}>
       <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} title="Editar Cliente">
-        <CustomerForm onSave={handleSaveCustomer} onClose={() => setIsModalOpen(false)} customerToEdit={profile} loading={isSaving} />
+        <CustomerForm onSave={handleSaveCustomer} onClose={() => setIsModalOpen(false)} customerToEdit={customerToEdit} loading={isSaving} />
       </Modal>
 
       <header className={styles.header}>
@@ -65,7 +73,7 @@ const CustomerDetailPage = () => {
       <div className={styles.mainGrid}>
         <div className={styles.profileSection}>
             <div className={styles.profileCard}><FaUser className={styles.icon} /> <h3>{profile.full_name}</h3></div>
-            <div className={styles.profileCard}><FaPhone className={styles.icon} /> <p>{profile.cellphone || 'Não informado'}</p></div>
+            <div className={styles.profileCard}><FaPhone className={styles.icon} /> <p>{profile.cellphone ? maskPhone(profile.cellphone) : 'Não informado'}</p></div>
             <div className={styles.profileCard}><FaIdCard className={styles.icon} /> <p>{profile.cpf || 'Não informado'}</p></div>
             <div className={styles.profileCard}><FaBirthdayCake className={styles.icon} /> <p>{profile.birth_date ? new Date(profile.birth_date).toLocaleDateString('pt-BR', {timeZone: 'UTC'}) : 'Não informado'}</p></div>
             <div className={`${styles.profileCard} ${styles.addressCard}`}>

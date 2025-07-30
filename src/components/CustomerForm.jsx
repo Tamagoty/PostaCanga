@@ -1,6 +1,6 @@
 // Arquivo: src/components/CustomerForm.jsx
-// MELHORIA (v4.2): Refatorada a busca de contatos para usar useDebounce,
-// adicionado um indicador de carregamento e corrigido o reset do estado.
+// CORREÇÃO (v4.3): A função handleSubmit agora envia apenas os dados brutos do formulário,
+// deixando a responsabilidade de formatar o payload para a página que a chama.
 
 import React, { useState, useEffect, useCallback } from "react";
 import styles from "./CustomerForm.module.css";
@@ -25,10 +25,10 @@ const CustomerForm = ({ onSave, onClose, customerToEdit, loading }) => {
   const [contactResults, setContactResults] = useState([]);
   const [selectedContactName, setSelectedContactName] = useState("");
   const [foundAddress, setFoundAddress] = useState(null);
-  const [isSearchingContacts, setIsSearchingContacts] = useState(false); // Estado de carregamento para a busca
+  const [isSearchingContacts, setIsSearchingContacts] = useState(false);
 
   const debouncedCep = useDebounce(cep, 500);
-  const debouncedContactSearch = useDebounce(contactSearch, 500); // Debounce para a busca de contatos
+  const debouncedContactSearch = useDebounce(contactSearch, 500);
 
   const fetchAddressOptions = useCallback(async () => {
     const { data: addresses, error } = await supabase
@@ -39,7 +39,6 @@ const CustomerForm = ({ onSave, onClose, customerToEdit, loading }) => {
     else if (addresses) setAddressOptions(addresses);
   }, []);
 
-  // Efeito para buscar o endereço automaticamente
   useEffect(() => {
     const autoFetchAddress = async () => {
       const cleanedCep = debouncedCep.replace(/\D/g, "");
@@ -79,7 +78,6 @@ const CustomerForm = ({ onSave, onClose, customerToEdit, loading }) => {
     }
   }, [debouncedCep, fetchAddressOptions]);
 
-  // Efeito para buscar contatos automaticamente
   useEffect(() => {
     const searchContacts = async () => {
       if (debouncedContactSearch.length < 2) {
@@ -130,7 +128,6 @@ const CustomerForm = ({ onSave, onClose, customerToEdit, loading }) => {
           });
       }
     } else {
-      // Garante que todos os estados são limpos ao criar um novo cliente
       setFormData(initialFormData);
       setFoundAddress(null);
       setCep('');
@@ -164,8 +161,8 @@ const CustomerForm = ({ onSave, onClose, customerToEdit, loading }) => {
       toast.error("O nome completo é obrigatório.");
       return;
     }
-    const payload = { ...formData, p_customer_id: customerToEdit?.id || null };
-    onSave(payload);
+    // Apenas devolve os dados puros do formulário
+    onSave(formData);
   };
 
   return (

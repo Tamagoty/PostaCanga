@@ -1,5 +1,5 @@
 // Arquivo: src/pages/CustomersPage.jsx
-// CORREÇÃO: Adicionado o parâmetro 'p_full_name' em falta na chamada RPC para guardar o cliente.
+// Versão Final Corrigida
 
 import React, { useState, useEffect, useCallback } from 'react';
 import { supabase } from '../lib/supabaseClient';
@@ -66,7 +66,6 @@ const CustomersPage = () => {
     setIsSaving(true);
     const payload = {
       p_customer_id: customerToEdit?.id || null,
-      // --- CORREÇÃO APLICADA AQUI ---
       p_full_name: formData.full_name,
       p_cpf: formData.cpf || null,
       p_cellphone: formData.cellphone || null,
