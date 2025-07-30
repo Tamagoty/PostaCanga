@@ -1,5 +1,5 @@
 // Arquivo: src/components/AddressForm.jsx
-// MELHORIA (v2): Implementado o `handleSupabaseError`.
+// MELHORIA (v3): Removida a lógica de construção do payload.
 
 import React, { useState, useEffect, useCallback } from 'react';
 import styles from './CustomerForm.module.css';
@@ -49,6 +49,8 @@ const AddressForm = ({ onSave, onClose, addressToEdit, loading }) => {
           });
         }
       });
+    } else {
+      setFormData(initialFormData);
     }
   }, [addressToEdit]);
   
@@ -58,7 +60,7 @@ const AddressForm = ({ onSave, onClose, addressToEdit, loading }) => {
       if (city) {
         setFormData(prev => ({ ...prev, city_id: city.id }));
       } else {
-        toast.error(`A cidade "${cityToSelect}" não foi encontrada no nosso banco de dados para este estado.`);
+        toast.error(`A cidade "${cityToSelect}" não foi encontrada na nossa base de dados para este estado.`);
       }
       setCityToSelect('');
     }
@@ -89,11 +91,11 @@ const AddressForm = ({ onSave, onClose, addressToEdit, loading }) => {
           }));
           toast.success('Endereço encontrado!');
         } else {
-          toast.error(`O estado "${data.uf}" não foi encontrado no nosso banco de dados.`);
+          toast.error(`O estado "${data.uf}" não foi encontrado na nossa base de dados.`);
         }
       }
     } catch (error) {
-      toast.error('Falha ao buscar o CEP. Verifique sua conexão.');
+      toast.error('Falha ao buscar o CEP. Verifique a sua conexão.');
     } finally {
       setCepLoading(false);
     }
@@ -114,8 +116,8 @@ const AddressForm = ({ onSave, onClose, addressToEdit, loading }) => {
       toast.error('Logradouro e Cidade são obrigatórios.');
       return;
     }
-    const payload = { ...formData, p_address_id: addressToEdit?.id || null };
-    onSave(payload);
+    // Apenas devolve os dados puros do formulário
+    onSave(formData);
   };
 
   return (
@@ -149,7 +151,7 @@ const AddressForm = ({ onSave, onClose, addressToEdit, loading }) => {
       </fieldset>
       <div className={styles.formActions}>
         <Button type="button" variant="secondary" onClick={onClose} disabled={loading}>Cancelar</Button>
-        <Button type="submit" loading={loading} disabled={loading}>{loading ? 'Salvando...' : 'Salvar Endereço'}</Button>
+        <Button type="submit" loading={loading} disabled={loading}>{loading ? 'A Guardar...' : 'Guardar Endereço'}</Button>
       </div>
     </form>
   );

@@ -1,5 +1,6 @@
 // Arquivo: src/pages/AddressesPage.jsx
-// MELHORIA (v6): Implementado o Skeleton Loader para a tabela.
+// CORREÇÃO (v6.1): Ajustado o payload da chamada RPC para corresponder
+// aos nomes dos parâmetros esperados pela função SQL.
 
 import React, { useState, useEffect, useCallback } from 'react';
 import { supabase } from '../lib/supabaseClient';
@@ -82,7 +83,15 @@ const AddressesPage = () => {
 
   const handleSaveAddress = async (formData) => {
     setIsSaving(true);
-    const { error } = await supabase.rpc('create_or_update_address', formData);
+    // --- CORREÇÃO APLICADA AQUI ---
+    const payload = {
+      p_address_id: addressToEdit?.id || null,
+      p_cep: formData.cep,
+      p_street_name: formData.street_name,
+      p_neighborhood: formData.neighborhood,
+      p_city_id: formData.city_id
+    };
+    const { error } = await supabase.rpc('create_or_update_address', payload);
     if (error) toast.error(handleSupabaseError(error));
     else {
       toast.success('Endereço salvo com sucesso!');
@@ -127,7 +136,7 @@ const AddressesPage = () => {
         title="Confirmar Exclusão"
         loading={isDeleting}
       >
-        <p>Tem certeza que deseja apagar o endereço <strong>{addressToDelete?.street_name}</strong>?</p>
+        <p>Tem a certeza que deseja apagar o endereço <strong>{addressToDelete?.street_name}</strong>?</p>
         <p>Esta ação só funcionará se o endereço não estiver em uso por nenhum cliente.</p>
       </ConfirmationModal>
 
