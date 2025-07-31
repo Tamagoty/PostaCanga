@@ -92,11 +92,16 @@ CREATE OR REPLACE FUNCTION delete_address(p_address_id UUID) RETURNS VOID LANGUA
 DROP FUNCTION IF EXISTS find_or_create_address_by_cep(TEXT,TEXT,TEXT,TEXT,TEXT);
 CREATE OR REPLACE FUNCTION find_or_create_address_by_cep(p_cep TEXT, p_street_name TEXT, p_neighborhood TEXT, p_city_name TEXT, p_state_uf TEXT) RETURNS UUID LANGUAGE plpgsql SECURITY DEFINER AS $$ DECLARE v_address_id UUID; v_city_id INT; BEGIN SELECT id INTO v_address_id FROM public.addresses WHERE cep = p_cep AND street_name = p_street_name LIMIT 1; IF v_address_id IS NOT NULL THEN RETURN v_address_id; END IF; SELECT c.id INTO v_city_id FROM public.cities c JOIN public.states s ON c.state_id = s.id WHERE c.name ILIKE p_city_name AND s.uf = p_state_uf LIMIT 1; IF v_city_id IS NULL THEN RAISE EXCEPTION 'Cidade ou Estado não encontrado: %, %', p_city_name, p_state_uf; END IF; INSERT INTO public.addresses (cep, street_name, neighborhood, city_id) VALUES (p_cep, p_street_name, p_neighborhood, v_city_id) RETURNING id INTO v_address_id; RETURN v_address_id; END; $$;
 
+DROP FUNCTION IF EXISTS count_addresses();
 DROP FUNCTION IF EXISTS count_addresses(TEXT);
-CREATE OR REPLACE FUNCTION count_addresses(p_search_term TEXT DEFAULT NULL) RETURNS INT LANGUAGE plpgsql AS $$ DECLARE v_count INT; v_query TEXT; BEGIN v_query := 'SELECT COUNT(*) FROM public.addresses'; IF p_search_term IS NOT NULL AND p_search_term <> '' THEN v_query := v_query || format(' WHERE street_name ILIKE %L OR neighborhood ILIKE %L OR cep ILIKE %L', '%' || p_search_term || '%', '%' || p_search_term || '%', '%' || p_search_term || '%'); END IF; EXECUTE v_query INTO v_count; RETURN v_count; END; $$;
+DROP FUNCTION IF EXISTS count_addresses(INT, TEXT);
+CREATE OR REPLACE FUNCTION count_addresses(p_city_id INT DEFAULT NULL, p_search_term TEXT DEFAULT NULL) RETURNS INT LANGUAGE plpgsql AS $$ DECLARE v_count INT; v_query TEXT; BEGIN v_query := 'SELECT COUNT(*) FROM public.addresses WHERE TRUE'; IF p_city_id IS NOT NULL THEN v_query := v_query || ' AND city_id = ' || p_city_id; END IF; IF p_search_term IS NOT NULL AND p_search_term <> '' THEN v_query := v_query || format(' AND (street_name ILIKE %L OR neighborhood ILIKE %L OR cep ILIKE %L)', '%' || p_search_term || '%', '%' || p_search_term || '%', '%' || p_search_term || '%'); END IF; EXECUTE v_query INTO v_count; RETURN v_count; END; $$;
 
 DROP FUNCTION IF EXISTS get_address_details_by_id(UUID);
 CREATE OR REPLACE FUNCTION get_address_details_by_id(p_address_id UUID) RETURNS TABLE (street_name TEXT, city_name TEXT, state_uf TEXT) LANGUAGE plpgsql AS $$ BEGIN RETURN QUERY SELECT a.street_name, c.name AS city_name, s.uf AS state_uf FROM public.addresses a JOIN public.cities c ON a.city_id = c.id JOIN public.states s ON c.state_id = s.id WHERE a.id = p_address_id; END; $$;
+
+DROP FUNCTION IF EXISTS get_neighborhoods_by_city(INT);
+CREATE OR REPLACE FUNCTION get_neighborhoods_by_city(p_city_id INT) RETURNS TABLE (neighborhood TEXT) LANGUAGE plpgsql AS $$ BEGIN RETURN QUERY SELECT DISTINCT a.neighborhood::TEXT FROM public.addresses a WHERE a.city_id = p_city_id AND a.neighborhood IS NOT NULL AND a.neighborhood <> '' ORDER BY a.neighborhood::TEXT; END; $$;
 
 -- Funções de Gestão de Clientes
 DROP FUNCTION IF EXISTS create_or_update_customer(UUID,TEXT,TEXT,TEXT,DATE,UUID,TEXT,UUID,TEXT,TEXT);
@@ -228,61 +233,8 @@ CREATE OR REPLACE FUNCTION get_monthly_objects_report(p_year INT) RETURNS JSON L
 DROP FUNCTION IF EXISTS get_supplies_usage_report(INT);
 CREATE OR REPLACE FUNCTION get_supplies_usage_report(p_months INT DEFAULT 3) RETURNS JSON LANGUAGE plpgsql AS $$ DECLARE report_data JSON; v_start_date DATE; BEGIN IF (SELECT get_my_role()) <> 'admin' THEN RETURN '[]'::json; END IF; v_start_date := (NOW() - (p_months || ' months')::INTERVAL)::DATE; WITH usage_stats AS (SELECT l.supply_id, SUM(ABS(l.quantity_changed)) AS total_consumed FROM public.supply_stock_log l WHERE l.quantity_changed < 0 AND l.created_at >= v_start_date GROUP BY l.supply_id) SELECT json_agg(t.*) INTO report_data FROM (SELECT s.name AS supply_name, COALESCE(us.total_consumed, 0)::int AS total_consumed, s.stock AS current_stock, (COALESCE(us.total_consumed, 0) / p_months)::decimal(10, 2) AS monthly_avg, GREATEST(0, CEIL((COALESCE(us.total_consumed, 0) / p_months) * 3) - s.stock)::int AS suggestion FROM public.office_supplies s LEFT JOIN usage_stats us ON s.id = us.supply_id ORDER BY total_consumed DESC) t; RETURN COALESCE(report_data, '[]'::json); END; $$;
 
-DROP FUNCTION IF EXISTS public.get_customers_for_export();
-
-CREATE OR REPLACE FUNCTION get_customers_for_export()
-RETURNS TABLE (
-    full_name TEXT,
-    cellphone_to_use TEXT,
-    is_active BOOLEAN,
-    birth_date DATE,
-    email TEXT,
-    street_name TEXT,
-    address_number TEXT,
-    neighborhood TEXT,
-    city_name TEXT,
-    state_uf TEXT,
-    cep TEXT,
-    associated_contacts TEXT
-)
-LANGUAGE plpgsql
-AS $$
-BEGIN
-    RETURN QUERY
-    SELECT
-        c.full_name::TEXT,
-        -- Usa o telemóvel do cliente, se existir; caso contrário, usa o do contato.
-        COALESCE(c.cellphone, contact.cellphone)::TEXT AS cellphone_to_use,
-        c.is_active,
-        c.birth_date,
-        c.email::TEXT,
-        a.street_name::TEXT,
-        c.address_number::TEXT,
-        a.neighborhood::TEXT,
-        ci.name::TEXT AS city_name,
-        s.uf::TEXT AS state_uf,
-        a.cep::TEXT,
-        -- Busca os nomes dos clientes que dependem DESTE cliente como contato.
-        (
-            SELECT STRING_AGG(dependent.full_name, ', ')
-            FROM public.customers dependent
-            WHERE dependent.contact_customer_id = c.id
-        )::TEXT AS associated_contacts
-    FROM
-        public.customers c
-    LEFT JOIN
-        public.customers contact ON c.contact_customer_id = contact.id
-    LEFT JOIN
-        public.addresses a ON c.address_id = a.id
-    LEFT JOIN
-        public.cities ci ON a.city_id = ci.id
-    LEFT JOIN
-        public.states s ON ci.state_id = s.id
-    -- Garante que apenas exportamos registos que terão um número de telemóvel válido.
-    WHERE
-        c.cellphone IS NOT NULL OR contact.cellphone IS NOT NULL;
-END;
-$$;
+DROP FUNCTION IF EXISTS get_customers_for_export();
+CREATE OR REPLACE FUNCTION get_customers_for_export() RETURNS TABLE (full_name TEXT, cellphone_to_use TEXT, is_active BOOLEAN, birth_date DATE, email TEXT, street_name TEXT, address_number TEXT, neighborhood TEXT, city_name TEXT, state_uf TEXT, cep TEXT, associated_contacts TEXT) LANGUAGE plpgsql AS $$ BEGIN RETURN QUERY SELECT c.full_name::TEXT, COALESCE(c.cellphone, contact.cellphone)::TEXT AS cellphone_to_use, c.is_active, c.birth_date, c.email::TEXT, a.street_name::TEXT, c.address_number::TEXT, a.neighborhood::TEXT, ci.name::TEXT AS city_name, s.uf::TEXT AS state_uf, a.cep::TEXT, (SELECT STRING_AGG(dependent.full_name, ', ') FROM public.customers dependent WHERE dependent.contact_customer_id = c.id)::TEXT AS associated_contacts FROM public.customers c LEFT JOIN public.customers contact ON c.contact_customer_id = contact.id LEFT JOIN public.addresses a ON c.address_id = a.id LEFT JOIN public.cities ci ON a.city_id = ci.id LEFT JOIN public.states s ON ci.state_id = s.id WHERE c.cellphone IS NOT NULL OR contact.cellphone IS NOT NULL; END; $$;
 
 -- Triggers
 DROP FUNCTION IF EXISTS public.handle_new_user() CASCADE;
