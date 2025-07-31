@@ -3,7 +3,7 @@
 // que a paginação e os resultados sejam sempre precisos.
 
 import React, { useState, useEffect, useCallback } from 'react';
-import { supabase } from '../lib/supabaseClient';
+import { supabase } from '../lib/supabase';
 import toast from 'react-hot-toast';
 import styles from './SuppliesPage.module.css';
 import { FaSearch, FaPlus, FaEdit, FaPlusCircle, FaMinusCircle, FaHistory, FaArrowLeft, FaArrowRight, FaArrowUp, FaArrowDown, FaClipboardList } from 'react-icons/fa';

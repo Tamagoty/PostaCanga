@@ -2,7 +2,7 @@
 // MELHORIA (v3): Adicionado o relatório de uso de expediente e um seletor de relatórios.
 
 import React, { useState } from 'react';
-import { supabase } from '../lib/supabaseClient';
+import { supabase } from '../lib/supabase';
 import toast from 'react-hot-toast';
 import styles from './ReportsPage.module.css';
 import { FaChartBar, FaClipboardList } from 'react-icons/fa';

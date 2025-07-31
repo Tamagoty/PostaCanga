@@ -7,7 +7,7 @@ import styles from "./CustomerForm.module.css";
 import Input from "./Input";
 import Button from "./Button";
 import toast from "react-hot-toast";
-import { supabase } from "../lib/supabaseClient";
+import { supabase } from "../lib/supabase";
 import { handleSupabaseError } from '../utils/errorHandler';
 import { maskCPF, maskPhone } from '../utils/masks';
 import useDebounce from '../hooks/useDebounce';

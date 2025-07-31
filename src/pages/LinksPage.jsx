@@ -3,7 +3,7 @@
 // que a paginação e os resultados sejam sempre precisos.
 
 import React, { useState, useEffect, useCallback } from 'react';
-import { supabase } from '../lib/supabaseClient';
+import { supabase } from '../lib/supabase';
 import toast from 'react-hot-toast';
 import styles from './LinksPage.module.css';
 import { FaSearch, FaPlus, FaExternalLinkAlt, FaEdit, FaTrashAlt, FaInfoCircle, FaArrowLeft, FaArrowRight, FaSortAlphaDown, FaSortAlphaUp, FaLink } from 'react-icons/fa';

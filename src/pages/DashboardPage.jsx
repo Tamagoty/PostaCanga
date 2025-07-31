@@ -2,7 +2,7 @@
 // MELHORIA (v4): Implementado o Skeleton Loader para o Dashboard.
 
 import React, { useState, useEffect } from 'react';
-import { supabase } from '../lib/supabaseClient';
+import { supabase } from '../lib/supabase';
 import toast from 'react-hot-toast';
 import styles from './DashboardPage.module.css';
 import DashboardStats from '../components/DashboardStats';

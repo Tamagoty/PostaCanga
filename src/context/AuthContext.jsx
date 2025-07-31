@@ -1,6 +1,6 @@
 // Arquivo: src/context/AuthContext.jsx (Versão Final e Corrigida)
 import React, { createContext, useState, useEffect, useContext } from 'react';
-import { supabase } from '../lib/supabaseClient';
+import { supabase } from '../lib/supabase';
 
 const AuthContext = createContext();
 

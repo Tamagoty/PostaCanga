@@ -2,7 +2,7 @@
 // MELHORIA (v2): Implementado o `handleSupabaseError`.
 
 import React, { useState, useEffect, useCallback } from 'react';
-import { supabase } from '../lib/supabaseClient';
+import { supabase } from '../lib/supabase';
 import toast from 'react-hot-toast';
 import styles from './TasksPage.module.css';
 import { FaCheckCircle, FaRegCircle, FaInfoCircle, FaCog } from 'react-icons/fa';

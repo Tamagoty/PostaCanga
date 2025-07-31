@@ -2,7 +2,7 @@
 // MELHORIA (v3.1): Adicionada tradução para os nomes das permissões.
 
 import React, { useState, useEffect, useCallback } from 'react';
-import { supabase } from '../lib/supabaseClient';
+import { supabase } from '../lib/supabase';
 import { useAuth } from '../context/AuthContext';
 import toast from 'react-hot-toast';
 import styles from './EmployeesPage.module.css';

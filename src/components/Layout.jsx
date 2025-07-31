@@ -7,7 +7,7 @@ import { Outlet, useLocation } from 'react-router-dom';
 import Sidebar from './Sidebar';
 import Header from './Header';
 import styles from './Layout.module.css';
-import { supabase } from '../lib/supabaseClient';
+import { supabase } from '../lib/supabase';
 import toast from 'react-hot-toast';
 import { handleSupabaseError } from '../utils/errorHandler';
 import { useAuth } from '../context/AuthContext';

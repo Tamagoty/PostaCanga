@@ -3,7 +3,7 @@
 
 import React, { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
-import { supabase } from '../lib/supabaseClient';
+import { supabase } from '../lib/supabase';
 import toast from 'react-hot-toast';
 import styles from './CustomerDetailPage.module.css';
 import { FaArrowLeft, FaEdit, FaUser, FaMapMarkerAlt, FaPhone, FaBirthdayCake, FaIdCard, FaUsers } from 'react-icons/fa';

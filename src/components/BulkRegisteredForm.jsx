@@ -5,7 +5,7 @@ import React, { useState, useEffect } from 'react';
 import styles from './BulkRegisteredForm.module.css';
 import Button from './Button';
 import toast from 'react-hot-toast';
-import { supabase } from '../lib/supabaseClient';
+import { supabase } from '../lib/supabase';
 import { handleSupabaseError } from '../utils/errorHandler';
 
 const BulkRegisteredForm = ({ onSave, onClose, loading }) => {

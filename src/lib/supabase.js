@@ -1,4 +1,4 @@
-// Arquivo: src/lib/supabaseClient.js
+// Arquivo: src/lib/supabase.js
 // Descrição: Inicializa e exporta o cliente Supabase para ser usado em toda a aplicação.
 
 import { createClient } from '@supabase/supabase-js';

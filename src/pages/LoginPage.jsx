@@ -2,7 +2,7 @@
 // MELHORIA (v2): Implementado o `handleSupabaseError`.
 
 import React, { useState } from 'react';
-import { supabase } from '../lib/supabaseClient';
+import { supabase } from '../lib/supabase';
 import toast from 'react-hot-toast';
 import { FaEnvelope, FaLock } from 'react-icons/fa';
 import Input from '../components/Input';

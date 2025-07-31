@@ -5,7 +5,7 @@ import React, { useState, useEffect } from 'react';
 import styles from './EmployeeForm.module.css';
 import Button from './Button';
 import toast from 'react-hot-toast';
-import { supabase } from '../lib/supabaseClient';
+import { supabase } from '../lib/supabase';
 import { handleSupabaseError } from '../utils/errorHandler';
 
 const BulkObjectForm = ({ onSave, onClose, loading }) => {

@@ -2,7 +2,7 @@
 // MELHORIA (v4): Implementado o Skeleton Loader para a tabela.
 
 import React, { useState, useEffect, useCallback } from 'react';
-import { supabase } from '../lib/supabaseClient';
+import { supabase } from '../lib/supabase';
 import toast from 'react-hot-toast';
 import styles from './SuppliesPage.module.css';
 import { FaPlus, FaEdit, FaTrashAlt, FaRulerCombined } from 'react-icons/fa';

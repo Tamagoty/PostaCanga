@@ -3,7 +3,7 @@
 // que era ineficaz. A nova função SQL agora retorna todos os dados.
 
 import React, { useState, useEffect, useCallback } from 'react';
-import { supabase } from '../lib/supabaseClient';
+import { supabase } from '../lib/supabase';
 import toast from 'react-hot-toast';
 import styles from './CustomersPage.module.css';
 import { FaSearch, FaPlus, FaEye, FaUserCircle, FaPhoneAlt, FaArrowLeft, FaArrowRight, FaFileCsv, FaUsers } from 'react-icons/fa';

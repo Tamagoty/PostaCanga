@@ -1,8 +1,9 @@
-// Arquivo: src/pages/ObjectsPage.jsx
-// MELHORIA (v2.2): Implementado o Skeleton Loader para a tabela.
+// src/pages/ObjectsPage.jsx
+// MELHORIA: A lógica de exibição do endereço agora prioriza o endereço guardado
+// diretamente no objeto, antes de usar o endereço associado ao cliente.
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { supabase } from '../lib/supabaseClient';
+import { supabase } from '../lib/supabase';
 import toast from 'react-hot-toast';
 import styles from './ObjectsPage.module.css';
 import { FaSearch, FaPlus, FaEdit, FaCheckCircle, FaUndoAlt, FaWhatsapp, FaArchive, FaHistory, FaPaperPlane, FaPhone, FaPhoneSlash, FaBoxOpen, FaCopy, FaBoxes, FaArrowUp, FaArrowDown, FaFilePdf } from 'react-icons/fa';
@@ -317,7 +318,10 @@ const ObjectsPage = () => {
               {filteredObjects.length > 0 ? (
                 filteredObjects.map(obj => {
                   const hasContact = !!contactMap[obj.recipient_name];
-                  const addressText = obj.addresses ? obj.addresses.street_name : 'Não informado';
+                  // Lógica de exibição do endereço com prioridade
+                  const addressText = obj.delivery_street_name 
+                    ? obj.delivery_street_name 
+                    : (obj.addresses ? obj.addresses.street_name : 'Não informado');
                   return (
                     <tr key={obj.control_number} className={selectedObjects.has(obj.control_number) ? styles.selectedRow : ''}>
                       {!showArchived && <td className={styles.checkboxCell}>{obj.status === 'Aguardando Retirada' && <input type="checkbox" checked={selectedObjects.has(obj.control_number)} onChange={() => handleSelectObject(obj.control_number)} />}</td>}
