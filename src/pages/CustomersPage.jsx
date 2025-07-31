@@ -1,5 +1,6 @@
 // Arquivo: src/pages/CustomersPage.jsx
-// Versão Final Corrigida
+// CORREÇÃO (v12.2): Removido o .limit() da chamada RPC de exportação,
+// que era ineficaz. A nova função SQL agora retorna todos os dados.
 
 import React, { useState, useEffect, useCallback } from 'react';
 import { supabase } from '../lib/supabaseClient';
@@ -93,7 +94,10 @@ const CustomersPage = () => {
   const handleExportCSV = async () => {
     const toastId = toast.loading('A preparar exportação...');
     
-    const { data: customersToExport, error } = await supabase.rpc('get_customers_for_export').limit(20000);
+    // --- CORREÇÃO APLICADA AQUI ---
+    // A chamada RPC agora está limpa, sem o .limit(). A função no backend
+    // irá devolver todos os resultados num único objeto JSON.
+    const { data: customersToExport, error } = await supabase.rpc('get_customers_for_export');
 
     if (error || !customersToExport || customersToExport.length === 0) {
       toast.error(error ? handleSupabaseError(error) : 'Nenhum cliente com telefone para exportar.', { id: toastId });
