@@ -1,5 +1,6 @@
-// Arquivo: src/pages/AddressesPage.jsx
-// Adicionados comentários detalhados para depuração e entendimento da lógica.
+// path: src/pages/AddressesPage.jsx
+// CORREÇÃO (v1.2): Implementada a busca inteligente de cidades com debounce
+// e corrigida a lógica de chamada das funções RPC.
 
 import React, { useState, useEffect, useCallback } from 'react';
 import { supabase } from '../lib/supabase';
@@ -18,7 +19,6 @@ import Input from '../components/Input';
 import useDebounce from '../hooks/useDebounce';
 
 const AddressesPage = () => {
-  // --- Estados da Página ---
   const [addresses, setAddresses] = useState([]);
   const [loading, setLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
@@ -30,74 +30,58 @@ const AddressesPage = () => {
   const [page, setPage] = useState(0);
   const [totalCount, setTotalCount] = useState(0);
   const [sortConfig, setSortConfig] = useState({ key: 'street_name', direction: 'asc', referencedTable: null });
-
-  // --- Estados dos Filtros ---
-  const [cities, setCities] = useState([]);
-  const [neighborhoods, setNeighborhoods] = useState([]);
-  const [cityFilter, setCityFilter] = useState('');
-  const [neighborhoodFilter, setNeighborhoodFilter] = useState('');
   const [searchTerm, setSearchTerm] = useState('');
   const debouncedSearchTerm = useDebounce(searchTerm, 500);
 
-  // =========================================================================================
-  // PASSO 1: CARREGAR DADOS INICIAIS PARA OS FILTROS
-  // =========================================================================================
-  // Este useEffect é executado apenas uma vez, quando a página é montada.
-  // A sua função é buscar a lista de todas as cidades para preencher o dropdown de filtro
-  // e pré-selecionar a cidade padrão da agência.
+  // Estados para o filtro de cidade inteligente
+  const [citySearchTerm, setCitySearchTerm] = useState('');
+  const [cityResults, setCityResults] = useState([]);
+  const [cityFilter, setCityFilter] = useState('');
+  const [selectedCityName, setSelectedCityName] = useState('');
+  const debouncedCitySearch = useDebounce(citySearchTerm, 500);
+  
+  const [neighborhoods, setNeighborhoods] = useState([]);
+  const [neighborhoodFilter, setNeighborhoodFilter] = useState('');
+
+  // Busca cidades dinamicamente
   useEffect(() => {
-    const fetchFilterData = async () => {
-      const { data, error } = await supabase.from('cities').select('id, name, state:states(uf)').order('name');
+    if (debouncedCitySearch.length < 2) {
+      setCityResults([]);
+      return;
+    }
+    const searchCities = async () => {
+      const { data, error } = await supabase.rpc('search_cities', { p_search_term: debouncedCitySearch });
       if (error) {
         toast.error(handleSupabaseError(error));
       } else {
-        setCities(data);
-        const agencyCityName = import.meta.env.VITE_AGENCY_NAME.split(' de ')[1];
-        const defaultCity = data.find(c => c.name === agencyCityName);
-        if (defaultCity) {
-          setCityFilter(defaultCity.id);
-        }
+        setCityResults(data || []);
       }
     };
-    fetchFilterData();
-  }, []);
+    searchCities();
+  }, [debouncedCitySearch]);
 
-  // =========================================================================================
-  // PASSO 2: ATUALIZAR A LISTA DE BAIRROS QUANDO A CIDADE MUDA
-  // =========================================================================================
-  // Este useEffect "observa" a variável `cityFilter`. Sempre que o utilizador
-  // seleciona uma nova cidade no filtro, este código é executado.
+  // Busca bairros quando uma cidade é selecionada
   useEffect(() => {
     const fetchNeighborhoods = async () => {
-      // Se nenhuma cidade estiver selecionada, limpa a lista de bairros.
       if (!cityFilter) {
         setNeighborhoods([]);
         setNeighborhoodFilter('');
         return;
       }
-      // Chama a função RPC `get_neighborhoods_by_city` para buscar os bairros
-      // únicos da cidade selecionada.
       const { data, error } = await supabase.rpc('get_neighborhoods_by_city', { p_city_id: cityFilter });
-      if (error) {
-        toast.error(handleSupabaseError(error));
-      } else {
-        setNeighborhoods(data);
-      }
+      if (error) toast.error(handleSupabaseError(error));
+      else setNeighborhoods(data);
     };
     fetchNeighborhoods();
   }, [cityFilter]);
 
-  // =========================================================================================
-  // PASSO 3: FUNÇÃO PRINCIPAL PARA BUSCAR OS ENDEREÇOS
-  // =========================================================================================
-  // Esta é a função central da página. Ela é responsável por buscar os dados
-  // dos endereços, aplicando todos os filtros e a paginação.
+  // Busca a lista principal de endereços
   const fetchAddresses = useCallback(async () => {
     setLoading(true);
     try {
-      // Primeiro, contamos o número total de resultados que correspondem aos filtros.
       const { data: count, error: countError } = await supabase.rpc('count_addresses', {
         p_city_id: cityFilter || null,
+        p_neighborhood: neighborhoodFilter || null,
         p_search_term: debouncedSearchTerm || null
       });
       if (countError) throw countError;
@@ -106,17 +90,11 @@ const AddressesPage = () => {
       const from = page * ITEMS_PER_PAGE;
       const to = from + ITEMS_PER_PAGE - 1;
 
-      // Depois, construímos a consulta para buscar apenas os dados da página atual.
-      let query = supabase
-        .from('addresses')
-        .select('*, city:cities(name, state:states(uf))');
-
-      // Adicionamos os filtros à consulta.
+      let query = supabase.from('addresses').select('*, city:cities(name, state:states(uf))');
       if (cityFilter) query = query.eq('city_id', cityFilter);
       if (neighborhoodFilter) query = query.eq('neighborhood', neighborhoodFilter);
       if (debouncedSearchTerm) query = query.or(`street_name.ilike.%${debouncedSearchTerm}%,cep.ilike.%${debouncedSearchTerm}%`);
 
-      // Adicionamos a ordenação e a paginação.
       query = query.order(sortConfig.key, {
           ascending: sortConfig.direction === 'asc',
           referencedTable: sortConfig.referencedTable,
@@ -134,12 +112,15 @@ const AddressesPage = () => {
     }
   }, [page, sortConfig, cityFilter, neighborhoodFilter, debouncedSearchTerm]);
 
-  // Executa a busca sempre que um filtro, a página ou a ordenação mudam.
   useEffect(() => { fetchAddresses(); }, [fetchAddresses]);
-  // Volta para a primeira página sempre que um filtro muda.
   useEffect(() => { setPage(0); }, [cityFilter, neighborhoodFilter, debouncedSearchTerm]);
 
-  // ... (demais funções permanecem iguais)
+  const handleSelectCity = (city) => {
+    setCityFilter(city.id);
+    setSelectedCityName(`${city.name} - ${city.uf}`);
+    setCitySearchTerm(`${city.name} - ${city.uf}`);
+    setCityResults([]);
+  };
 
   const requestSort = (key, referencedTable = null) => {
     let direction = 'asc';
@@ -147,7 +128,6 @@ const AddressesPage = () => {
       direction = 'desc';
     }
     setSortConfig({ key, direction, referencedTable });
-    setPage(0);
   };
 
   const getSortIcon = (name) => {
@@ -163,10 +143,8 @@ const AddressesPage = () => {
   const handleSaveAddress = async (formData) => {
     setIsSaving(true);
     const payload = {
-      p_address_id: addressToEdit?.id || null,
-      p_cep: formData.cep,
-      p_street_name: formData.street_name,
-      p_neighborhood: formData.neighborhood,
+      p_address_id: addressToEdit?.id || null, p_cep: formData.cep,
+      p_street_name: formData.street_name, p_neighborhood: formData.neighborhood,
       p_city_id: formData.city_id
     };
     const { error } = await supabase.rpc('create_or_update_address', payload);
@@ -188,12 +166,8 @@ const AddressesPage = () => {
     if (!addressToDelete) return;
     setIsDeleting(true);
     const { error } = await supabase.rpc('delete_address', { p_address_id: addressToDelete.id });
-    if (error) {
-      toast.error(handleSupabaseError(error));
-    } else {
-      toast.success('Endereço apagado.');
-      fetchAddresses();
-    }
+    if (error) toast.error(handleSupabaseError(error));
+    else { toast.success('Endereço apagado.'); fetchAddresses(); }
     setIsDeleting(false);
     setIsConfirmModalOpen(false);
     setAddressToDelete(null);
@@ -207,13 +181,7 @@ const AddressesPage = () => {
         <AddressForm onSave={handleSaveAddress} onClose={() => setIsFormModalOpen(false)} addressToEdit={addressToEdit} loading={isSaving} />
       </Modal>
 
-      <ConfirmationModal
-        isOpen={isConfirmModalOpen}
-        onClose={() => setIsConfirmModalOpen(false)}
-        onConfirm={confirmDeleteAddress}
-        title="Confirmar Exclusão"
-        loading={isDeleting}
-      >
+      <ConfirmationModal isOpen={isConfirmModalOpen} onClose={() => setIsConfirmModalOpen(false)} onConfirm={confirmDeleteAddress} title="Confirmar Exclusão" loading={isDeleting}>
         <p>Tem a certeza que deseja apagar o endereço <strong>{addressToDelete?.street_name}</strong>?</p>
         <p>Esta ação só funcionará se o endereço não estiver em uso por nenhum cliente.</p>
       </ConfirmationModal>
@@ -225,13 +193,25 @@ const AddressesPage = () => {
 
       <div className={styles.filterContainer}>
         <div className={styles.filterGroup}>
-          <label htmlFor="cityFilter">Filtrar por Cidade</label>
-          <select id="cityFilter" value={cityFilter} onChange={(e) => setCityFilter(e.target.value)} className={styles.select}>
-            <option value="">Todas as Cidades</option>
-            {cities.map(city => (
-              <option key={city.id} value={city.id}>{city.name} - {city.state.uf}</option>
-            ))}
-          </select>
+          <label htmlFor="citySearch">Filtrar por Cidade</label>
+          <div className={styles.searchWrapper}>
+            <Input
+              id="citySearch"
+              placeholder="Digite para buscar uma cidade..."
+              value={citySearchTerm}
+              onChange={(e) => setCitySearchTerm(e.target.value)}
+              onFocus={() => { if (selectedCityName) { setCitySearchTerm(''); setSelectedCityName(''); setCityFilter(''); } }}
+            />
+            {cityResults.length > 0 && (
+              <ul className={styles.searchResults}>
+                {cityResults.map((city) => (
+                  <li key={city.id} onClick={() => handleSelectCity(city)}>
+                    {city.name} - {city.uf}
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
         </div>
         <div className={styles.filterGroup}>
           <label htmlFor="neighborhoodFilter">Filtrar por Bairro</label>
@@ -248,9 +228,7 @@ const AddressesPage = () => {
       </div>
 
       <div className={styles.tableContainer}>
-        {loading ? (
-          <TableSkeleton columns={5} rows={ITEMS_PER_PAGE} />
-        ) : (
+        {loading ? <TableSkeleton columns={5} rows={ITEMS_PER_PAGE} /> : (
           <table className={styles.table}>
             <thead>
               <tr>
@@ -282,12 +260,8 @@ const AddressesPage = () => {
                   <td colSpan="5">
                     <EmptyState 
                       icon={FaMapMarkedAlt} 
-                      title={debouncedSearchTerm || cityFilter ? "Nenhum resultado" : "Nenhum endereço"}
-                      message={
-                        debouncedSearchTerm || cityFilter
-                          ? "Nenhum endereço encontrado para os filtros selecionados."
-                          : "Ainda não há endereços cadastrados."
-                      }
+                      title={searchTerm || cityFilter ? "Nenhum resultado" : "Nenhum endereço"}
+                      message={searchTerm || cityFilter ? "Nenhum endereço encontrado para os filtros selecionados." : "Ainda não há endereços cadastrados."}
                     />
                   </td>
                 </tr>
@@ -299,15 +273,9 @@ const AddressesPage = () => {
 
       {totalPages > 1 && (
         <div className={styles.pagination}>
-          <Button onClick={() => setPage(p => p - 1)} disabled={page === 0}>
-            <FaArrowLeft /> Anterior
-          </Button>
-          <span className={styles.pageInfo}>
-            Página {page + 1} de {totalPages}
-          </span>
-          <Button onClick={() => setPage(p => p + 1)} disabled={page + 1 >= totalPages}>
-            Próxima <FaArrowRight />
-          </Button>
+          <Button onClick={() => setPage(p => p - 1)} disabled={page === 0}><FaArrowLeft /> Anterior</Button>
+          <span className={styles.pageInfo}>Página {page + 1} de {totalPages}</span>
+          <Button onClick={() => setPage(p => p + 1)} disabled={page + 1 >= totalPages}>Próxima <FaArrowRight /></Button>
         </div>
       )}
     </div>

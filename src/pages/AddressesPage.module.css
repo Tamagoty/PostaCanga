@@ -1,4 +1,4 @@
-/* Arquivo: src/pages/AddressesPage.module.css */
+/* path: src/pages/AddressesPage.module.css */
 .container {
   display: flex;
   flex-direction: column;
@@ -16,7 +16,6 @@
   color: var(--text-primary);
 }
 
-/* Estilos para o container dos filtros */
 .filterContainer {
   display: flex;
   flex-wrap: wrap;
@@ -68,7 +67,37 @@
   align-self: flex-end;
 }
 
-/* Estilos da Tabela (reutilizados) */
+.searchWrapper {
+  position: relative;
+}
+
+.searchResults {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  background-color: var(--bg-tertiary);
+  border: 1px solid var(--border-color);
+  border-top: none;
+  border-radius: 0 0 var(--border-radius) var(--border-radius);
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  z-index: 10;
+  max-height: 250px;
+  overflow-y: auto;
+}
+
+.searchResults li {
+  padding: 0.75rem 1rem;
+  cursor: pointer;
+}
+
+.searchResults li:hover {
+  background-color: var(--accent-primary);
+  color: white;
+}
+
 .tableContainer {
   overflow-x: auto;
   background-color: var(--bg-secondary);
@@ -147,7 +176,6 @@
   color: var(--accent-danger) !important;
 }
 
-/* Estilos para Paginação */
 .pagination {
   display: flex;
   justify-content: center;

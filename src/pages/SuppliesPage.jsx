@@ -1,8 +1,8 @@
-// Arquivo: src/pages/SuppliesPage.jsx
-// MELHORIA (v7): A busca agora é feita no banco de dados, garantindo
-// que a paginação e os resultados sejam sempre precisos.
+// path: src/pages/SuppliesPage.jsx
+// REATORAÇÃO: Página refatorada para usar o hook customizado useResourceManagement,
+// simplificando drasticamente o código e centralizando a lógica de gestão de dados.
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState } from 'react';
 import { supabase } from '../lib/supabase';
 import toast from 'react-hot-toast';
 import styles from './SuppliesPage.module.css';
@@ -13,81 +13,40 @@ import Modal from '../components/Modal';
 import SupplyForm from '../components/SupplyForm';
 import AdjustStockForm from '../components/AdjustStockForm';
 import { useNavigate } from 'react-router-dom';
-import useDebounce from '../hooks/useDebounce';
 import { handleSupabaseError } from '../utils/errorHandler';
 import { ITEMS_PER_PAGE } from '../constants';
 import EmptyState from '../components/EmptyState';
 import TableSkeleton from '../components/TableSkeleton';
+import useResourceManagement from '../hooks/useResourceManagement'; // 1. Importar o novo hook
 
 const SuppliesPage = () => {
-  const [supplies, setSupplies] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [isSaving, setIsSaving] = useState(false);
-  const [searchTerm, setSearchTerm] = useState('');
-  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const navigate = useNavigate();
+
+  // 2. Usar o hook para gerir o recurso 'office_supplies'
+  const {
+    data: supplies,
+    loading,
+    isSaving,
+    setIsSaving,
+    isModalOpen,
+    itemToEdit: supplyToEdit,
+    page,
+    setPage,
+    totalCount,
+    searchTerm,
+    setSearchTerm,
+    sortConfig,
+    fetchData: fetchSupplies,
+    handleOpenModal: handleOpenEditModal,
+    handleCloseModal: handleCloseEditModal,
+    requestSort,
+  } = useResourceManagement('office_supplies', 'count_supplies', { key: 'name', direction: 'asc' });
+
+  // Estados específicos para o modal de ajuste de stock
   const [isAdjustModalOpen, setIsAdjustModalOpen] = useState(false);
-  const [supplyToEdit, setSupplyToEdit] = useState(null);
   const [supplyToAdjust, setSupplyToAdjust] = useState(null);
   const [adjustActionType, setAdjustActionType] = useState('add');
-  const navigate = useNavigate();
-  const debouncedSearchTerm = useDebounce(searchTerm, 300);
-  const [page, setPage] = useState(0);
-  const [totalCount, setTotalCount] = useState(0);
-  const [sortConfig, setSortConfig] = useState({ key: 'name', direction: 'asc' });
-
-  const fetchSupplies = useCallback(async () => {
-    setLoading(true);
-    try {
-      // 1. A contagem agora passa o termo da busca para o backend.
-      const { data: count, error: countError } = await supabase.rpc('count_supplies', { p_search_term: debouncedSearchTerm });
-      if (countError) throw countError;
-      setTotalCount(count || 0);
-
-      const from = page * ITEMS_PER_PAGE;
-      const to = from + ITEMS_PER_PAGE - 1;
-
-      let query = supabase.from('office_supplies').select('*');
-      
-      // 2. A filtragem também é feita no backend.
-      if (debouncedSearchTerm) {
-        query = query.ilike('name', `%${debouncedSearchTerm}%`);
-      }
-
-      query = query.order(sortConfig.key, { ascending: sortConfig.direction === 'asc' }).range(from, to);
-
-      const { data, error } = await query;
-      if (error) throw error;
-
-      setSupplies(data);
-    } catch (error) {
-      toast.error(handleSupabaseError(error));
-    } finally {
-      setLoading(false);
-    }
-  }, [page, sortConfig, debouncedSearchTerm]);
-
-  useEffect(() => { fetchSupplies(); }, [fetchSupplies]);
-  useEffect(() => { setPage(0); }, [debouncedSearchTerm]);
-
-  const requestSort = (key) => {
-    let direction = 'asc';
-    if (sortConfig.key === key && sortConfig.direction === 'asc') {
-      direction = 'desc';
-    }
-    setSortConfig({ key, direction });
-    setPage(0);
-  };
-
-  const getSortIcon = (name) => {
-    if (sortConfig.key !== name) return null;
-    return sortConfig.direction === 'asc' ? <FaArrowUp /> : <FaArrowDown />;
-  };
   
-  const handleOpenEditModal = (supply) => {
-    setSupplyToEdit(supply);
-    setIsEditModalOpen(true);
-  };
-
   const handleOpenAdjustModal = (supply, actionType) => {
     setSupplyToAdjust(supply);
     setAdjustActionType(actionType);
@@ -103,7 +62,7 @@ const SuppliesPage = () => {
     if (error) toast.error(handleSupabaseError(error));
     else {
       toast.success(`Material ${supplyToEdit ? 'atualizado' : 'criado'}!`);
-      setIsEditModalOpen(false);
+      handleCloseEditModal();
       fetchSupplies();
     }
     setIsSaving(false);
@@ -126,12 +85,17 @@ const SuppliesPage = () => {
     setIsSaving(false);
   };
 
+  const getSortIcon = (name) => {
+    if (sortConfig.key !== name) return null;
+    return sortConfig.direction === 'asc' ? <FaArrowUp /> : <FaArrowDown />;
+  };
+
   const totalPages = Math.ceil(totalCount / ITEMS_PER_PAGE);
 
   return (
     <div className={styles.container}>
-      <Modal isOpen={isEditModalOpen} onClose={() => setIsEditModalOpen(false)} title={supplyToEdit ? 'Editar Material' : 'Adicionar Novo Material'}>
-        <SupplyForm onSave={handleSaveSupply} onClose={() => setIsEditModalOpen(false)} supplyToEdit={supplyToEdit} loading={isSaving} />
+      <Modal isOpen={isModalOpen} onClose={handleCloseEditModal} title={supplyToEdit ? 'Editar Material' : 'Adicionar Novo Material'}>
+        <SupplyForm onSave={handleSaveSupply} onClose={handleCloseEditModal} supplyToEdit={supplyToEdit} loading={isSaving} />
       </Modal>
 
       {supplyToAdjust && (
@@ -150,7 +114,7 @@ const SuppliesPage = () => {
         <h1>Material de Expediente</h1>
         <div className={styles.actions}>
           <Input id="search" placeholder="Buscar por nome..." icon={FaSearch} value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} />
-          <Button onClick={() => { setSupplyToEdit(null); setIsEditModalOpen(true); }}><FaPlus /> Novo Material</Button>
+          <Button onClick={() => handleOpenEditModal(null)}><FaPlus /> Novo Material</Button>
         </div>
       </header>
 
@@ -200,10 +164,10 @@ const SuppliesPage = () => {
                   <td colSpan="4">
                     <EmptyState
                       icon={FaClipboardList}
-                      title={debouncedSearchTerm ? "Nenhum resultado" : "Nenhum material"}
+                      title={searchTerm ? "Nenhum resultado" : "Nenhum material"}
                       message={
-                        debouncedSearchTerm
-                          ? <>Nenhum material encontrado para a busca <strong>"{debouncedSearchTerm}"</strong>.</>
+                        searchTerm
+                          ? <>Nenhum material encontrado para a busca <strong>"{searchTerm}"</strong>.</>
                           : "Ainda não há materiais de expediente cadastrados."
                       }
                     />

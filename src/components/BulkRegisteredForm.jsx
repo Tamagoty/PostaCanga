@@ -1,7 +1,8 @@
-// Arquivo: src/components/BulkRegisteredForm.jsx
-// MELHORIA (v3): O seletor de "Tipo de Objeto" para itens não classificados agora busca os dados dinamicamente.
+// path: src/components/BulkRegisteredForm.jsx
+// CORREÇÃO (v3.1): Corrigido o array de dependências do useEffect
+// envolvendo a função fetchObjectTypes com useCallback.
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import styles from './BulkRegisteredForm.module.css';
 import Button from './Button';
 import toast from 'react-hot-toast';
@@ -13,20 +14,20 @@ const BulkRegisteredForm = ({ onSave, onClose, loading }) => {
   const [unclassifiedObjects, setUnclassifiedObjects] = useState([]);
   const [classifiedObjects, setClassifiedObjects] = useState([]);
   const [isProcessing, setIsProcessing] = useState(false);
-  const [objectTypes, setObjectTypes] = useState([]); // Estado para os tipos
+  const [objectTypes, setObjectTypes] = useState([]);
 
-  // Busca os tipos de objeto do banco de dados
-  useEffect(() => {
-    const fetchObjectTypes = async () => {
-      const { data, error } = await supabase.from('object_types').select('name').order('name');
-      if (error) {
-        toast.error(handleSupabaseError(error));
-      } else if (data) {
-        setObjectTypes(data.map(item => item.name));
-      }
-    };
-    fetchObjectTypes();
+  const fetchObjectTypes = useCallback(async () => {
+    const { data, error } = await supabase.from('object_types').select('name').order('name');
+    if (error) {
+      toast.error(handleSupabaseError(error));
+    } else if (data) {
+      setObjectTypes(data.map(item => item.name));
+    }
   }, []);
+
+  useEffect(() => {
+    fetchObjectTypes();
+  }, [fetchObjectTypes]);
 
   const handleProcessData = async () => {
     if (!textData.trim()) { toast.error('Por favor, cole os dados na área de texto.'); return; }

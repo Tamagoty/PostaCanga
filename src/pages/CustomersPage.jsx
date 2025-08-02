@@ -1,8 +1,7 @@
-// Arquivo: src/pages/CustomersPage.jsx
-// CORREÇÃO (v12.2): Removido o .limit() da chamada RPC de exportação,
-// que era ineficaz. A nova função SQL agora retorna todos os dados.
+// path: src/pages/CustomersPage.jsx
+// REATORAÇÃO: Página refatorada para usar o hook customizado useResourceManagement.
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useCallback } from 'react';
 import { supabase } from '../lib/supabase';
 import toast from 'react-hot-toast';
 import styles from './CustomersPage.module.css';
@@ -13,55 +12,54 @@ import Modal from '../components/Modal';
 import CustomerForm from '../components/CustomerForm';
 import ToggleSwitch from '../components/ToggleSwitch';
 import { useNavigate } from 'react-router-dom';
-import useDebounce from '../hooks/useDebounce';
 import { ITEMS_PER_PAGE } from '../constants';
 import { handleSupabaseError } from '../utils/errorHandler';
 import EmptyState from '../components/EmptyState';
 import CardSkeleton from '../components/CardSkeleton';
 import { maskPhone } from '../utils/masks';
+import useResourceManagement from '../hooks/useResourceManagement';
 
 const CustomersPage = () => {
-  const [customers, setCustomers] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [isSaving, setIsSaving] = useState(false);
-  const [searchTerm, setSearchTerm] = useState('');
-  const [statusFilter, setStatusFilter] = useState('all');
-  const [isModalOpen, setIsModalOpen] = useState(false);
-  const [customerToEdit, setCustomerToEdit] = useState(null);
-  const [page, setPage] = useState(0);
-  const [totalCount, setTotalCount] = useState(0);
   const navigate = useNavigate();
+  const [statusFilter, setStatusFilter] = useState('all');
 
-  const debouncedSearchTerm = useDebounce(searchTerm, 500);
+  // 1. Definir a função que busca os dados específicos desta página
+  const fetchCustomersFn = useCallback(async ({ page, itemsPerPage, searchTerm }) => {
+    const from = page * itemsPerPage;
+    const { data: count, error: countError } = await supabase.rpc('count_customers_filtered', { 
+      p_search_term: searchTerm, 
+      p_status_filter: statusFilter 
+    });
+    if (countError) return { error: countError };
 
-  const fetchCustomers = useCallback(async () => {
-    setLoading(true);
-    try {
-      const { data: count, error: countError } = await supabase.rpc('count_customers_filtered', { p_search_term: debouncedSearchTerm, p_status_filter: statusFilter });
-      if (countError) throw countError;
-      setTotalCount(count || 0);
+    const { data, error: dataError } = await supabase.rpc('get_paginated_customers_with_details', {
+      p_search_term: searchTerm,
+      p_status_filter: statusFilter,
+      p_offset: from,
+      p_limit: itemsPerPage
+    });
+    if (dataError) return { error: dataError };
+    
+    return { data, count };
+  }, [statusFilter]); // A função de busca depende do filtro de status
 
-      const from = page * ITEMS_PER_PAGE;
-
-      const { data, error: dataError } = await supabase.rpc('get_paginated_customers_with_details', {
-        p_search_term: debouncedSearchTerm,
-        p_status_filter: statusFilter,
-        p_offset: from,
-        p_limit: ITEMS_PER_PAGE
-      });
-
-      if (dataError) throw dataError;
-
-      setCustomers(data || []);
-    } catch (error) {
-        toast.error(handleSupabaseError(error));
-    } finally {
-        setLoading(false);
-    }
-  }, [page, debouncedSearchTerm, statusFilter]);
-
-  useEffect(() => { fetchCustomers(); }, [fetchCustomers]);
-  useEffect(() => { setPage(0); }, [debouncedSearchTerm, statusFilter]);
+  // 2. Usar o hook, passando a função de busca
+  const {
+    data: customers,
+    loading,
+    isSaving,
+    setIsSaving,
+    isModalOpen,
+    itemToEdit: customerToEdit,
+    page,
+    setPage,
+    totalCount,
+    searchTerm,
+    setSearchTerm,
+    fetchData: fetchCustomers,
+    handleOpenModal,
+    handleCloseModal,
+  } = useResourceManagement({ key: 'full_name', direction: 'asc' }, fetchCustomersFn);
 
   const handleSaveCustomer = async (formData) => {
     setIsSaving(true);
@@ -79,7 +77,7 @@ const CustomersPage = () => {
     };
     const { error } = await supabase.rpc('create_or_update_customer', payload);
     if (error) { toast.error(handleSupabaseError(error)); }
-    else { toast.success(`Cliente ${customerToEdit ? 'atualizado' : 'criado'}!`); setIsModalOpen(false); fetchCustomers(); }
+    else { toast.success(`Cliente ${customerToEdit ? 'atualizado' : 'criado'}!`); handleCloseModal(); fetchCustomers(); }
     setIsSaving(false);
   };
 
@@ -93,19 +91,12 @@ const CustomersPage = () => {
 
   const handleExportCSV = async () => {
     const toastId = toast.loading('A preparar exportação...');
-    
-    // --- CORREÇÃO APLICADA AQUI ---
-    // A chamada RPC agora está limpa, sem o .limit(). A função no backend
-    // irá devolver todos os resultados num único objeto JSON.
     const { data: customersToExport, error } = await supabase.rpc('get_customers_for_export');
-
     if (error || !customersToExport || customersToExport.length === 0) {
       toast.error(error ? handleSupabaseError(error) : 'Nenhum cliente com telefone para exportar.', { id: toastId });
       return;
     }
-    
     const headers = "First Name,Birthday,Notes,Labels,E-mail 1 - Label,E-mail 1 - Value,Phone 1 - Label,Phone 1 - Value,Address 1 - Label,Address 1 - Street,Address 1 - Extended Address,Address 1 - City,Address 1 - Region,Address 1 - Postal Code,Address 1 - Country";
-    
     const rows = customersToExport.map(c => {
       const firstName = `${c.full_name} ${c.is_active ? '✅' : '❌'}`;
       const birthday = c.birth_date ? new Date(c.birth_date).toLocaleDateString('pt-BR', { timeZone: 'UTC' }) : '';
@@ -114,12 +105,10 @@ const CustomersPage = () => {
       const emailLabel = 'Home';
       const emailValue = c.email || '';
       const phoneLabel = 'Mobile';
-      
       let phoneValue = (c.cellphone_to_use || '').replace(/\D/g, '');
       if (phoneValue.length === 11 && !phoneValue.startsWith('0')) {
         phoneValue = `0${phoneValue}`;
       }
-
       const addressLabel = 'Home';
       const street = `${c.street_name || ''}, ${c.address_number || 'SN'}`;
       const extendedAddress = c.neighborhood || '';
@@ -127,11 +116,9 @@ const CustomersPage = () => {
       const region = c.state_uf || '';
       const postalCode = c.cep || '';
       const country = 'Brasil';
-
       const fields = [firstName, birthday, notes, labels, emailLabel, emailValue, phoneLabel, phoneValue, addressLabel, street, extendedAddress, city, region, postalCode, country];
       return fields.map(field => `"${(field || '').toString().replace(/"/g, '""')}"`).join(',');
     });
-
     const csvContent = "data:text/csv;charset=utf-8," + [headers, ...rows].join("\n");
     const encodedUri = encodeURI(csvContent);
     const link = document.createElement("a");
@@ -147,8 +134,8 @@ const CustomersPage = () => {
 
   return (
     <div className={styles.container}>
-      <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} title={customerToEdit ? 'Editar Cliente' : 'Adicionar Novo Cliente'}>
-        <CustomerForm onSave={handleSaveCustomer} onClose={() => setIsModalOpen(false)} customerToEdit={customerToEdit} loading={isSaving} />
+      <Modal isOpen={isModalOpen} onClose={handleCloseModal} title={customerToEdit ? 'Editar Cliente' : 'Adicionar Novo Cliente'}>
+        <CustomerForm onSave={handleSaveCustomer} onClose={handleCloseModal} customerToEdit={customerToEdit} loading={isSaving} />
       </Modal>
 
       <header className={styles.header}>
@@ -163,7 +150,7 @@ const CustomersPage = () => {
             <Button variant={statusFilter === 'all' ? 'primary' : 'secondary'} onClick={() => setStatusFilter('all')}>Todos</Button>
           </div>
           <Button onClick={handleExportCSV} variant="secondary"><FaFileCsv /> Exportar CSV</Button>
-          <Button onClick={() => { setCustomerToEdit(null); setIsModalOpen(true); }}><FaPlus /> Novo Cliente</Button>
+          <Button onClick={() => handleOpenModal(null)}><FaPlus /> Novo Cliente</Button>
         </div>
       </header>
 
@@ -190,10 +177,10 @@ const CustomersPage = () => {
         ) : (
           <EmptyState
             icon={FaUsers}
-            title={debouncedSearchTerm ? "Nenhum resultado" : "Nenhum cliente"}
+            title={searchTerm ? "Nenhum resultado" : "Nenhum cliente"}
             message={
-              debouncedSearchTerm
-                ? <>Nenhum cliente encontrado para a busca <strong>"{debouncedSearchTerm}"</strong>.</>
+              searchTerm
+                ? <>Nenhum cliente encontrado para a busca <strong>"{searchTerm}"</strong>.</>
                 : "Ainda não há clientes cadastrados ou nenhum corresponde ao filtro selecionado."
             }
           />

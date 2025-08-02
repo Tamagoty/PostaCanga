@@ -1,6 +1,5 @@
-// src/pages/ObjectsPage.jsx
-// MELHORIA: A lógica de exibição do endereço agora prioriza o endereço guardado
-// diretamente no objeto, antes de usar o endereço associado ao cliente.
+// path: src/pages/ObjectsPage.jsx
+// CORREÇÃO (v1.1): Corrigida a importação da biblioteca jsPDF para permitir a exportação do relatório.
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { supabase } from '../lib/supabase';
@@ -18,6 +17,8 @@ import { handleSupabaseError } from '../utils/errorHandler';
 import TableSkeleton from '../components/TableSkeleton';
 import EmptyState from '../components/EmptyState';
 import { ITEMS_PER_PAGE } from '../constants';
+import jsPDF from 'jspdf'; // <-- [CORREÇÃO] Importação adicionada
+import 'jspdf-autotable'; // <-- [CORREÇÃO] Importação adicionada
 
 const getWhatsAppMessage = (object) => {
   const agencyName = "Correio de América Dourada";
@@ -232,7 +233,7 @@ const ObjectsPage = () => {
   };
 
   const generatePDF = () => {
-    const { jsPDF } = window.jspdf;
+    // [CORREÇÃO] Acessa a biblioteca através da importação, não do objeto window.
     const doc = new jsPDF();
     doc.text("Relatório de Inserção em Massa", 14, 16);
     doc.autoTable({
@@ -318,7 +319,6 @@ const ObjectsPage = () => {
               {filteredObjects.length > 0 ? (
                 filteredObjects.map(obj => {
                   const hasContact = !!contactMap[obj.recipient_name];
-                  // Lógica de exibição do endereço com prioridade
                   const addressText = obj.delivery_street_name 
                     ? obj.delivery_street_name 
                     : (obj.addresses ? obj.addresses.street_name : 'Não informado');

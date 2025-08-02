@@ -1,7 +1,8 @@
-// Arquivo: src/components/BulkObjectForm.jsx
-// MELHORIA (v2): O seletor de "Tipo de Objeto" agora busca os dados dinamicamente.
+// path: src/components/BulkObjectForm.jsx
+// CORREÇÃO (v2.1): Corrigido o array de dependências do useEffect
+// envolvendo a função fetchObjectTypes com useCallback.
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import styles from './EmployeeForm.module.css';
 import Button from './Button';
 import toast from 'react-hot-toast';
@@ -13,20 +14,21 @@ const BulkObjectForm = ({ onSave, onClose, loading }) => {
   const [objectType, setObjectType] = useState('');
   const [objectTypes, setObjectTypes] = useState([]);
 
-  useEffect(() => {
-    const fetchObjectTypes = async () => {
-      const { data, error } = await supabase.from('object_types').select('name').order('name');
-      if (error) {
-        toast.error(handleSupabaseError(error));
-      } else if (data) {
-        setObjectTypes(data.map(item => item.name));
-        if (data.length > 0) {
-          setObjectType(data.find(t => t.name === 'Carta Simples') ? 'Carta Simples' : data[0].name);
-        }
+  const fetchObjectTypes = useCallback(async () => {
+    const { data, error } = await supabase.from('object_types').select('name').order('name');
+    if (error) {
+      toast.error(handleSupabaseError(error));
+    } else if (data) {
+      setObjectTypes(data.map(item => item.name));
+      if (data.length > 0) {
+        setObjectType(data.find(t => t.name === 'Carta Simples') ? 'Carta Simples' : data[0].name);
       }
-    };
-    fetchObjectTypes();
+    }
   }, []);
+
+  useEffect(() => {
+    fetchObjectTypes();
+  }, [fetchObjectTypes]);
 
   const handleSubmit = (e) => {
     e.preventDefault();
