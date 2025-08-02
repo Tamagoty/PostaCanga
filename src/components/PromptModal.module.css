@@ -1,4 +1,5 @@
-/* Arquivo: src/components/PromptModal.module.css */
+/* path: src/components/PromptModal.module.css */
+/* MELHORIA: Adicionados estilos para o textarea. */
 
 .form {
   display: flex;
@@ -11,4 +12,36 @@
   justify-content: flex-end;
   gap: 0.75rem; /* 12px */
   margin-top: 1rem;
+}
+
+/* Novos estilos para suportar o textarea */
+.formGroup {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.label {
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: var(--text-secondary);
+}
+
+.textarea {
+  width: 100%;
+  padding: 0.75rem 1rem;
+  background-color: var(--bg-tertiary);
+  border: 1px solid var(--border-color);
+  border-radius: var(--border-radius);
+  color: var(--text-primary);
+  font-size: 1rem;
+  transition: border-color 0.2s, box-shadow 0.2s;
+  font-family: inherit;
+  resize: vertical;
+}
+
+.textarea:focus {
+  outline: none;
+  border-color: var(--accent-primary);
+  box-shadow: 0 0 0 2px var(--accent-primary-hover);
 }
