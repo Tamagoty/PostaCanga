@@ -1,8 +1,8 @@
-// Arquivo: src/pages/LinksPage.jsx
-// MELHORIA (v1.6): A busca agora é feita no banco de dados, garantindo
-// que a paginação e os resultados sejam sempre precisos.
+// path: src/pages/LinksPage.jsx
+// CORREÇÃO (v1.1): A função de busca de dados foi envolvida com useCallback
+// para prevenir um loop infinito de renderização causado pelo hook useResourceManagement.
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useCallback } from 'react';
 import { supabase } from '../lib/supabase';
 import toast from 'react-hot-toast';
 import styles from './LinksPage.module.css';
@@ -14,68 +14,58 @@ import LinkForm from '../components/LinkForm';
 import ConfirmationModal from '../components/ConfirmationModal';
 import DetailsModal from '../components/DetailsModal';
 import { handleSupabaseError } from '../utils/errorHandler';
-import useDebounce from '../hooks/useDebounce';
 import { ITEMS_PER_PAGE } from '../constants';
 import EmptyState from '../components/EmptyState';
 import CardSkeleton from '../components/CardSkeleton';
+import useResourceManagement from '../hooks/useResourceManagement';
 
 const LinksPage = () => {
-  const [links, setLinks] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [isSaving, setIsSaving] = useState(false);
-  const [searchTerm, setSearchTerm] = useState('');
-  const [isFormModalOpen, setIsFormModalOpen] = useState(false);
-  const [linkToEdit, setLinkToEdit] = useState(null);
-  const [isConfirmModalOpen, setIsConfirmModalOpen] = useState(false);
-  const [linkToDelete, setLinkToDelete] = useState(null);
   const [detailsToShow, setDetailsToShow] = useState(null);
-  const debouncedSearchTerm = useDebounce(searchTerm, 300);
-  const [page, setPage] = useState(0);
-  const [totalCount, setTotalCount] = useState(0);
-  const [sortConfig, setSortConfig] = useState({ key: 'name', direction: 'asc' });
 
-  const fetchLinks = useCallback(async () => {
-    setLoading(true);
-    try {
-      // 1. A contagem agora passa o termo da busca para o backend.
-      const { data: count, error: countError } = await supabase.rpc('count_links', { p_search_term: debouncedSearchTerm });
-      if (countError) throw countError;
-      setTotalCount(count || 0);
+  // [CORREÇÃO] A função de busca agora está "memorizada" pelo useCallback com um array de dependências vazio,
+  // garantindo que ela seja criada apenas uma vez e não cause um loop infinito no hook.
+  const fetchLinksFn = useCallback(async ({ page, itemsPerPage, searchTerm, sortConfig }) => {
+    const from = page * itemsPerPage;
+    const to = from + itemsPerPage - 1;
 
-      const from = page * ITEMS_PER_PAGE;
-      const to = from + ITEMS_PER_PAGE - 1;
+    const { data: count, error: countError } = await supabase.rpc('count_links', { p_search_term: searchTerm });
+    if (countError) return { error: countError };
 
-      let query = supabase.from('system_links').select('*');
-
-      // 2. A filtragem também é feita no backend.
-      if (debouncedSearchTerm) {
-        query = query.or(`name.ilike.%${debouncedSearchTerm}%,description.ilike.%${debouncedSearchTerm}%`);
-      }
-
-      query = query.order(sortConfig.key, { ascending: sortConfig.direction === 'asc' }).range(from, to);
-      
-      const { data, error } = await query;
-      if (error) throw error;
-      
-      setLinks(data || []);
-    } catch (error) {
-      toast.error(handleSupabaseError(error));
-    } finally {
-      setLoading(false);
+    let query = supabase.from('system_links').select('*');
+    if (searchTerm) {
+      query = query.or(`name.ilike.%${searchTerm}%,description.ilike.%${searchTerm}%`);
     }
-  }, [page, sortConfig, debouncedSearchTerm]);
+    query = query.order(sortConfig.key, { ascending: sortConfig.direction === 'asc' }).range(from, to);
+    
+    const { data, error: dataError } = await query;
+    if (dataError) return { error: dataError };
+    
+    return { data, count };
+  }, []);
 
-  useEffect(() => { fetchLinks(); }, [fetchLinks]);
-  useEffect(() => { setPage(0); }, [debouncedSearchTerm]);
+  const {
+    data: links,
+    loading,
+    isSaving,
+    setIsSaving,
+    isModalOpen,
+    itemToEdit: linkToEdit,
+    isConfirmModalOpen,
+    itemToDelete: linkToDelete,
+    page,
+    setPage,
+    totalCount,
+    searchTerm,
+    setSearchTerm,
+    sortConfig,
+    fetchData: fetchLinks,
+    handleOpenModal,
+    handleCloseModal,
+    handleStartDelete: startDeleteLink,
+    handleCloseConfirmModal,
+    requestSort,
+  } = useResourceManagement({ key: 'name', direction: 'asc' }, fetchLinksFn);
 
-  const toggleSortDirection = () => {
-    setSortConfig(prev => ({
-      ...prev,
-      direction: prev.direction === 'asc' ? 'desc' : 'asc'
-    }));
-    setPage(0);
-  };
-  
   const handleSaveLink = async (formData) => {
     setIsSaving(true);
     const payload = {
@@ -87,58 +77,39 @@ const LinksPage = () => {
       toast.error(handleSupabaseError(error));
     } else {
       toast.success(`Link ${linkToEdit ? 'atualizado' : 'criado'}!`);
-      setIsFormModalOpen(false);
-      setLinkToEdit(null);
+      handleCloseModal();
       fetchLinks();
     }
     setIsSaving(false);
-  };
-
-  const startDeleteLink = (link) => {
-    setLinkToDelete(link);
-    setIsConfirmModalOpen(true);
   };
 
   const confirmDeleteLink = async () => {
     if (!linkToDelete) return;
     setIsSaving(true);
     const { error } = await supabase.rpc('delete_link', { p_link_id: linkToDelete.id });
-    if (error) {
-      toast.error(handleSupabaseError(error));
-    } else {
-      toast.success('Link apagado.');
-      fetchLinks();
-    }
+    if (error) toast.error(handleSupabaseError(error));
+    else { toast.success('Link apagado.'); fetchLinks(); }
     setIsSaving(false);
-    setIsConfirmModalOpen(false);
-    setLinkToDelete(null);
+    handleCloseConfirmModal();
+  };
+
+  const toggleSortDirection = () => {
+    requestSort(sortConfig.key);
   };
 
   const totalPages = Math.ceil(totalCount / ITEMS_PER_PAGE);
 
   return (
     <div className={styles.container}>
-      <Modal isOpen={isFormModalOpen} onClose={() => setIsFormModalOpen(false)} title={linkToEdit ? 'Editar Link' : 'Adicionar Novo Link'}>
-        <LinkForm onSave={handleSaveLink} onClose={() => setIsFormModalOpen(false)} linkToEdit={linkToEdit} loading={isSaving} />
+      <Modal isOpen={isModalOpen} onClose={handleCloseModal} title={linkToEdit ? 'Editar Link' : 'Adicionar Novo Link'}>
+        <LinkForm onSave={handleSaveLink} onClose={handleCloseModal} linkToEdit={linkToEdit} loading={isSaving} />
       </Modal>
 
-      <ConfirmationModal
-        isOpen={isConfirmModalOpen}
-        onClose={() => setIsConfirmModalOpen(false)}
-        onConfirm={confirmDeleteLink}
-        title="Confirmar Exclusão"
-        loading={isSaving}
-      >
+      <ConfirmationModal isOpen={isConfirmModalOpen} onClose={handleCloseConfirmModal} onConfirm={confirmDeleteLink} title="Confirmar Exclusão" loading={isSaving}>
         <p>Tem certeza que deseja apagar o link para <strong>{linkToDelete?.name}</strong>?</p>
       </ConfirmationModal>
 
-      <DetailsModal
-        isOpen={!!detailsToShow}
-        onClose={() => setDetailsToShow(null)}
-        title={detailsToShow?.name}
-        description={detailsToShow?.description}
-        content={detailsToShow?.details}
-      />
+      <DetailsModal isOpen={!!detailsToShow} onClose={() => setDetailsToShow(null)} title={detailsToShow?.name} content={detailsToShow?.details} />
 
       <header className={styles.header}>
         <h1>Links Úteis</h1>
@@ -147,7 +118,7 @@ const LinksPage = () => {
           <Button onClick={toggleSortDirection} variant="secondary" title="Alterar Ordem">
             {sortConfig.direction === 'asc' ? <FaSortAlphaDown /> : <FaSortAlphaUp />}
           </Button>
-          <Button onClick={() => { setLinkToEdit(null); setIsFormModalOpen(true); }}><FaPlus /> Novo Link</Button>
+          <Button onClick={() => handleOpenModal(null)}><FaPlus /> Novo Link</Button>
         </div>
       </header>
 
@@ -172,7 +143,7 @@ const LinksPage = () => {
                 )}
               </div>
               <div className={styles.cardFooter}>
-                <button className={styles.actionButton} onClick={() => { setLinkToEdit(link); setIsFormModalOpen(true); }}><FaEdit /> Editar</button>
+                <button className={styles.actionButton} onClick={() => handleOpenModal(link)}><FaEdit /> Editar</button>
                 <button className={styles.actionButton} onClick={() => startDeleteLink(link)}><FaTrashAlt /> Apagar</button>
               </div>
             </div>
@@ -180,10 +151,10 @@ const LinksPage = () => {
         ) : (
           <EmptyState
             icon={FaLink}
-            title={debouncedSearchTerm ? "Nenhum resultado" : "Nenhum link"}
+            title={searchTerm ? "Nenhum resultado" : "Nenhum link"}
             message={
-              debouncedSearchTerm
-                ? <>Nenhum link encontrado para a busca <strong>"{debouncedSearchTerm}"</strong>.</>
+              searchTerm
+                ? <>Nenhum link encontrado para a busca <strong>"{searchTerm}"</strong>.</>
                 : "Ainda não há links úteis cadastrados."
             }
           />
