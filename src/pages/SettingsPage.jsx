@@ -1,5 +1,5 @@
-// Arquivo: src/pages/SettingsPage.jsx
-// MELHORIA (v5): Removida a exibição da "chave" da lista de configurações para uma interface mais limpa.
+// path: src/pages/SettingsPage.jsx
+// CORREÇÃO (v1.1): Adicionadas as importações em falta para EmptyState e o ícone FaCommentDots.
 
 import React, { useState, useEffect, useCallback } from 'react';
 import { useTheme } from '../context/ThemeContext';
@@ -11,8 +11,10 @@ import AppSettingForm from '../components/AppSettingForm';
 import Modal from '../components/Modal';
 import ConfirmationModal from '../components/ConfirmationModal';
 import PromptModal from '../components/PromptModal';
-import { FaTrash, FaEdit, FaPlus } from 'react-icons/fa';
+import { FaTrash, FaEdit, FaPlus, FaCommentDots } from 'react-icons/fa'; // Ícone importado
 import { handleSupabaseError } from '../utils/errorHandler';
+import MessageTemplateForm from '../components/MessageTemplateForm';
+import EmptyState from '../components/EmptyState'; // Componente importado
 
 const CORE_SETTINGS = ['agency_name', 'agency_dh', 'agency_mcu', 'agency_sto', 'agency_address'];
 
@@ -31,6 +33,13 @@ const SettingsPage = () => {
   const [themeToDelete, setThemeToDelete] = useState(null);
   const [isDeleting, setIsDeleting] = useState(false);
 
+  // Estados para os modelos de mensagem
+  const [messageTemplates, setMessageTemplates] = useState([]);
+  const [isTemplateModalOpen, setIsTemplateModalOpen] = useState(false);
+  const [templateToEdit, setTemplateToEdit] = useState(null);
+  const [isTemplateConfirmOpen, setIsTemplateConfirmOpen] = useState(false);
+  const [templateToDelete, setTemplateToDelete] = useState(null);
+
   const fetchSettings = useCallback(async () => {
     setLoading(true);
     const { data: themes, error: themesError } = await supabase.from('user_themes').select('*');
@@ -41,17 +50,21 @@ const SettingsPage = () => {
     if (settingsError) toast.error(handleSupabaseError(settingsError));
     else setAppSettings(settings || []);
     
+    const { data: templates, error: templatesError } = await supabase.rpc('get_message_templates');
+    if (templatesError) toast.error(handleSupabaseError(templatesError));
+    else setMessageTemplates(templates || []);
+
     setLoading(false);
   }, []);
 
   useEffect(() => { fetchSettings(); }, [fetchSettings]);
   useEffect(() => { setCurrentColors(theme); }, [theme]);
 
+  // Funções para as configurações da agência
   const handleOpenSettingModal = (setting = null) => {
     setSettingToEdit(setting);
     setIsSettingModalOpen(true);
   };
-
   const handleSaveSetting = async (formData) => {
     setLoading(true);
     const { error } = await supabase.rpc('create_or_update_app_setting', {
@@ -61,12 +74,10 @@ const SettingsPage = () => {
     else { toast.success('Configuração salva!'); setIsSettingModalOpen(false); fetchSettings(); }
     setLoading(false);
   };
-
   const startDeleteSetting = (setting) => {
     setSettingToDelete(setting);
     setIsSettingConfirmOpen(true);
   };
-
   const confirmDeleteSetting = async () => {
     if (!settingToDelete) return;
     setIsDeleting(true);
@@ -78,6 +89,7 @@ const SettingsPage = () => {
     setSettingToDelete(null);
   };
   
+  // Funções para os temas
   const confirmSaveTheme = async (themeName) => {
     if (savedThemes.length >= 3 && !savedThemes.find(t => t.theme_name === themeName)) {
       toast.error('Você pode salvar no máximo 3 temas. Apague um para salvar um novo.');
@@ -90,12 +102,10 @@ const SettingsPage = () => {
     setIsPromptModalOpen(false);
     setLoading(false);
   };
-
   const startDeleteTheme = (theme) => {
     setThemeToDelete(theme);
     setIsThemeConfirmOpen(true);
   };
-
   const confirmDeleteTheme = async () => {
     if (!themeToDelete) return;
     setIsDeleting(true);
@@ -106,12 +116,38 @@ const SettingsPage = () => {
     setIsThemeConfirmOpen(false);
     setThemeToDelete(null);
   };
-
   const handleColorChange = (e) => {
     const { name, value } = e.target;
     const newColors = { ...currentColors, [name]: value };
     setCurrentColors(newColors);
     applyTheme(newColors);
+  };
+
+  // Funções para os modelos de mensagem
+  const handleOpenTemplateModal = (template = null) => {
+    setTemplateToEdit(template);
+    setIsTemplateModalOpen(true);
+  };
+  const handleSaveTemplate = async (formData) => {
+    setLoading(true);
+    const { error } = await supabase.rpc('create_or_update_message_template', formData);
+    if (error) toast.error(handleSupabaseError(error));
+    else { toast.success('Modelo de mensagem salvo!'); setIsTemplateModalOpen(false); fetchSettings(); }
+    setLoading(false);
+  };
+  const startDeleteTemplate = (template) => {
+    setTemplateToDelete(template);
+    setIsTemplateConfirmOpen(true);
+  };
+  const confirmDeleteTemplate = async () => {
+    if (!templateToDelete) return;
+    setIsDeleting(true);
+    const { error } = await supabase.rpc('delete_message_template', { p_id: templateToDelete.id });
+    if (error) toast.error(handleSupabaseError(error));
+    else { toast.success('Modelo apagado.'); fetchSettings(); }
+    setIsDeleting(false);
+    setIsTemplateConfirmOpen(false);
+    setTemplateToDelete(null);
   };
 
   const colorInputs = Object.keys(defaultTheme).filter(key => !key.includes('hover'));
@@ -121,33 +157,19 @@ const SettingsPage = () => {
       <Modal isOpen={isSettingModalOpen} onClose={() => setIsSettingModalOpen(false)} title={settingToEdit ? 'Editar Configuração' : 'Nova Configuração'}>
         <AppSettingForm onSave={handleSaveSetting} onClose={() => setIsSettingModalOpen(false)} settingToEdit={settingToEdit} loading={loading} />
       </Modal>
-
-      <PromptModal
-        isOpen={isPromptModalOpen}
-        onClose={() => setIsPromptModalOpen(false)}
-        onSave={confirmSaveTheme}
-        title="Salvar Tema"
-        label="Digite um nome para o seu tema"
-        placeholder="Ex: Meu Tema Azul"
-        loading={loading}
-      />
-
-      <ConfirmationModal
-        isOpen={isSettingConfirmOpen}
-        onClose={() => setIsSettingConfirmOpen(false)}
-        onConfirm={confirmDeleteSetting}
-        title="Confirmar Exclusão" loading={isDeleting}
-      >
+      <PromptModal isOpen={isPromptModalOpen} onClose={() => setIsPromptModalOpen(false)} onSave={confirmSaveTheme} title="Salvar Tema" label="Digite um nome para o seu tema" placeholder="Ex: Meu Tema Azul" loading={loading} />
+      <ConfirmationModal isOpen={isSettingConfirmOpen} onClose={() => setIsSettingConfirmOpen(false)} onConfirm={confirmDeleteSetting} title="Confirmar Exclusão" loading={isDeleting}>
         <p>Tem certeza que deseja apagar a configuração <strong>{settingToDelete?.label || settingToDelete?.key}</strong>?</p>
       </ConfirmationModal>
-
-      <ConfirmationModal
-        isOpen={isThemeConfirmOpen}
-        onClose={() => setIsThemeConfirmOpen(false)}
-        onConfirm={confirmDeleteTheme}
-        title="Confirmar Exclusão" loading={isDeleting}
-      >
+      <ConfirmationModal isOpen={isThemeConfirmOpen} onClose={() => setIsThemeConfirmOpen(false)} onConfirm={confirmDeleteTheme} title="Confirmar Exclusão" loading={isDeleting}>
         <p>Tem certeza que deseja apagar o tema <strong>{themeToDelete?.theme_name}</strong>?</p>
+      </ConfirmationModal>
+
+      <Modal isOpen={isTemplateModalOpen} onClose={() => setIsTemplateModalOpen(false)} title={templateToEdit ? 'Editar Modelo' : 'Novo Modelo de Mensagem'}>
+        <MessageTemplateForm onSave={handleSaveTemplate} onClose={() => setIsTemplateModalOpen(false)} templateToEdit={templateToEdit} loading={loading} />
+      </Modal>
+      <ConfirmationModal isOpen={isTemplateConfirmOpen} onClose={() => setIsTemplateConfirmOpen(false)} onConfirm={confirmDeleteTemplate} title="Confirmar Exclusão" loading={isDeleting}>
+        <p>Tem certeza que deseja apagar o modelo <strong>{templateToDelete?.name}</strong>?</p>
       </ConfirmationModal>
 
       <h1>Configurações</h1>
@@ -169,18 +191,36 @@ const SettingsPage = () => {
                     </div>
                     <div className={styles.settingActions}>
                         <button onClick={() => handleOpenSettingModal(setting)} title="Editar"><FaEdit /></button>
-                        <button 
-                          onClick={() => startDeleteSetting(setting)} 
-                          className={styles.deleteButton}
-                          disabled={isCore}
-                          title={isCore ? "Esta configuração não pode ser apagada" : "Apagar configuração"}
-                        >
+                        <button onClick={() => startDeleteSetting(setting)} className={styles.deleteButton} disabled={isCore} title={isCore ? "Esta configuração não pode ser apagada" : "Apagar configuração"}>
                           <FaTrash />
                         </button>
                     </div>
                 </div>
               )
             })}
+        </div>
+      </div>
+
+      <div className={styles.section}>
+        <div className={styles.sectionHeader}>
+          <h2>Modelos de Mensagem</h2>
+          <Button onClick={() => handleOpenTemplateModal()}><FaPlus /> Novo Modelo</Button>
+        </div>
+        <div className={styles.settingsList}>
+          {loading ? <p>Carregando modelos...</p> : messageTemplates.length > 0 ? messageTemplates.map(template => (
+            <div key={template.id} className={styles.settingItem}>
+              <div className={styles.settingInfo}>
+                <strong>{template.name}</strong>
+                <em className={styles.templateContent}>{template.content}</em>
+              </div>
+              <div className={styles.settingActions}>
+                <button onClick={() => handleOpenTemplateModal(template)} title="Editar"><FaEdit /></button>
+                <button onClick={() => startDeleteTemplate(template)} className={styles.deleteButton} title="Apagar modelo"><FaTrash /></button>
+              </div>
+            </div>
+          )) : (
+            <EmptyState icon={FaCommentDots} title="Nenhum modelo" message="Crie modelos de mensagem para agilizar as notificações." />
+          )}
         </div>
       </div>
 

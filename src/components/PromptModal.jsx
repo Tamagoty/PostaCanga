@@ -1,11 +1,14 @@
 // path: src/components/PromptModal.jsx
-// MELHORIA: Adicionada a prop `isTextarea` para permitir a inserção de textos mais longos.
+// FUNCIONALIDADE: Adicionado um dropdown para selecionar modelos de mensagem.
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import Modal from './Modal';
 import Button from './Button';
 import Input from './Input';
 import styles from './PromptModal.module.css';
+import { supabase } from '../lib/supabase';
+import { handleSupabaseError } from '../utils/errorHandler';
+import toast from 'react-hot-toast';
 
 const PromptModal = ({
   isOpen,
@@ -16,14 +19,40 @@ const PromptModal = ({
   placeholder = '',
   loading = false,
   confirmText = 'Salvar',
-  isTextarea = false, // Nova prop para alternar entre input e textarea
+  isTextarea = false,
 }) => {
   const [inputValue, setInputValue] = useState('');
+  const [templates, setTemplates] = useState([]);
+
+  // Busca os modelos de mensagem quando o modal é aberto
+  useEffect(() => {
+    if (isOpen && isTextarea) {
+      const fetchTemplates = async () => {
+        const { data, error } = await supabase.rpc('get_message_templates');
+        if (error) {
+          toast.error(handleSupabaseError(error));
+        } else {
+          setTemplates(data || []);
+        }
+      };
+      fetchTemplates();
+    }
+  }, [isOpen, isTextarea]);
+
+  const handleTemplateChange = (e) => {
+    const templateId = e.target.value;
+    if (templateId) {
+      const selectedTemplate = templates.find(t => t.id === templateId);
+      if (selectedTemplate) {
+        setInputValue(selectedTemplate.content);
+      }
+    } else {
+      setInputValue('');
+    }
+  };
 
   const handleSave = (e) => {
     e.preventDefault();
-    // A validação .trim() permite que mensagens vazias (apenas com espaços) sejam consideradas como "não preenchidas"
-    // e a mensagem padrão seja enviada.
     onSave(inputValue.trim());
     setInputValue('');
   };
@@ -35,6 +64,18 @@ const PromptModal = ({
   return (
     <Modal isOpen={isOpen} onClose={onClose} title={title}>
       <form onSubmit={handleSave} className={styles.form}>
+        {isTextarea && templates.length > 0 && (
+          <div className={styles.formGroup}>
+            <label htmlFor="template-select" className={styles.label}>Usar um modelo</label>
+            <select id="template-select" onChange={handleTemplateChange} className={styles.templateSelect} defaultValue="">
+              <option value="">-- Selecione um modelo --</option>
+              {templates.map(template => (
+                <option key={template.id} value={template.id}>{template.name}</option>
+              ))}
+            </select>
+          </div>
+        )}
+
         {isTextarea ? (
           <div className={styles.formGroup}>
             <label htmlFor="prompt-input" className={styles.label}>{label}</label>

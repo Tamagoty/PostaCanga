@@ -1,4 +1,6 @@
-/* Arquivo: src/components/CustomerForm.module.css */
+/* path: src/components/CustomerForm.module.css */
+/* MELHORIA: Adicionados estilos para o spinner de carregamento do CEP */
+
 .form {
   display: flex;
   flex-direction: column;
@@ -44,7 +46,7 @@
   gap: 0.5rem;
 }
 
-.cepGroup > div {
+.cepGroup > div { /* O container do Input */
   flex-grow: 1;
 }
 
@@ -57,7 +59,7 @@
   display: inline-block;
   box-sizing: border-box;
   animation: rotation 1s linear infinite;
-  margin-bottom: 0.5rem;
+  margin-bottom: 0.5rem; /* Alinha com a base do input */
 }
 
 @keyframes rotation {
@@ -96,7 +98,6 @@
   margin-top: 1rem;
 }
 
-/* Novos estilos */
 .searchWrapper {
   position: relative;
 }

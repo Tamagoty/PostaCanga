@@ -1,6 +1,5 @@
 // path: src/components/CustomerForm.jsx
-// CORREÇÃO (v4.4): Corrigido o array de dependências do useEffect
-// envolvendo a função fetchAddressOptions com useCallback.
+// MELHORIA (v4.5): Adicionado um spinner de carregamento visual durante a busca por CEP.
 
 import React, { useState, useEffect, useCallback } from "react";
 import styles from "./CustomerForm.module.css";
@@ -30,9 +29,6 @@ const CustomerForm = ({ onSave, onClose, customerToEdit, loading }) => {
   const debouncedCep = useDebounce(cep, 500);
   const debouncedContactSearch = useDebounce(contactSearch, 500);
 
-  // [CORREÇÃO] A função foi envolvida com useCallback.
-  // Isso a "memoriza", evitando que seja recriada a cada renderização,
-  // o que nos permite adicioná-la ao array de dependências do useEffect com segurança.
   const fetchAddressOptions = useCallback(async () => {
     const { data: addresses, error } = await supabase
       .from("addresses")
@@ -79,7 +75,7 @@ const CustomerForm = ({ onSave, onClose, customerToEdit, loading }) => {
     if (debouncedCep) {
         autoFetchAddress();
     }
-  }, [debouncedCep, fetchAddressOptions]); // [CORREÇÃO] fetchAddressOptions foi adicionado aqui.
+  }, [debouncedCep, fetchAddressOptions]);
 
   useEffect(() => {
     const searchContacts = async () => {
@@ -103,7 +99,7 @@ const CustomerForm = ({ onSave, onClose, customerToEdit, loading }) => {
 
   useEffect(() => {
     fetchAddressOptions();
-  }, [fetchAddressOptions]); // [CORREÇÃO] fetchAddressOptions foi adicionado aqui.
+  }, [fetchAddressOptions]);
 
   useEffect(() => {
     if (customerToEdit) {
@@ -211,6 +207,7 @@ const CustomerForm = ({ onSave, onClose, customerToEdit, loading }) => {
         <legend>Endereço</legend>
         <div className={styles.cepGroup}>
           <Input id="cep-lookup" name="cep-lookup" label="Buscar Endereço por CEP" value={cep} onChange={(e) => setCep(e.target.value)} />
+          {/* [MELHORIA] Adicionado o spinner de carregamento */}
           {cepLoading && <div className={styles.loader}></div>}
         </div>
 

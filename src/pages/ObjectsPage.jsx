@@ -1,5 +1,6 @@
 // path: src/pages/ObjectsPage.jsx
-// FUNCIONALIDADE (v1.5): Adicionado modal para inserir mensagem extra nas notificações do WhatsApp.
+// FUNCIONALIDADE (v1.6): Implementada a substituição de variáveis dinâmicas
+// nos modelos de mensagem antes de enviar as notificações.
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { supabase } from '../lib/supabase';
@@ -20,7 +21,30 @@ import { ITEMS_PER_PAGE } from '../constants';
 import jsPDF from 'jspdf';
 import 'jspdf-autotable';
 import useDebounce from '../hooks/useDebounce';
-import PromptModal from '../components/PromptModal'; // Importar o novo modal
+import PromptModal from '../components/PromptModal';
+
+// Função para substituir as variáveis dinâmicas num modelo de texto
+const replaceVariables = (template, object) => {
+    if (!template || !object) return template;
+    
+    const deadline = new Date(object.storage_deadline);
+    deadline.setDate(deadline.getDate() + 1);
+    
+    const today = new Date();
+    today.setHours(0,0,0,0);
+    const prazoFinal = new Date(object.storage_deadline);
+    prazoFinal.setHours(0,0,0,0);
+    
+    const diffTime = prazoFinal - today;
+    const diffDays = Math.max(0, Math.ceil(diffTime / (1000 * 60 * 60 * 24)));
+
+    return template
+        .replace(/{{NOME_CLIENTE}}/g, object.recipient_name)
+        .replace(/{{DIAS_RESTANTES}}/g, diffDays)
+        .replace(/{{DATA_PRAZO}}/g, deadline.toLocaleDateString('pt-BR'))
+        .replace(/{{TIPO_OBJETO}}/g, object.object_type)
+        .replace(/{{CODIGO_RASTREIO}}/g, object.tracking_code || 'N/A');
+};
 
 const getWhatsAppMessage = (object, extraMessage = '') => {
   const agencyName = import.meta.env.VITE_AGENCY_NAME || "Agência dos Correios";
@@ -62,35 +86,24 @@ const ObjectsPage = () => {
   const textareaRef = useRef(null);
   const debouncedSearchTerm = useDebounce(searchTerm, 500);
 
-  // Estados para o fluxo de notificação
   const [isNotifyModalOpen, setIsNotifyModalOpen] = useState(false);
-  const [notificationContext, setNotificationContext] = useState(null); // { type: 'single' | 'bulk', object?: any }
+  const [notificationContext, setNotificationContext] = useState(null);
 
   const loadInitialData = useCallback(async () => {
     setLoading(true);
     try {
       let objectQuery = supabase.from('objects').select('*, addresses:delivery_address_id(*, city:cities(name, state:states(uf)))');
-      
       objectQuery = showArchived ? objectQuery.eq('is_archived', true) : objectQuery.eq('is_archived', false);
-
       if (debouncedSearchTerm) {
         const isNumeric = /^\d+$/.test(debouncedSearchTerm);
-        let orConditions = [
-          `recipient_name.ilike.%${debouncedSearchTerm}%`,
-          `tracking_code.ilike.%${debouncedSearchTerm}%`
-        ];
-        if (isNumeric) {
-          orConditions.push(`control_number.eq.${debouncedSearchTerm}`);
-        }
+        let orConditions = [`recipient_name.ilike.%${debouncedSearchTerm}%`, `tracking_code.ilike.%${debouncedSearchTerm}%`];
+        if (isNumeric) { orConditions.push(`control_number.eq.${debouncedSearchTerm}`); }
         objectQuery = objectQuery.or(orConditions.join(','));
       }
-
       const { data: objectsData, error: objectsError } = await objectQuery.order(sortConfig.key, { ascending: sortConfig.direction === 'asc' });
       if (objectsError) throw objectsError;
-      
       const currentObjects = objectsData || [];
       setObjects(currentObjects);
-
       if (currentObjects.length > 0) {
         const recipientNames = [...new Set(currentObjects.map(obj => obj.recipient_name))];
         const { data: phoneData, error: phoneError } = await supabase.rpc('get_phones_for_recipients', { p_recipient_names: recipientNames });
@@ -177,12 +190,8 @@ const ObjectsPage = () => {
   const handleRevertStatus = async (controlNumber) => {
     const toastId = toast.loading('Revertendo status do objeto...');
     const { error } = await supabase.rpc('revert_object_status', { p_control_number: controlNumber });
-    if (error) {
-      toast.error(handleSupabaseError(error), { id: toastId });
-    } else {
-      toast.success('Status revertido para "Aguardando Retirada"!', { id: toastId });
-      loadInitialData();
-    }
+    if (error) { toast.error(handleSupabaseError(error), { id: toastId }); }
+    else { toast.success('Status revertido para "Aguardando Retirada"!', { id: toastId }); loadInitialData(); }
   };
 
   const handleSelectObject = (controlNumber) => {
@@ -223,14 +232,15 @@ const ObjectsPage = () => {
     setIsNotifyModalOpen(true);
   };
 
-  const handleSendNotifications = (extraMessage) => {
+  const handleSendNotifications = (rawMessageFromModal) => {
     if (!notificationContext) return;
 
     if (notificationContext.type === 'single') {
       const object = notificationContext.object;
+      const personalizedExtraMessage = replaceVariables(rawMessageFromModal, object);
       const phone = contactMap[object.recipient_name];
       if (!phone) { toast.error('Nenhum contato válido encontrado.'); return; }
-      const message = getWhatsAppMessage(object, extraMessage);
+      const message = getWhatsAppMessage(object, personalizedExtraMessage);
       const url = `https://wa.me/55${phone.replace(/\D/g, '')}?text=${encodeURIComponent(message)}`;
       window.open(url, '_blank');
     } else if (notificationContext.type === 'bulk') {
@@ -239,7 +249,8 @@ const ObjectsPage = () => {
       objectsToNotify.forEach(object => {
         const phone = contactMap[object.recipient_name];
         if (phone) {
-          const message = getWhatsAppMessage(object, extraMessage);
+          const personalizedExtraMessage = replaceVariables(rawMessageFromModal, object);
+          const message = getWhatsAppMessage(object, personalizedExtraMessage);
           const url = `https://wa.me/55${phone.replace(/\D/g, '')}?text=${encodeURIComponent(message)}`;
           linksHTML += `<div id="${object.control_number}" class="container" onclick="ocultarDiv(this)"><a href="${url}" target="_blank"><div class="imagem"><img src="https://i.imgur.com/S5h76II.png" alt="Ícone de mensagem" /><div class="texto">${object.control_number}</div></div></a></div>`;
         }
@@ -293,46 +304,19 @@ const ObjectsPage = () => {
 
   return (
     <div className={styles.container}>
-      <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} title={objectToEdit ? 'Editar Objeto' : 'Adicionar Novo Objeto'}>
-        <ObjectForm onSave={handleSaveObject} onClose={() => setIsModalOpen(false)} objectToEdit={objectToEdit} loading={isSaving} />
-      </Modal>
-
-      <Modal isOpen={isBulkSimpleModalOpen} onClose={() => setIsBulkSimpleModalOpen(false)} title="Inserir Objetos Simples em Massa">
-        <BulkObjectForm onSave={handleBulkSave} onClose={() => setIsBulkSimpleModalOpen(false)} loading={isSaving} />
-      </Modal>
-
-      <Modal isOpen={isBulkRegisteredModalOpen} onClose={() => setIsBulkRegisteredModalOpen(false)} title="Inserir Objetos Registrados em Massa">
-        <BulkRegisteredForm onSave={handleBulkRegisteredSave} onClose={() => setIsBulkRegisteredModalOpen(false)} loading={isSaving} />
-      </Modal>
-
-      <Modal isOpen={isReportModalOpen} onClose={() => setIsReportModalOpen(false)} title="Relatório de Inserção">
-        <div className={styles.reportContainer}>
-          <table className={styles.reportTable}>
-            <thead><tr><th>Destinatário</th><th>Cód. Rastreio</th><th>N° Controle</th></tr></thead>
-            <tbody>
-              {bulkReportData.map(item => (
-                <tr key={item.number}><td>{item.name}</td><td>{item.code || '-'}</td><td><strong>{item.number}</strong></td></tr>
-              ))}
-            </tbody>
-          </table>
-          <div className={styles.reportActions}>
-            <Button onClick={generatePDF} variant="secondary"><FaFilePdf /> Gerar PDF</Button>
-            <Button onClick={() => setIsReportModalOpen(false)}>Fechar</Button>
-          </div>
-        </div>
-      </Modal>
-
-      <Modal isOpen={isExportModalOpen} onClose={() => setIsExportModalOpen(false)} title="Exportar Códigos de Rastreamento">
-        <textarea ref={textareaRef} value={codesToExport} readOnly className={styles.exportTextarea} />
-        <div className={styles.exportActions}><Button onClick={copyToClipboard}><FaCopy /> Copiar</Button></div>
-      </Modal>
-
+      {/* Modais existentes... */}
+      <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} title={objectToEdit ? 'Editar Objeto' : 'Adicionar Novo Objeto'}><ObjectForm onSave={handleSaveObject} onClose={() => setIsModalOpen(false)} objectToEdit={objectToEdit} loading={isSaving} /></Modal>
+      <Modal isOpen={isBulkSimpleModalOpen} onClose={() => setIsBulkSimpleModalOpen(false)} title="Inserir Objetos Simples em Massa"><BulkObjectForm onSave={handleBulkSave} onClose={() => setIsBulkSimpleModalOpen(false)} loading={isSaving} /></Modal>
+      <Modal isOpen={isBulkRegisteredModalOpen} onClose={() => setIsBulkRegisteredModalOpen(false)} title="Inserir Objetos Registrados em Massa"><BulkRegisteredForm onSave={handleBulkRegisteredSave} onClose={() => setIsBulkRegisteredModalOpen(false)} loading={isSaving} /></Modal>
+      <Modal isOpen={isReportModalOpen} onClose={() => setIsReportModalOpen(false)} title="Relatório de Inserção"><div className={styles.reportContainer}><table className={styles.reportTable}><thead><tr><th>Destinatário</th><th>Cód. Rastreio</th><th>N° Controle</th></tr></thead><tbody>{bulkReportData.map(item => (<tr key={item.number}><td>{item.name}</td><td>{item.code || '-'}</td><td><strong>{item.number}</strong></td></tr>))}</tbody></table><div className={styles.reportActions}><Button onClick={generatePDF} variant="secondary"><FaFilePdf /> Gerar PDF</Button><Button onClick={() => setIsReportModalOpen(false)}>Fechar</Button></div></div></Modal>
+      <Modal isOpen={isExportModalOpen} onClose={() => setIsExportModalOpen(false)} title="Exportar Códigos de Rastreamento"><textarea ref={textareaRef} value={codesToExport} readOnly className={styles.exportTextarea} /><div className={styles.exportActions}><Button onClick={copyToClipboard}><FaCopy /> Copiar</Button></div></Modal>
+      
       <PromptModal
         isOpen={isNotifyModalOpen}
         onClose={() => setIsNotifyModalOpen(false)}
         onSave={handleSendNotifications}
         title="Adicionar Mensagem Extra"
-        label="Digite uma mensagem adicional (opcional)"
+        label="Selecione um modelo ou digite uma mensagem"
         placeholder="Ex: Aproveite a nossa promoção!"
         confirmText="Enviar Notificações"
         isTextarea={true}
@@ -392,17 +376,8 @@ const ObjectsPage = () => {
                             <>
                               {hasContact && obj.status === 'Aguardando Retirada' && (<button className={`${styles.actionButton} ${styles.whatsapp}`} title="Notificar via WhatsApp" onClick={() => startNotificationProcess('single', obj)}><FaWhatsapp /></button>)}
                               <button className={styles.actionButton} title="Editar" onClick={() => { setObjectToEdit(obj); setIsModalOpen(true); }}><FaEdit /></button>
-                              
-                              {obj.status === 'Aguardando Retirada' && (
-                                <>
-                                  <button className={`${styles.actionButton} ${styles.deliver}`} title="Entregar" onClick={() => updateObjectStatus(obj.control_number, 'deliver')}><FaCheckCircle /></button>
-                                  <button className={`${styles.actionButton} ${styles.return}`} title="Devolver" onClick={() => updateObjectStatus(obj.control_number, 'return')}><FaUndoAlt /></button>
-                                </>
-                              )}
-                              
-                              {(obj.status === 'Entregue' || obj.status === 'Devolvido') && (
-                                <button className={styles.actionButton} title="Reverter Status" onClick={() => handleRevertStatus(obj.control_number)}><FaUndo /></button>
-                              )}
+                              {obj.status === 'Aguardando Retirada' && (<><button className={`${styles.actionButton} ${styles.deliver}`} title="Entregar" onClick={() => updateObjectStatus(obj.control_number, 'deliver')}><FaCheckCircle /></button><button className={`${styles.actionButton} ${styles.return}`} title="Devolver" onClick={() => updateObjectStatus(obj.control_number, 'return')}><FaUndoAlt /></button></>)}
+                              {(obj.status === 'Entregue' || obj.status === 'Devolvido') && (<button className={styles.actionButton} title="Reverter Status" onClick={() => handleRevertStatus(obj.control_number)}><FaUndo /></button>)}
                             </>
                           )}
                         </div>
@@ -416,11 +391,7 @@ const ObjectsPage = () => {
                     <EmptyState 
                       icon={FaBoxOpen}
                       title={searchTerm ? "Nenhum resultado" : "Nenhum objeto"}
-                      message={
-                        searchTerm
-                          ? <>Nenhum objeto encontrado para a busca <strong>"{searchTerm}"</strong>.</>
-                          : "Ainda não há objetos nesta seção."
-                      }
+                      message={searchTerm ? <>Nenhum objeto encontrado para a busca <strong>"{searchTerm}"</strong>.</> : "Ainda não há objetos nesta seção."}
                     />
                   </td>
                 </tr>
