@@ -1,8 +1,9 @@
-// src/components/ObjectForm.jsx
-// CORREÇÃO: Componente reconstruído com a lógica correta para adicionar/editar um objeto.
+// path: src/components/ObjectForm.jsx
+// CORREÇÃO (v1.1): Alterada a importação de CSS para usar os estilos do CustomerForm,
+// garantindo a consistência visual do formulário.
 
 import React, { useState, useEffect, useCallback } from 'react';
-import styles from './ObjectForm.module.css';
+import styles from './CustomerForm.module.css'; // <-- [CORREÇÃO] Alterado para usar o CSS do CustomerForm
 import Input from './Input';
 import Button from './Button';
 import toast from 'react-hot-toast';
@@ -23,14 +24,12 @@ const ObjectForm = ({ onSave, onClose, objectToEdit, loading }) => {
   });
   const [objectTypes, setObjectTypes] = useState([]);
 
-  // Busca os tipos de objeto para preencher o seletor
   const fetchObjectTypes = useCallback(async () => {
     const { data, error } = await supabase.from('object_types').select('name').order('name');
     if (error) {
       toast.error(handleSupabaseError(error));
     } else if (data) {
       setObjectTypes(data.map(item => item.name));
-      // Define um valor padrão se não estiver a editar
       if (!objectToEdit && data.length > 0) {
         setFormData(prev => ({ ...prev, object_type: data[0].name }));
       }
@@ -41,7 +40,6 @@ const ObjectForm = ({ onSave, onClose, objectToEdit, loading }) => {
     fetchObjectTypes();
   }, [fetchObjectTypes]);
 
-  // Preenche o formulário se estiver no modo de edição
   useEffect(() => {
     if (objectToEdit) {
       setFormData({
