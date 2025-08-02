@@ -1,28 +1,23 @@
 // path: src/components/ObjectForm.jsx
-// CORREÇÃO (v1.1): Alterada a importação de CSS para usar os estilos do CustomerForm,
-// garantindo a consistência visual do formulário.
+// FUNCIONALIDADE: Adicionada a sugestão de clientes com nomes similares.
 
 import React, { useState, useEffect, useCallback } from 'react';
-import styles from './CustomerForm.module.css'; // <-- [CORREÇÃO] Alterado para usar o CSS do CustomerForm
+import styles from './CustomerForm.module.css'; // Reutilizando estilos
 import Input from './Input';
 import Button from './Button';
 import toast from 'react-hot-toast';
 import { supabase } from '../lib/supabase';
 import { handleSupabaseError } from '../utils/errorHandler';
+import useDebounce from '../hooks/useDebounce';
 
 const ObjectForm = ({ onSave, onClose, objectToEdit, loading }) => {
   const [formData, setFormData] = useState({
-    recipient_name: '',
-    object_type: '',
-    tracking_code: '',
-    street_name: '',
-    number: '',
-    neighborhood: '',
-    city: '',
-    state: '',
-    cep: ''
+    recipient_name: '', object_type: '', tracking_code: '', street_name: '',
+    number: '', neighborhood: '', city: '', state: '', cep: ''
   });
   const [objectTypes, setObjectTypes] = useState([]);
+  const [customerSuggestions, setCustomerSuggestions] = useState([]);
+  const debouncedRecipientName = useDebounce(formData.recipient_name, 500);
 
   const fetchObjectTypes = useCallback(async () => {
     const { data, error } = await supabase.from('object_types').select('name').order('name');
@@ -40,17 +35,32 @@ const ObjectForm = ({ onSave, onClose, objectToEdit, loading }) => {
     fetchObjectTypes();
   }, [fetchObjectTypes]);
 
+  // Efeito para buscar sugestões de clientes
+  useEffect(() => {
+    const getSuggestions = async () => {
+      if (debouncedRecipientName.length < 3) {
+        setCustomerSuggestions([]);
+        return;
+      }
+      const { data, error } = await supabase.rpc('suggest_customers', { p_search_term: debouncedRecipientName });
+      if (error) {
+        // Não mostra erro, apenas não mostra sugestões
+        console.error(error);
+        setCustomerSuggestions([]);
+      } else {
+        setCustomerSuggestions(data || []);
+      }
+    };
+    getSuggestions();
+  }, [debouncedRecipientName]);
+
   useEffect(() => {
     if (objectToEdit) {
       setFormData({
-        recipient_name: objectToEdit.recipient_name || '',
-        object_type: objectToEdit.object_type || '',
-        tracking_code: objectToEdit.tracking_code || '',
-        street_name: objectToEdit.addresses?.street_name || '',
-        number: objectToEdit.address_number || '',
-        neighborhood: objectToEdit.addresses?.neighborhood || '',
-        city: objectToEdit.addresses?.city?.name || '',
-        state: objectToEdit.addresses?.city?.state?.uf || '',
+        recipient_name: objectToEdit.recipient_name || '', object_type: objectToEdit.object_type || '',
+        tracking_code: objectToEdit.tracking_code || '', street_name: objectToEdit.addresses?.street_name || '',
+        number: objectToEdit.address_number || '', neighborhood: objectToEdit.addresses?.neighborhood || '',
+        city: objectToEdit.addresses?.city?.name || '', state: objectToEdit.addresses?.city?.state?.uf || '',
         cep: objectToEdit.addresses?.cep || ''
       });
     }
@@ -59,6 +69,11 @@ const ObjectForm = ({ onSave, onClose, objectToEdit, loading }) => {
   const handleChange = (e) => {
     const { name, value } = e.target;
     setFormData(prev => ({ ...prev, [name]: value }));
+  };
+
+  const handleSelectSuggestion = (suggestion) => {
+    setFormData(prev => ({ ...prev, recipient_name: suggestion.full_name }));
+    setCustomerSuggestions([]);
   };
 
   const handleSubmit = (e) => {
@@ -74,7 +89,18 @@ const ObjectForm = ({ onSave, onClose, objectToEdit, loading }) => {
     <form onSubmit={handleSubmit} className={styles.form}>
       <fieldset className={styles.fieldset}>
         <legend>Dados do Objeto</legend>
-        <Input id="recipient_name" name="recipient_name" label="Nome do Destinatário" value={formData.recipient_name} onChange={handleChange} required />
+        <div className={styles.searchWrapper}>
+            <Input id="recipient_name" name="recipient_name" label="Nome do Destinatário" value={formData.recipient_name} onChange={handleChange} required autoComplete="off" />
+            {customerSuggestions.length > 0 && (
+              <ul className={styles.searchResults}>
+                {customerSuggestions.map((suggestion) => (
+                  <li key={suggestion.id} onClick={() => handleSelectSuggestion(suggestion)}>
+                    {suggestion.full_name}
+                  </li>
+                ))}
+              </ul>
+            )}
+        </div>
         <div className={styles.formGroup}>
           <label htmlFor="object_type">Tipo de Objeto</label>
           <select id="object_type" name="object_type" value={formData.object_type} onChange={handleChange} className={styles.select} required>
@@ -88,7 +114,7 @@ const ObjectForm = ({ onSave, onClose, objectToEdit, loading }) => {
       </fieldset>
 
       <fieldset className={styles.fieldset}>
-        <legend>Endereço de Entrega (Opcional, para objetos não cadastrados)</legend>
+        <legend>Endereço de Entrega (Opcional)</legend>
         <Input id="street_name" name="street_name" label="Rua / Logradouro" value={formData.street_name} onChange={handleChange} />
         <div className={styles.grid}>
           <Input id="number" name="number" label="Número" value={formData.number} onChange={handleChange} />

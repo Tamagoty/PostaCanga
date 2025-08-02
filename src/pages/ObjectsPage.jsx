@@ -1,12 +1,11 @@
 // path: src/pages/ObjectsPage.jsx
-// FUNCIONALIDADE (v1.6): Implementada a substituição de variáveis dinâmicas
-// nos modelos de mensagem antes de enviar as notificações.
+// FUNCIONALIDADE (v1.8): Melhorada a funcionalidade de sugestão de clientes com busca no modal.
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { supabase } from '../lib/supabase';
 import toast from 'react-hot-toast';
 import styles from './ObjectsPage.module.css';
-import { FaSearch, FaPlus, FaEdit, FaCheckCircle, FaUndoAlt, FaWhatsapp, FaArchive, FaHistory, FaPaperPlane, FaPhone, FaPhoneSlash, FaBoxOpen, FaCopy, FaBoxes, FaArrowUp, FaArrowDown, FaFilePdf, FaUndo } from 'react-icons/fa';
+import { FaSearch, FaPlus, FaEdit, FaCheckCircle, FaUndoAlt, FaWhatsapp, FaArchive, FaHistory, FaPaperPlane, FaPhone, FaPhoneSlash, FaBoxOpen, FaCopy, FaBoxes, FaArrowUp, FaArrowDown, FaFilePdf, FaUndo, FaLink } from 'react-icons/fa';
 import Input from '../components/Input';
 import Button from '../components/Button';
 import Modal from '../components/Modal';
@@ -22,29 +21,7 @@ import jsPDF from 'jspdf';
 import 'jspdf-autotable';
 import useDebounce from '../hooks/useDebounce';
 import PromptModal from '../components/PromptModal';
-
-// Função para substituir as variáveis dinâmicas num modelo de texto
-const replaceVariables = (template, object) => {
-    if (!template || !object) return template;
-    
-    const deadline = new Date(object.storage_deadline);
-    deadline.setDate(deadline.getDate() + 1);
-    
-    const today = new Date();
-    today.setHours(0,0,0,0);
-    const prazoFinal = new Date(object.storage_deadline);
-    prazoFinal.setHours(0,0,0,0);
-    
-    const diffTime = prazoFinal - today;
-    const diffDays = Math.max(0, Math.ceil(diffTime / (1000 * 60 * 60 * 24)));
-
-    return template
-        .replace(/{{NOME_CLIENTE}}/g, object.recipient_name)
-        .replace(/{{DIAS_RESTANTES}}/g, diffDays)
-        .replace(/{{DATA_PRAZO}}/g, deadline.toLocaleDateString('pt-BR'))
-        .replace(/{{TIPO_OBJETO}}/g, object.object_type)
-        .replace(/{{CODIGO_RASTREIO}}/g, object.tracking_code || 'N/A');
-};
+import SuggestionModal from '../components/SuggestionModal';
 
 const getWhatsAppMessage = (object, extraMessage = '') => {
   const agencyName = import.meta.env.VITE_AGENCY_NAME || "Agência dos Correios";
@@ -66,6 +43,25 @@ const getWhatsAppMessage = (object, extraMessage = '') => {
   return introMessage + messageBody + extraContent + disclaimer;
 };
 
+const replaceVariables = (template, object) => {
+    if (!template || !object) return template;
+    const deadline = new Date(object.storage_deadline);
+    deadline.setDate(deadline.getDate() + 1);
+    const today = new Date();
+    today.setHours(0,0,0,0);
+    const prazoFinal = new Date(object.storage_deadline);
+    prazoFinal.setHours(0,0,0,0);
+    const diffTime = prazoFinal - today;
+    const diffDays = Math.max(0, Math.ceil(diffTime / (1000 * 60 * 60 * 24)));
+
+    return template
+        .replace(/{{NOME_CLIENTE}}/g, object.recipient_name)
+        .replace(/{{DIAS_RESTANTES}}/g, diffDays)
+        .replace(/{{DATA_PRAZO}}/g, deadline.toLocaleDateString('pt-BR'))
+        .replace(/{{TIPO_OBJETO}}/g, object.object_type)
+        .replace(/{{CODIGO_RASTREIO}}/g, object.tracking_code || 'N/A');
+};
+
 const ObjectsPage = () => {
   const [objects, setObjects] = useState([]);
   const [contactMap, setContactMap] = useState({});
@@ -85,9 +81,14 @@ const ObjectsPage = () => {
   const [sortConfig, setSortConfig] = useState({ key: 'arrival_date', direction: 'desc' });
   const textareaRef = useRef(null);
   const debouncedSearchTerm = useDebounce(searchTerm, 500);
-
   const [isNotifyModalOpen, setIsNotifyModalOpen] = useState(false);
   const [notificationContext, setNotificationContext] = useState(null);
+  const [suggestionState, setSuggestionState] = useState({
+    isOpen: false,
+    object: null,
+    suggestions: [],
+    loading: false,
+  });
 
   const loadInitialData = useCallback(async () => {
     setLoading(true);
@@ -119,7 +120,7 @@ const ObjectsPage = () => {
     }
   }, [showArchived, sortConfig, debouncedSearchTerm]);
 
-  useEffect(() => { loadInitialData(); setSelectedObjects(new Set()); }, [loadInitialData]);
+  useEffect(() => { loadInitialData(); }, [loadInitialData]);
 
   const handleSaveObject = async (formData) => {
     setIsSaving(true);
@@ -234,7 +235,6 @@ const ObjectsPage = () => {
 
   const handleSendNotifications = (rawMessageFromModal) => {
     if (!notificationContext) return;
-
     if (notificationContext.type === 'single') {
       const object = notificationContext.object;
       const personalizedExtraMessage = replaceVariables(rawMessageFromModal, object);
@@ -256,9 +256,7 @@ const ObjectsPage = () => {
         }
       });
       if (!linksHTML) { toast.error('Nenhum contato válido encontrado para os objetos selecionados.'); return; }
-      
       const fullHtml = `<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8" /><title>Notificações WhatsApp</title><style>body{background:linear-gradient(to bottom left,#1a1d24,#272b35);min-height:100vh;font-family:sans-serif;padding:20px;margin:0}.grid-container{display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:20px}.container{cursor:pointer;text-align:center;transition:opacity .3s,transform .3s}.imagem{position:relative;display:inline-block}img{width:120px;border-radius:15px;box-shadow:0 4px 15px rgba(0,0,0,.4)}.texto{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);color:#fff;font-size:1.5rem;font-weight:700;text-shadow:2px 2px 4px rgba(0,0,0,.7)}a{text-decoration:none}.hidden{opacity:.2;transform:scale(.9);pointer-events:none}</style></head><body><div class="grid-container">${linksHTML}</div><script>function ocultarDiv(e){e.classList.add("hidden")}</script></body></html>`;
-      
       const blob = new Blob([fullHtml], { type: 'text/html' });
       const url = URL.createObjectURL(blob);
       const link = document.createElement('a');
@@ -266,12 +264,10 @@ const ObjectsPage = () => {
       link.setAttribute('download', 'notificacoes_whatsapp.html');
       document.body.appendChild(link);
       link.click();
-      
       document.body.removeChild(link);
       URL.revokeObjectURL(url);
       toast.success('Arquivo de notificações gerado!');
     }
-
     setIsNotifyModalOpen(false);
     setNotificationContext(null);
   };
@@ -300,26 +296,60 @@ const ObjectsPage = () => {
     doc.save(`relatorio_${new Date().toISOString().split('T')[0]}.pdf`);
   };
 
-  const filteredObjects = objects;
+  const handleOpenSuggestions = async (object) => {
+    setSuggestionState({ isOpen: true, object, suggestions: [], loading: true });
+    const { data, error } = await supabase.rpc('suggest_customer_links', { p_search_term: object.recipient_name });
+    if (error) {
+      toast.error(handleSupabaseError(error));
+      setSuggestionState({ isOpen: true, object, suggestions: [], loading: false });
+    } else {
+      setSuggestionState({ isOpen: true, object, suggestions: data || [], loading: false });
+    }
+  };
+
+  const handleSuggestionSearch = useCallback(async (term) => {
+    setSuggestionState(prev => ({ ...prev, loading: true }));
+    const { data, error } = await supabase.rpc('suggest_customer_links', { p_search_term: term });
+    if (error) {
+      toast.error(handleSupabaseError(error));
+      setSuggestionState(prev => ({ ...prev, suggestions: [], loading: false }));
+    } else {
+      setSuggestionState(prev => ({ ...prev, suggestions: data || [], loading: false }));
+    }
+  }, []);
+
+  const handleLinkObject = async (customerId) => {
+    setIsSaving(true);
+    const { error } = await supabase.rpc('link_object_to_customer', {
+      p_control_number: suggestionState.object.control_number,
+      p_customer_id: customerId
+    });
+    if (error) {
+      toast.error(handleSupabaseError(error));
+    } else {
+      toast.success('Objeto associado com sucesso!');
+      setSuggestionState({ isOpen: false, object: null, suggestions: [], loading: false });
+      loadInitialData();
+    }
+    setIsSaving(false);
+  };
 
   return (
     <div className={styles.container}>
-      {/* Modais existentes... */}
       <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} title={objectToEdit ? 'Editar Objeto' : 'Adicionar Novo Objeto'}><ObjectForm onSave={handleSaveObject} onClose={() => setIsModalOpen(false)} objectToEdit={objectToEdit} loading={isSaving} /></Modal>
       <Modal isOpen={isBulkSimpleModalOpen} onClose={() => setIsBulkSimpleModalOpen(false)} title="Inserir Objetos Simples em Massa"><BulkObjectForm onSave={handleBulkSave} onClose={() => setIsBulkSimpleModalOpen(false)} loading={isSaving} /></Modal>
       <Modal isOpen={isBulkRegisteredModalOpen} onClose={() => setIsBulkRegisteredModalOpen(false)} title="Inserir Objetos Registrados em Massa"><BulkRegisteredForm onSave={handleBulkRegisteredSave} onClose={() => setIsBulkRegisteredModalOpen(false)} loading={isSaving} /></Modal>
       <Modal isOpen={isReportModalOpen} onClose={() => setIsReportModalOpen(false)} title="Relatório de Inserção"><div className={styles.reportContainer}><table className={styles.reportTable}><thead><tr><th>Destinatário</th><th>Cód. Rastreio</th><th>N° Controle</th></tr></thead><tbody>{bulkReportData.map(item => (<tr key={item.number}><td>{item.name}</td><td>{item.code || '-'}</td><td><strong>{item.number}</strong></td></tr>))}</tbody></table><div className={styles.reportActions}><Button onClick={generatePDF} variant="secondary"><FaFilePdf /> Gerar PDF</Button><Button onClick={() => setIsReportModalOpen(false)}>Fechar</Button></div></div></Modal>
       <Modal isOpen={isExportModalOpen} onClose={() => setIsExportModalOpen(false)} title="Exportar Códigos de Rastreamento"><textarea ref={textareaRef} value={codesToExport} readOnly className={styles.exportTextarea} /><div className={styles.exportActions}><Button onClick={copyToClipboard}><FaCopy /> Copiar</Button></div></Modal>
-      
-      <PromptModal
-        isOpen={isNotifyModalOpen}
-        onClose={() => setIsNotifyModalOpen(false)}
-        onSave={handleSendNotifications}
-        title="Adicionar Mensagem Extra"
-        label="Selecione um modelo ou digite uma mensagem"
-        placeholder="Ex: Aproveite a nossa promoção!"
-        confirmText="Enviar Notificações"
-        isTextarea={true}
+      <PromptModal isOpen={isNotifyModalOpen} onClose={() => setIsNotifyModalOpen(false)} onSave={handleSendNotifications} title="Adicionar Mensagem Extra" label="Selecione um modelo ou digite uma mensagem" placeholder="Ex: Aproveite a nossa promoção!" confirmText="Enviar Notificações" isTextarea={true} />
+      <SuggestionModal
+        isOpen={suggestionState.isOpen}
+        onClose={() => setSuggestionState({ isOpen: false, object: null, suggestions: [], loading: false })}
+        object={suggestionState.object}
+        suggestions={suggestionState.suggestions}
+        onLink={handleLinkObject}
+        onSearch={handleSuggestionSearch}
+        loading={isSaving || suggestionState.loading}
       />
 
       <header className={styles.header}>
@@ -338,28 +368,27 @@ const ObjectsPage = () => {
       
       <div className={styles.tableContainer}>
         {loading ? (
-          <TableSkeleton columns={showArchived ? 5 : 6} rows={ITEMS_PER_PAGE} />
+          <TableSkeleton columns={6} rows={ITEMS_PER_PAGE} />
         ) : (
           <table className={styles.table}>
             <thead>
               <tr>
                 {!showArchived && <th className={styles.checkboxCell}><input type="checkbox" onChange={handleSelectAll} /></th>}
-                <th onClick={() => requestSort('control_number')} className={styles.sortableHeader}>N° Controle {getSortIcon('control_number')}</th>
-                <th onClick={() => requestSort('recipient_name')} className={styles.sortableHeader}>Destinatário {getSortIcon('recipient_name')}</th>
+                <th onClick={() => requestSort('control_number')} className={styles.sortableHeader}>N° Controle</th>
+                <th onClick={() => requestSort('recipient_name')} className={styles.sortableHeader}>Destinatário</th>
                 <th>Endereço</th>
                 <th>Prazo de Guarda</th>
                 <th>Ações</th>
               </tr>
             </thead>
             <tbody>
-              {filteredObjects.length > 0 ? (
-                filteredObjects.map(obj => {
+              {objects.map(obj => {
                   const hasContact = !!contactMap[obj.recipient_name];
-                  const addressText = obj.delivery_street_name 
-                    ? obj.delivery_street_name 
-                    : (obj.addresses ? obj.addresses.street_name : 'Não informado');
+                  const addressText = obj.addresses 
+                    ? `${obj.addresses.street_name}, ${obj.address_number || 'S/N'}`
+                    : (obj.delivery_street_name ? `${obj.delivery_street_name}, ${obj.delivery_address_number || 'S/N'}` : 'Não informado');
                   return (
-                    <tr key={obj.control_number} className={selectedObjects.has(obj.control_number) ? styles.selectedRow : ''}>
+                    <tr key={obj.control_number}>
                       {!showArchived && <td className={styles.checkboxCell}>{obj.status === 'Aguardando Retirada' && <input type="checkbox" checked={selectedObjects.has(obj.control_number)} onChange={() => handleSelectObject(obj.control_number)} />}</td>}
                       <td data-label="N° Controle">{obj.control_number}</td>
                       <td data-label="Destinatário">
@@ -374,6 +403,11 @@ const ObjectsPage = () => {
                         <div className={styles.actionButtons}>
                           {obj.is_archived ? (<button className={styles.actionButton} title="Recuperar Objeto" onClick={() => handleUnarchive(obj.control_number)}><FaHistory /></button>) : (
                             <>
+                              {!obj.customer_id && obj.status === 'Aguardando Retirada' && (
+                                <button className={`${styles.actionButton} ${styles.link}`} title="Sugerir e Associar Cliente" onClick={() => handleOpenSuggestions(obj)}>
+                                  <FaLink />
+                                </button>
+                              )}
                               {hasContact && obj.status === 'Aguardando Retirada' && (<button className={`${styles.actionButton} ${styles.whatsapp}`} title="Notificar via WhatsApp" onClick={() => startNotificationProcess('single', obj)}><FaWhatsapp /></button>)}
                               <button className={styles.actionButton} title="Editar" onClick={() => { setObjectToEdit(obj); setIsModalOpen(true); }}><FaEdit /></button>
                               {obj.status === 'Aguardando Retirada' && (<><button className={`${styles.actionButton} ${styles.deliver}`} title="Entregar" onClick={() => updateObjectStatus(obj.control_number, 'deliver')}><FaCheckCircle /></button><button className={`${styles.actionButton} ${styles.return}`} title="Devolver" onClick={() => updateObjectStatus(obj.control_number, 'return')}><FaUndoAlt /></button></>)}
@@ -384,18 +418,7 @@ const ObjectsPage = () => {
                       </td>
                     </tr>
                   )
-                })
-              ) : (
-                <tr>
-                  <td colSpan={showArchived ? 5 : 6}>
-                    <EmptyState 
-                      icon={FaBoxOpen}
-                      title={searchTerm ? "Nenhum resultado" : "Nenhum objeto"}
-                      message={searchTerm ? <>Nenhum objeto encontrado para a busca <strong>"{searchTerm}"</strong>.</> : "Ainda não há objetos nesta seção."}
-                    />
-                  </td>
-                </tr>
-              )}
+                })}
             </tbody>
           </table>
         )}

@@ -1,4 +1,4 @@
-/* Arquivo: src/pages/ObjectsPage.module.css */
+/* path: src/pages/ObjectsPage.module.css */
 .container {
   display: flex;
   flex-direction: column;
@@ -138,6 +138,7 @@
 .actionButton.whatsapp:hover { color: #25D366; }
 .actionButton.deliver:hover { color: var(--accent-secondary); }
 .actionButton.return:hover { color: var(--accent-danger); }
+.actionButton.link:hover { color: #f59e0b; } /* Cor para o novo botão */
 
 @media (min-width: 900px) {
   .header { flex-direction: row; justify-content: space-between; align-items: center; }
