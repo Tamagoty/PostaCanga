@@ -1,8 +1,9 @@
 // path: src/hooks/useResourceManagement.js
-// REATORAÇÃO (v2): O hook agora é mais flexível e recebe uma função de busca (fetcher)
-// como argumento, permitindo que seja usado com diferentes lógicas de busca de dados (tabelas, RPCs, etc.).
+// DESCRIÇÃO: Hook customizado para gerir a lógica de CRUD (Create, Read, Update, Delete),
+// paginação, busca e ordenação para qualquer recurso do Supabase.
 
 import { useState, useEffect, useCallback } from 'react';
+import { supabase } from '../lib/supabase';
 import toast from 'react-hot-toast';
 import { handleSupabaseError } from '../utils/errorHandler';
 import useDebounce from './useDebounce';
@@ -26,6 +27,7 @@ const useResourceManagement = (initialSortConfig, fetcher) => {
   const fetchData = useCallback(async () => {
     setLoading(true);
     try {
+      // O hook agora chama a função 'fetcher' que foi passada como argumento
       const result = await fetcher({
         page,
         itemsPerPage: ITEMS_PER_PAGE,

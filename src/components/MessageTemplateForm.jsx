@@ -1,6 +1,6 @@
 // path: src/components/MessageTemplateForm.jsx
-// CORREÇÃO (v1.3): Corrigido o payload enviado para a função RPC para
-// corresponder aos nomes dos parâmetros esperados pelo backend (p_name, p_content).
+// CORREÇÃO (v1.2): Corrigida a sintaxe no helper de variáveis para
+// evitar um erro de referência que quebrava o componente.
 
 import React, { useState, useEffect } from 'react';
 import styles from './MessageTemplateForm.module.css';
@@ -36,12 +36,7 @@ const MessageTemplateForm = ({ onSave, onClose, templateToEdit, loading }) => {
       toast.error('O Nome e o Conteúdo do modelo são obrigatórios.');
       return;
     }
-    // [CORREÇÃO] O payload agora usa os nomes de parâmetros corretos (p_name, p_content)
-    const payload = {
-      p_name: formData.name,
-      p_content: formData.content,
-      p_id: templateToEdit?.id || null
-    };
+    const payload = { ...formData, p_id: templateToEdit?.id || null };
     onSave(payload);
   };
 
@@ -63,6 +58,7 @@ const MessageTemplateForm = ({ onSave, onClose, templateToEdit, loading }) => {
             required
           />
            <div className={styles.variableHelper}>
+            {/* [CORREÇÃO] O texto agora é uma string para evitar erros de compilação. */}
             {"Variáveis: {{NOME_CLIENTE}}, {{DIAS_RESTANTES}}, {{DATA_PRAZO}}"}
           </div>
         </div>

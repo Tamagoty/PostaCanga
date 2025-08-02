@@ -1,8 +1,7 @@
-// Arquivo: src/pages/ObjectTypesPage.jsx
-// CORREÇÃO (v4.1): Ajustado o payload da chamada RPC para corresponder
-// aos nomes dos parâmetros esperados pela função SQL.
+// path: src/pages/ObjectTypesPage.jsx
+// CORREÇÃO: A página foi corrigida para usar a nova assinatura do hook useResourceManagement.
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useCallback } from 'react';
 import { supabase } from '../lib/supabase';
 import toast from 'react-hot-toast';
 import styles from './SuppliesPage.module.css';
@@ -14,35 +13,37 @@ import ConfirmationModal from '../components/ConfirmationModal';
 import { handleSupabaseError } from '../utils/errorHandler';
 import TableSkeleton from '../components/TableSkeleton';
 import EmptyState from '../components/EmptyState';
+import useResourceManagement from '../hooks/useResourceManagement';
 
 const ObjectTypesPage = () => {
-  const [types, setTypes] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [isSaving, setIsSaving] = useState(false);
-  const [isFormModalOpen, setIsFormModalOpen] = useState(false);
-  const [typeToEdit, setTypeToEdit] = useState(null);
-  const [isConfirmModalOpen, setIsConfirmModalOpen] = useState(false);
-  const [typeToDelete, setTypeToDelete] = useState(null);
-  const [isDeleting, setIsDeleting] = useState(false);
-
-  const fetchTypes = useCallback(async () => {
-    setLoading(true);
-    const { data, error } = await supabase.from('object_types').select('*').order('name');
-    if (error) toast.error(handleSupabaseError(error));
-    else setTypes(data);
-    setLoading(false);
+  const fetchTypesFn = useCallback(async ({ sortConfig }) => {
+    const { data, error } = await supabase
+      .from('object_types')
+      .select('*')
+      .order(sortConfig.key, { ascending: sortConfig.direction === 'asc' });
+    
+    if (error) return { error };
+    return { data, count: data?.length || 0 };
   }, []);
 
-  useEffect(() => { fetchTypes(); }, [fetchTypes]);
-
-  const handleOpenModal = (type = null) => {
-    setTypeToEdit(type);
-    setIsFormModalOpen(true);
-  };
+  const {
+    data: types,
+    loading,
+    isSaving,
+    setIsSaving,
+    isModalOpen,
+    itemToEdit: typeToEdit,
+    isConfirmModalOpen,
+    itemToDelete: typeToDelete,
+    fetchData: fetchTypes,
+    handleOpenModal,
+    handleCloseModal,
+    handleStartDelete: startDeleteType,
+    handleCloseConfirmModal,
+  } = useResourceManagement({ key: 'name', direction: 'asc' }, fetchTypesFn);
 
   const handleSaveType = async (formData) => {
     setIsSaving(true);
-    // --- CORREÇÃO APLICADA AQUI ---
     const payload = {
       p_type_id: typeToEdit?.id || null,
       p_name: formData.name,
@@ -50,18 +51,17 @@ const ObjectTypesPage = () => {
     };
     const { error } = await supabase.rpc('create_or_update_object_type', payload);
     if (error) toast.error(handleSupabaseError(error));
-    else { toast.success('Tipo de objeto salvo!'); setIsFormModalOpen(false); fetchTypes(); }
+    else {
+      toast.success('Tipo de objeto salvo!');
+      handleCloseModal();
+      fetchTypes();
+    }
     setIsSaving(false);
-  };
-
-  const startDeleteType = (type) => {
-    setTypeToDelete(type);
-    setIsConfirmModalOpen(true);
   };
 
   const confirmDeleteType = async () => {
     if (!typeToDelete) return;
-    setIsDeleting(true);
+    setIsSaving(true);
     const { error } = await supabase.rpc('delete_object_type', { p_type_id: typeToDelete.id });
     if (error) {
       toast.error(handleSupabaseError(error));
@@ -69,23 +69,22 @@ const ObjectTypesPage = () => {
       toast.success('Tipo apagado.');
       fetchTypes();
     }
-    setIsDeleting(false);
-    setIsConfirmModalOpen(false);
-    setTypeToDelete(null);
+    setIsSaving(false);
+    handleCloseConfirmModal();
   };
 
   return (
     <div className={styles.container}>
-      <Modal isOpen={isFormModalOpen} onClose={() => setIsFormModalOpen(false)} title={typeToEdit ? 'Editar Tipo' : 'Novo Tipo de Objeto'}>
-        <ObjectTypeForm onSave={handleSaveType} onClose={() => setIsFormModalOpen(false)} typeToEdit={typeToEdit} loading={isSaving} />
+      <Modal isOpen={isModalOpen} onClose={handleCloseModal} title={typeToEdit ? 'Editar Tipo' : 'Novo Tipo de Objeto'}>
+        <ObjectTypeForm onSave={handleSaveType} onClose={handleCloseModal} typeToEdit={typeToEdit} loading={isSaving} />
       </Modal>
 
       <ConfirmationModal
         isOpen={isConfirmModalOpen}
-        onClose={() => setIsConfirmModalOpen(false)}
+        onClose={handleCloseConfirmModal}
         onConfirm={confirmDeleteType}
         title="Confirmar Exclusão"
-        loading={isDeleting}
+        loading={isSaving}
       >
         <p>Tem a certeza que deseja apagar o tipo <strong>{typeToDelete?.name}</strong>?</p>
       </ConfirmationModal>

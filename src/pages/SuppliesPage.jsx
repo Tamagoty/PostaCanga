@@ -1,8 +1,7 @@
 // path: src/pages/SuppliesPage.jsx
-// REATORAÇÃO: Página refatorada para usar o hook customizado useResourceManagement,
-// simplificando drasticamente o código e centralizando a lógica de gestão de dados.
+// CORREÇÃO: A página foi corrigida para usar a nova assinatura do hook useResourceManagement.
 
-import React, { useState } from 'react';
+import React, { useState, useCallback } from 'react';
 import { supabase } from '../lib/supabase';
 import toast from 'react-hot-toast';
 import styles from './SuppliesPage.module.css';
@@ -17,12 +16,31 @@ import { handleSupabaseError } from '../utils/errorHandler';
 import { ITEMS_PER_PAGE } from '../constants';
 import EmptyState from '../components/EmptyState';
 import TableSkeleton from '../components/TableSkeleton';
-import useResourceManagement from '../hooks/useResourceManagement'; // 1. Importar o novo hook
+import useResourceManagement from '../hooks/useResourceManagement';
 
 const SuppliesPage = () => {
   const navigate = useNavigate();
 
-  // 2. Usar o hook para gerir o recurso 'office_supplies'
+  // Define a função de busca específica para esta página
+  const fetchSuppliesFn = useCallback(async ({ page, itemsPerPage, searchTerm, sortConfig }) => {
+    const from = page * itemsPerPage;
+    const to = from + itemsPerPage - 1;
+
+    const { data: count, error: countError } = await supabase.rpc('count_supplies', { p_search_term: searchTerm });
+    if (countError) return { error: countError };
+
+    let query = supabase.from('office_supplies').select('*');
+    if (searchTerm) {
+      query = query.ilike('name', `%${searchTerm}%`);
+    }
+    query = query.order(sortConfig.key, { ascending: sortConfig.direction === 'asc' }).range(from, to);
+
+    const { data, error: dataError } = await query;
+    if (dataError) return { error: dataError };
+
+    return { data, count };
+  }, []);
+
   const {
     data: supplies,
     loading,
@@ -40,9 +58,8 @@ const SuppliesPage = () => {
     handleOpenModal: handleOpenEditModal,
     handleCloseModal: handleCloseEditModal,
     requestSort,
-  } = useResourceManagement('office_supplies', 'count_supplies', { key: 'name', direction: 'asc' });
+  } = useResourceManagement({ key: 'name', direction: 'asc' }, fetchSuppliesFn);
 
-  // Estados específicos para o modal de ajuste de stock
   const [isAdjustModalOpen, setIsAdjustModalOpen] = useState(false);
   const [supplyToAdjust, setSupplyToAdjust] = useState(null);
   const [adjustActionType, setAdjustActionType] = useState('add');

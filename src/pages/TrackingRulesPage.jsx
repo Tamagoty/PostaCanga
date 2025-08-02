@@ -1,7 +1,7 @@
-// Arquivo: src/pages/TrackingRulesPage.jsx
-// MELHORIA (v4): Implementado o Skeleton Loader para a tabela.
+// path: src/pages/TrackingRulesPage.jsx
+// CORREÇÃO: A página foi corrigida para usar a nova assinatura do hook useResourceManagement.
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useCallback } from 'react';
 import { supabase } from '../lib/supabase';
 import toast from 'react-hot-toast';
 import styles from './SuppliesPage.module.css';
@@ -13,48 +13,50 @@ import ConfirmationModal from '../components/ConfirmationModal';
 import { handleSupabaseError } from '../utils/errorHandler';
 import TableSkeleton from '../components/TableSkeleton';
 import EmptyState from '../components/EmptyState';
+import useResourceManagement from '../hooks/useResourceManagement';
 
 const TrackingRulesPage = () => {
-  const [rules, setRules] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [isSaving, setIsSaving] = useState(false);
-  const [isFormModalOpen, setIsFormModalOpen] = useState(false);
-  const [ruleToEdit, setRuleToEdit] = useState(null);
-  const [isConfirmModalOpen, setIsConfirmModalOpen] = useState(false);
-  const [ruleToDelete, setRuleToDelete] = useState(null);
-  const [isDeleting, setIsDeleting] = useState(false);
-
-  const fetchRules = useCallback(async () => {
-    setLoading(true);
-    const { data, error } = await supabase.from('tracking_code_rules').select('*').order('prefix');
-    if (error) toast.error(handleSupabaseError(error));
-    else setRules(data);
-    setLoading(false);
+  const fetchRulesFn = useCallback(async ({ sortConfig }) => {
+    const { data, error } = await supabase
+      .from('tracking_code_rules')
+      .select('*')
+      .order(sortConfig.key, { ascending: sortConfig.direction === 'asc' });
+    
+    if (error) return { error };
+    return { data, count: data?.length || 0 };
   }, []);
 
-  useEffect(() => { fetchRules(); }, [fetchRules]);
-
-  const handleOpenModal = (rule = null) => {
-    setRuleToEdit(rule);
-    setIsFormModalOpen(true);
-  };
+  const {
+    data: rules,
+    loading,
+    isSaving,
+    setIsSaving,
+    isModalOpen,
+    itemToEdit: ruleToEdit,
+    isConfirmModalOpen,
+    itemToDelete: ruleToDelete,
+    fetchData: fetchRules,
+    handleOpenModal,
+    handleCloseModal,
+    handleStartDelete: startDeleteRule,
+    handleCloseConfirmModal,
+  } = useResourceManagement({ key: 'prefix', direction: 'asc' }, fetchRulesFn);
 
   const handleSaveRule = async (formData) => {
     setIsSaving(true);
     const { error } = await supabase.rpc('create_or_update_tracking_rule', formData);
     if (error) toast.error(handleSupabaseError(error));
-    else { toast.success('Regra salva com sucesso!'); setIsFormModalOpen(false); fetchRules(); }
+    else {
+      toast.success('Regra salva com sucesso!');
+      handleCloseModal();
+      fetchRules();
+    }
     setIsSaving(false);
-  };
-
-  const startDeleteRule = (rule) => {
-    setRuleToDelete(rule);
-    setIsConfirmModalOpen(true);
   };
 
   const confirmDeleteRule = async () => {
     if (!ruleToDelete) return;
-    setIsDeleting(true);
+    setIsSaving(true);
     const { error } = await supabase.rpc('delete_tracking_rule', { p_rule_id: ruleToDelete.id });
     if (error) {
       toast.error(handleSupabaseError(error));
@@ -62,23 +64,22 @@ const TrackingRulesPage = () => {
       toast.success('Regra apagada.');
       fetchRules();
     }
-    setIsDeleting(false);
-    setIsConfirmModalOpen(false);
-    setRuleToDelete(null);
+    setIsSaving(false);
+    handleCloseConfirmModal();
   };
 
   return (
     <div className={styles.container}>
-      <Modal isOpen={isFormModalOpen} onClose={() => setIsFormModalOpen(false)} title={ruleToEdit ? 'Editar Regra' : 'Nova Regra de Rastreio'}>
-        <TrackingRuleForm onSave={handleSaveRule} onClose={() => setIsFormModalOpen(false)} ruleToEdit={ruleToEdit} loading={isSaving} />
+      <Modal isOpen={isModalOpen} onClose={handleCloseModal} title={ruleToEdit ? 'Editar Regra' : 'Nova Regra de Rastreio'}>
+        <TrackingRuleForm onSave={handleSaveRule} onClose={handleCloseModal} ruleToEdit={ruleToEdit} loading={isSaving} />
       </Modal>
 
       <ConfirmationModal
         isOpen={isConfirmModalOpen}
-        onClose={() => setIsConfirmModalOpen(false)}
+        onClose={handleCloseConfirmModal}
         onConfirm={confirmDeleteRule}
         title="Confirmar Exclusão"
-        loading={isDeleting}
+        loading={isSaving}
       >
         <p>Tem certeza que deseja apagar a regra com o prefixo <strong>{ruleToDelete?.prefix}</strong>?</p>
       </ConfirmationModal>

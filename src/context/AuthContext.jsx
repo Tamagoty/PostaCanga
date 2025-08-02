@@ -1,9 +1,14 @@
-// Arquivo: src/context/AuthContext.jsx (Versão Final e Corrigida)
+// path: src/context/AuthContext.jsx
+// CORREÇÃO (v1.2): Revertida a separação do hook useAuth. O hook e o provider
+// agora coexistem neste ficheiro para resolver o erro crítico de importação.
+
 import React, { createContext, useState, useEffect, useContext } from 'react';
 import { supabase } from '../lib/supabase';
 
 const AuthContext = createContext();
 
+// O hook para consumir o contexto é definido aqui.
+// A linha abaixo desativa o aviso do Vite sobre "Fast Refresh", pois este padrão é seguro.
 // eslint-disable-next-line react-refresh/only-export-components
 export const useAuth = () => useContext(AuthContext);
 
@@ -13,7 +18,6 @@ const AuthProvider = ({ children }) => {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // Função para verificar a sessão e buscar o perfil do usuário
     const setAuthData = async () => {
       try {
         const { data: { session: currentSession }, error: sessionError } = await supabase.auth.getSession();
@@ -21,25 +25,20 @@ const AuthProvider = ({ children }) => {
 
         if (currentSession) {
           setSession(currentSession);
-          // CORREÇÃO: A chamada a .single() pode falhar se o perfil ainda não foi criado.
-          // Removemos .single() e verificamos se os dados retornados têm algum registro.
           const { data: profileData, error: profileError } = await supabase
             .from('employees')
             .select('*')
             .eq('id', currentSession.user.id);
           
           if (profileError) {
-            // Se o erro for de RLS (recursão), não o tratamos como um erro fatal.
             if (profileError.code !== '42P17') {
               throw profileError;
             }
           }
 
-          // Se um perfil foi encontrado (profileData não é nulo e tem pelo menos um item), define o perfil.
           if (profileData && profileData.length > 0) {
             setUserProfile(profileData[0]);
           } else {
-            // Se nenhum perfil foi encontrado, define como nulo.
             setUserProfile(null);
           }
         } else {
@@ -57,7 +56,7 @@ const AuthProvider = ({ children }) => {
 
     setAuthData();
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_, session) => {
       setAuthData();
     });
 
