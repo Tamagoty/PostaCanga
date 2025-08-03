@@ -4,7 +4,7 @@
 -- =============================================================================
 -- DESCRIÇÃO: Script único e consolidado para criar ou atualizar o banco de dados.
 --            Pode ser executado com segurança em ambientes novos ou existentes.
--- VERSÃO FINAL: 2.1 - Corrigida a ordem de exclusão de funções e políticas para garantir idempotência.
+-- VERSÃO FINAL: 2.2 - Adicionadas funções de sugestão de cliente e busca paginada.
 
 --------------------------------------------------------------------------------
 -- 1. EXTENSÕES E FUNÇÕES BASE
@@ -78,6 +78,130 @@ CREATE OR REPLACE FUNCTION delete_message_template(p_id UUID) RETURNS void LANGU
 CREATE OR REPLACE FUNCTION get_customers_for_export() RETURNS JSONB LANGUAGE plpgsql AS $$ DECLARE export_data JSONB; BEGIN SELECT jsonb_agg(t) INTO export_data FROM ( SELECT c.full_name, c.cellphone AS cellphone_to_use, c.is_active, c.birth_date, c.email, a.street_name, c.address_number, a.neighborhood, ci.name AS city_name, s.uf AS state_uf, a.cep, ( SELECT STRING_AGG(dependent.full_name, ', ') FROM public.customers dependent WHERE dependent.contact_customer_id = c.id ) AS associated_contacts FROM public.customers c LEFT JOIN public.addresses a ON c.address_id = a.id LEFT JOIN public.cities ci ON a.city_id = ci.id LEFT JOIN public.states s ON ci.state_id = s.id WHERE c.cellphone IS NOT NULL AND c.cellphone <> '' ) t; RETURN COALESCE(export_data, '[]'::jsonb); END; $$;
 DROP FUNCTION IF EXISTS create_or_update_tracking_rule(integer, text, text, integer);
 CREATE OR REPLACE FUNCTION create_or_update_tracking_rule(p_rule_id INT, p_prefix TEXT, p_object_type TEXT, p_storage_days INT) RETURNS tracking_code_rules LANGUAGE plpgsql SECURITY DEFINER AS $$ DECLARE result_rule tracking_code_rules; BEGIN INSERT INTO public.tracking_code_rules (id, prefix, object_type, storage_days) VALUES (COALESCE(p_rule_id, nextval('tracking_code_rules_id_seq')), p_prefix, p_object_type, p_storage_days) ON CONFLICT (prefix) DO UPDATE SET object_type = EXCLUDED.object_type, storage_days = EXCLUDED.storage_days RETURNING * INTO result_rule; RETURN result_rule; END; $$;
+
+-- =============================================================================
+-- || NOVAS FUNÇÕES OTIMIZADAS                                                ||
+-- =============================================================================
+
+-- Sugestão inteligente de clientes
+DROP FUNCTION IF EXISTS suggest_customer_links(TEXT);
+CREATE OR REPLACE FUNCTION suggest_customer_links(p_search_term TEXT)
+RETURNS TABLE(id UUID, full_name TEXT, address_info TEXT)
+LANGUAGE plpgsql
+AS $$
+DECLARE
+    v_first_name TEXT;
+BEGIN
+    v_first_name := f_unaccent(split_part(p_search_term, ' ', 1));
+    RETURN QUERY
+    SELECT
+        c.id,
+        c.full_name::TEXT,
+        COALESCE(a.street_name || ', ' || a.neighborhood, a.street_name, 'Endereço não cadastrado')::TEXT AS address_info
+    FROM
+        public.customers c
+    LEFT JOIN
+        public.addresses a ON c.address_id = a.id
+    WHERE
+        f_unaccent(c.full_name) LIKE v_first_name || '%'
+        AND
+        similarity(f_unaccent(c.full_name), f_unaccent(p_search_term)) > 0.1
+    ORDER BY
+        similarity(f_unaccent(c.full_name), f_unaccent(p_search_term)) DESC
+    LIMIT 5;
+END;
+$$;
+
+-- Associação de objeto a cliente
+DROP FUNCTION IF EXISTS link_object_to_customer(INT, UUID);
+CREATE OR REPLACE FUNCTION link_object_to_customer(
+    p_control_number INT,
+    p_customer_id UUID
+)
+RETURNS void
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+BEGIN
+    UPDATE public.objects
+    SET
+        customer_id = p_customer_id,
+        recipient_name = (SELECT full_name FROM public.customers WHERE id = p_customer_id)
+    WHERE
+        control_number = p_control_number;
+END;
+$$;
+
+-- Busca paginada de objetos
+DROP FUNCTION IF EXISTS get_paginated_objects(p_search_term TEXT, p_show_archived BOOLEAN, p_sort_key TEXT, p_sort_direction_asc BOOLEAN, p_page_size INT, p_page_offset INT);
+CREATE OR REPLACE FUNCTION get_paginated_objects(
+    p_search_term TEXT,
+    p_show_archived BOOLEAN,
+    p_sort_key TEXT,
+    p_sort_direction_asc BOOLEAN,
+    p_page_size INT,
+    p_page_offset INT
+)
+RETURNS TABLE (
+    control_number INT,
+    recipient_name TEXT,
+    object_type VARCHAR(100),
+    tracking_code VARCHAR(100),
+    status VARCHAR(50),
+    arrival_date DATE,
+    storage_deadline DATE,
+    is_archived BOOLEAN,
+    customer_id UUID,
+    delivery_address_id UUID,
+    created_at TIMESTAMPTZ,
+    updated_at TIMESTAMPTZ,
+    addresses JSONB,
+    total_count BIGINT
+)
+LANGUAGE plpgsql
+AS $$
+BEGIN
+    RETURN QUERY
+    WITH filtered_objects AS (
+        SELECT o.*
+        FROM public.objects o
+        WHERE
+            o.is_archived = p_show_archived
+            AND (
+                p_search_term IS NULL OR p_search_term = '' OR
+                f_unaccent(o.recipient_name) ILIKE '%' || f_unaccent(p_search_term) || '%' OR
+                (o.tracking_code IS NOT NULL AND f_unaccent(o.tracking_code) ILIKE '%' || f_unaccent(p_search_term) || '%') OR
+                (p_search_term ~ '^\d+$' AND o.control_number = p_search_term::INT)
+            )
+    )
+    SELECT
+        fo.control_number,
+        fo.recipient_name::TEXT,
+        fo.object_type,
+        fo.tracking_code,
+        fo.status,
+        fo.arrival_date,
+        fo.storage_deadline,
+        fo.is_archived,
+        fo.customer_id,
+        fo.delivery_address_id,
+        fo.created_at,
+        fo.updated_at,
+        (SELECT to_jsonb(a.*) FROM public.addresses a WHERE a.id = fo.delivery_address_id) as addresses,
+        (SELECT count(*) FROM filtered_objects) as total_count
+    FROM
+        filtered_objects fo
+    ORDER BY
+        CASE WHEN p_sort_key = 'control_number' AND p_sort_direction_asc THEN fo.control_number END ASC,
+        CASE WHEN p_sort_key = 'control_number' AND NOT p_sort_direction_asc THEN fo.control_number END DESC,
+        CASE WHEN p_sort_key = 'recipient_name' AND p_sort_direction_asc THEN fo.recipient_name END ASC,
+        CASE WHEN p_sort_key = 'recipient_name' AND NOT p_sort_direction_asc THEN fo.recipient_name END DESC,
+        fo.arrival_date DESC
+    LIMIT p_page_size
+    OFFSET p_page_offset;
+END;
+$$;
+
 
 --------------------------------------------------------------------------------
 -- 5. ÍNDICES DE PERFORMANCE

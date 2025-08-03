@@ -1,5 +1,5 @@
 // path: src/pages/ObjectsPage.jsx
-// FUNCIONALIDADE (v1.8): Melhorada a funcionalidade de sugestão de clientes com busca no modal.
+// FUNCIONALIDADE (v1.9): Otimizado o carregamento com paginação do lado do servidor.
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { supabase } from '../lib/supabase';
@@ -83,34 +83,41 @@ const ObjectsPage = () => {
   const debouncedSearchTerm = useDebounce(searchTerm, 500);
   const [isNotifyModalOpen, setIsNotifyModalOpen] = useState(false);
   const [notificationContext, setNotificationContext] = useState(null);
-  const [suggestionState, setSuggestionState] = useState({
-    isOpen: false,
-    object: null,
-    suggestions: [],
-    loading: false,
-  });
+  const [suggestionState, setSuggestionState] = useState({ isOpen: false, object: null, suggestions: [], loading: false });
+  
+  // --- Estados para Paginação ---
+  const [currentPage, setCurrentPage] = useState(1);
+  const [totalObjects, setTotalObjects] = useState(0);
 
   const loadInitialData = useCallback(async () => {
     setLoading(true);
     try {
-      let objectQuery = supabase.from('objects').select('*, addresses:delivery_address_id(*, city:cities(name, state:states(uf)))');
-      objectQuery = showArchived ? objectQuery.eq('is_archived', true) : objectQuery.eq('is_archived', false);
-      if (debouncedSearchTerm) {
-        const isNumeric = /^\d+$/.test(debouncedSearchTerm);
-        let orConditions = [`recipient_name.ilike.%${debouncedSearchTerm}%`, `tracking_code.ilike.%${debouncedSearchTerm}%`];
-        if (isNumeric) { orConditions.push(`control_number.eq.${debouncedSearchTerm}`); }
-        objectQuery = objectQuery.or(orConditions.join(','));
-      }
-      const { data: objectsData, error: objectsError } = await objectQuery.order(sortConfig.key, { ascending: sortConfig.direction === 'asc' });
-      if (objectsError) throw objectsError;
-      const currentObjects = objectsData || [];
+      const { data, error } = await supabase.rpc('get_paginated_objects', {
+        p_search_term: debouncedSearchTerm,
+        p_show_archived: showArchived,
+        p_sort_key: sortConfig.key,
+        p_sort_direction_asc: sortConfig.direction === 'asc',
+        p_page_size: ITEMS_PER_PAGE,
+        p_page_offset: (currentPage - 1) * ITEMS_PER_PAGE
+      });
+
+      if (error) throw error;
+
+      const currentObjects = data || [];
       setObjects(currentObjects);
+
       if (currentObjects.length > 0) {
+        // Define a contagem total a partir do primeiro registro (ela é igual para todos)
+        setTotalObjects(currentObjects[0].total_count || 0);
+
+        // Busca os telefones apenas para os destinatários da página atual
         const recipientNames = [...new Set(currentObjects.map(obj => obj.recipient_name))];
         const { data: phoneData, error: phoneError } = await supabase.rpc('get_phones_for_recipients', { p_recipient_names: recipientNames });
         if (phoneError) throw phoneError;
         setContactMap(phoneData || {});
       } else {
+        setObjects([]);
+        setTotalObjects(0);
         setContactMap({});
       }
     } catch (error) {
@@ -118,9 +125,15 @@ const ObjectsPage = () => {
     } finally {
       setLoading(false);
     }
-  }, [showArchived, sortConfig, debouncedSearchTerm]);
+  }, [showArchived, sortConfig, debouncedSearchTerm, currentPage]);
 
   useEffect(() => { loadInitialData(); }, [loadInitialData]);
+  
+  // Reseta para a primeira página ao mudar o filtro de busca ou de arquivados
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [debouncedSearchTerm, showArchived]);
+
 
   const handleSaveObject = async (formData) => {
     setIsSaving(true);
@@ -333,6 +346,8 @@ const ObjectsPage = () => {
     }
     setIsSaving(false);
   };
+  
+  const totalPages = Math.ceil(totalObjects / ITEMS_PER_PAGE);
 
   return (
     <div className={styles.container}>
@@ -369,13 +384,15 @@ const ObjectsPage = () => {
       <div className={styles.tableContainer}>
         {loading ? (
           <TableSkeleton columns={6} rows={ITEMS_PER_PAGE} />
+        ) : objects.length === 0 ? (
+          <EmptyState message="Nenhum objeto encontrado." />
         ) : (
           <table className={styles.table}>
             <thead>
               <tr>
-                {!showArchived && <th className={styles.checkboxCell}><input type="checkbox" onChange={handleSelectAll} /></th>}
-                <th onClick={() => requestSort('control_number')} className={styles.sortableHeader}>N° Controle</th>
-                <th onClick={() => requestSort('recipient_name')} className={styles.sortableHeader}>Destinatário</th>
+                {!showArchived && <th className={styles.checkboxCell}><input type="checkbox" onChange={handleSelectAll} checked={selectedObjects.size > 0 && selectedObjects.size === objects.filter(o => o.status === 'Aguardando Retirada').length} /></th>}
+                <th onClick={() => requestSort('control_number')} className={styles.sortableHeader}>N° Controle {getSortIcon('control_number')}</th>
+                <th onClick={() => requestSort('recipient_name')} className={styles.sortableHeader}>Destinatário {getSortIcon('recipient_name')}</th>
                 <th>Endereço</th>
                 <th>Prazo de Guarda</th>
                 <th>Ações</th>
@@ -385,8 +402,8 @@ const ObjectsPage = () => {
               {objects.map(obj => {
                   const hasContact = !!contactMap[obj.recipient_name];
                   const addressText = obj.addresses 
-                    ? `${obj.addresses.street_name}, ${obj.address_number || 'S/N'}`
-                    : (obj.delivery_street_name ? `${obj.delivery_street_name}, ${obj.delivery_address_number || 'S/N'}` : 'Não informado');
+                    ? `${obj.addresses.street_name}, ${obj.addresses.number || 'S/N'}`
+                    : 'Não informado';
                   return (
                     <tr key={obj.control_number}>
                       {!showArchived && <td className={styles.checkboxCell}>{obj.status === 'Aguardando Retirada' && <input type="checkbox" checked={selectedObjects.has(obj.control_number)} onChange={() => handleSelectObject(obj.control_number)} />}</td>}
@@ -423,6 +440,31 @@ const ObjectsPage = () => {
           </table>
         )}
       </div>
+      
+      {totalObjects > 0 && !loading && (
+        <div className={styles.pagination}>
+            <span className={styles.paginationInfo}>
+                Mostrando {objects.length} de {totalObjects} objetos
+            </span>
+            <div className={styles.paginationControls}>
+                <Button
+                    onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                    disabled={currentPage === 1}
+                    variant="secondary"
+                >
+                    Anterior
+                </Button>
+                <span>Página {currentPage} de {totalPages}</span>
+                <Button
+                    onClick={() => setCurrentPage(p => p + 1)}
+                    disabled={currentPage >= totalPages}
+                    variant="secondary"
+                >
+                    Próxima
+                </Button>
+            </div>
+        </div>
+      )}
     </div>
   );
 };

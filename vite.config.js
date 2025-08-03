@@ -8,13 +8,13 @@ import react from '@vitejs/plugin-react'
 // https://vite.dev/config/
 export default defineConfig({
   plugins: [react()],
-  // Define explicitamente as configurações do servidor de desenvolvimento
   server: {
-    port: 5173, // Garante que o servidor sempre rode nesta porta
+    port: 5173,
     hmr: {
-      // Define explicitamente a porta para o cliente HMR (Hot Module Replacement) se conectar.
-      // Isto resolve bugs em alguns ambientes onde a porta não é inferida corretamente no refresh.
+      protocol: 'ws',
+      host: 'localhost',
       clientPort: 5173,
     },
   },
 })
+

@@ -168,3 +168,23 @@
 .reportTable th, .reportTable td { padding: 0.75rem; text-align: left; border-bottom: 1px solid var(--border-color); }
 .reportTable td strong { font-size: 1.1rem; color: var(--accent-primary); }
 .reportActions { margin-top: 1.5rem; display: flex; justify-content: flex-end; gap: 1rem; }
+
+/* --- Estilos para Paginação --- */
+.pagination {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 1rem;
+  color: var(--text-secondary);
+}
+.paginationControls {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+.paginationControls button {
+  width: auto;
+}
+.paginationInfo {
+    font-size: 0.875rem;
+}
