@@ -1,6 +1,6 @@
 // path: src/pages/ObjectsPage.jsx
-// CORREÇÃO: A chamada da função autoTable foi corrigida para o formato
-// explícito (autoTable(doc, ...)), que é mais robusto com o Vite.
+// MELHORIA: A página foi simplificada. Agora, ela apenas abre o modal de sugestões,
+// que se tornou responsável pela sua própria lógica de busca.
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { supabase } from '../lib/supabase';
@@ -20,7 +20,7 @@ import TableSkeleton from '../components/TableSkeleton';
 import EmptyState from '../components/EmptyState';
 import { ITEMS_PER_PAGE } from '../constants';
 import jsPDF from 'jspdf';
-import autoTable from 'jspdf-autotable'; // Importação corrigida
+import autoTable from 'jspdf-autotable';
 import useDebounce from '../hooks/useDebounce';
 import PromptModal from '../components/PromptModal';
 import SuggestionModal from '../components/SuggestionModal';
@@ -86,7 +86,7 @@ const ObjectsPage = () => {
   const debouncedSearchTerm = useDebounce(searchTerm, 500);
   const [isNotifyModalOpen, setIsNotifyModalOpen] = useState(false);
   const [notificationContext, setNotificationContext] = useState(null);
-  const [suggestionState, setSuggestionState] = useState({ isOpen: false, object: null, suggestions: [], loading: false });
+  const [objectToSuggestFor, setObjectToSuggestFor] = useState(null);
   
   const [currentPage, setCurrentPage] = useState(1);
   const [totalObjects, setTotalObjects] = useState(0);
@@ -343,11 +343,10 @@ const ObjectsPage = () => {
       
       const tableBody = bulkReportData.map(item => [
         item.name,
-        item.code || '-', // Garante que o valor é uma string
+        item.code || '-',
         item.number
       ]);
 
-      // Chamada corrigida
       autoTable(doc, {
         head: [['Destinatário', 'Cód. Rastreio', 'N° Controle']],
         body: tableBody,
@@ -361,39 +360,17 @@ const ObjectsPage = () => {
     }
   };
 
-  const handleOpenSuggestions = async (object) => {
-    setSuggestionState({ isOpen: true, object, suggestions: [], loading: true });
-    const { data, error } = await supabase.rpc('suggest_customer_links', { p_search_term: object.recipient_name });
-    if (error) {
-      toast.error(handleSupabaseError(error));
-      setSuggestionState({ isOpen: true, object, suggestions: [], loading: false });
-    } else {
-      setSuggestionState({ isOpen: true, object, suggestions: data || [], loading: false });
-    }
-  };
-
-  const handleSuggestionSearch = useCallback(async (term) => {
-    setSuggestionState(prev => ({ ...prev, loading: true }));
-    const { data, error } = await supabase.rpc('suggest_customer_links', { p_search_term: term });
-    if (error) {
-      toast.error(handleSupabaseError(error));
-      setSuggestionState(prev => ({ ...prev, suggestions: [], loading: false }));
-    } else {
-      setSuggestionState(prev => ({ ...prev, suggestions: data || [], loading: false }));
-    }
-  }, []);
-
   const handleLinkObject = async (customerId) => {
     setIsSaving(true);
     const { error } = await supabase.rpc('link_object_to_customer', {
-      p_control_number: suggestionState.object.control_number,
+      p_control_number: objectToSuggestFor.control_number,
       p_customer_id: customerId
     });
     if (error) {
       toast.error(handleSupabaseError(error));
     } else {
       toast.success('Objeto associado com sucesso!');
-      setSuggestionState({ isOpen: false, object: null, suggestions: [], loading: false });
+      setObjectToSuggestFor(null);
       loadInitialData();
     }
     setIsSaving(false);
@@ -411,13 +388,11 @@ const ObjectsPage = () => {
       <Modal isOpen={isExportModalOpen} onClose={() => setIsExportModalOpen(false)} title="Exportar Códigos de Rastreamento"><textarea ref={textareaRef} value={codesToExport} readOnly className={styles.exportTextarea} /><div className={styles.exportActions}><Button onClick={copyToClipboard}><FaCopy /> Copiar</Button></div></Modal>
       <PromptModal isOpen={isNotifyModalOpen} onClose={() => setIsNotifyModalOpen(false)} onSave={handleSendNotifications} title="Adicionar Mensagem Extra" label="Selecione um modelo ou digite uma mensagem" placeholder="Ex: Aproveite a nossa promoção!" confirmText="Enviar Notificações" isTextarea={true} />
       <SuggestionModal
-        isOpen={suggestionState.isOpen}
-        onClose={() => setSuggestionState({ isOpen: false, object: null, suggestions: [], loading: false })}
-        object={suggestionState.object}
-        suggestions={suggestionState.suggestions}
+        isOpen={!!objectToSuggestFor}
+        onClose={() => setObjectToSuggestFor(null)}
+        object={objectToSuggestFor}
         onLink={handleLinkObject}
-        onSearch={handleSuggestionSearch}
-        loading={isSaving || suggestionState.loading}
+        loading={isSaving}
       />
 
       <header className={styles.header}>
@@ -456,8 +431,8 @@ const ObjectsPage = () => {
               {objects.map(obj => {
                   const hasContact = !!contactMap[obj.recipient_name];
                   const addressText = obj.delivery_street_name 
-                    ? `${obj.delivery_street_name}, ${obj.delivery_address_number || 'S/N'}`
-                    : (obj.addresses ? `${obj.addresses.street_name}, ${obj.addresses.number || 'S/N'}` : 'Não informado');
+                    ? obj.delivery_street_name 
+                    : (obj.addresses && obj.addresses.street_name ? `${obj.addresses.street_name}, ${obj.addresses.number || 'S/N'}` : 'Não informado');
                   return (
                     <tr key={obj.control_number}>
                       {!showArchived && <td className={styles.checkboxCell}>{obj.status === 'Aguardando Retirada' && <input type="checkbox" checked={selectedObjects.has(obj.control_number)} onChange={() => handleSelectObject(obj.control_number)} />}</td>}
@@ -475,7 +450,7 @@ const ObjectsPage = () => {
                           {obj.is_archived ? (<button className={styles.actionButton} title="Recuperar Objeto" onClick={() => handleUnarchive(obj.control_number)}><FaHistory /></button>) : (
                             <>
                               {!obj.customer_id && obj.status === 'Aguardando Retirada' && (
-                                <button className={`${styles.actionButton} ${styles.link}`} title="Sugerir e Associar Cliente" onClick={() => handleOpenSuggestions(obj)}>
+                                <button className={`${styles.actionButton} ${styles.link}`} title="Sugerir e Associar Cliente" onClick={() => setObjectToSuggestFor(obj)}>
                                   <FaLink />
                                 </button>
                               )}

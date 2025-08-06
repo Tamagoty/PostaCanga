@@ -58,3 +58,29 @@ BEGIN
         control_number = p_control_number;
 END;
 $$;
+
+-- ARQUIVO: 0008_update_search_contacts.sql
+-- DESCRIÇÃO: Altera a função de busca de contactos para ser mais performática,
+--            retornar o endereço e corrigir o bug de não encontrar resultados.
+
+DROP FUNCTION IF EXISTS search_contacts(TEXT);
+CREATE OR REPLACE FUNCTION search_contacts(p_search_term TEXT) 
+RETURNS TABLE (id UUID, full_name TEXT, address_info TEXT) -- Adicionado address_info
+LANGUAGE plpgsql SECURITY DEFINER AS $$ 
+BEGIN 
+    RETURN QUERY 
+    SELECT 
+        c.id, 
+        c.full_name,
+        -- Concatena as partes do endereço para exibição, com um fallback.
+        COALESCE(a.street_name || ', ' || c.address_number || ' - ' || a.neighborhood, 'Endereço não informado') AS address_info
+    FROM public.customers c
+    LEFT JOIN public.addresses a ON c.address_id = a.id
+    WHERE c.is_active = TRUE 
+      AND c.cellphone IS NOT NULL 
+      -- A busca agora usa a nossa função otimizada f_unaccent
+      AND public.f_unaccent(c.full_name) ILIKE '%' || public.f_unaccent(p_search_term) || '%' 
+    ORDER BY c.full_name 
+    LIMIT 20; 
+END; 
+$$;

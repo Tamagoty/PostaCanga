@@ -1,49 +1,55 @@
 /* path: src/components/SuggestionModal.module.css */
 
-.context {
-  padding: 0.5rem 1rem;
-  background-color: var(--bg-tertiary);
+.container {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+.objectInfo {
+  background-color: var(--bg-primary);
+  padding: 1rem;
   border-radius: var(--border-radius);
-  margin-bottom: 1.5rem;
-  text-align: center;
+  border: 1px solid var(--border-color);
 }
 
-.context span {
-  color: var(--text-secondary);
-  margin-right: 0.5rem;
-}
-
-.context strong {
+.objectInfo h4 {
+  margin-top: 0;
+  margin-bottom: 0.75rem;
   color: var(--accent-primary);
-  font-size: 1.1rem;
 }
 
-.searchBox {
-  margin-bottom: 1.5rem;
+.objectInfo p {
+  margin: 0.25rem 0;
+  font-size: 0.9rem;
+  color: var(--text-secondary);
 }
 
-.listContainer {
-  max-height: 40vh;
+.objectInfo p strong {
+  color: var(--text-primary);
+}
+
+.suggestionsList {
+  /* CORREÇÃO: Altura mínima para evitar que o modal "pule" */
+  min-height: 250px; 
+  max-height: 250px;
   overflow-y: auto;
-  padding-right: 0.5rem;
-}
-
-.suggestionList {
-  list-style: none;
-  padding: 0;
-  margin: 0;
   display: flex;
   flex-direction: column;
   gap: 1rem;
+  padding-right: 0.5rem;
+  border-top: 1px solid var(--border-color);
+  border-bottom: 1px solid var(--border-color);
+  padding-top: 1rem;
+  padding-bottom: 1rem;
 }
 
 .suggestionItem {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  gap: 1rem;
   padding: 1rem;
-  background-color: var(--bg-primary);
+  background-color: var(--bg-tertiary);
   border-radius: var(--border-radius);
 }
 
@@ -55,11 +61,10 @@
 
 .customerName {
   font-weight: 600;
-  color: var(--text-primary);
 }
 
 .customerAddress {
-  font-size: 0.875rem;
+  font-size: 0.8rem;
   color: var(--text-secondary);
 }
 
@@ -68,14 +73,9 @@
   flex-shrink: 0;
 }
 
-.noSuggestions {
-  text-align: center;
-  color: var(--text-secondary);
-  padding: 2rem 0;
-}
-
 .actions {
   display: flex;
   justify-content: flex-end;
-  margin-top: 1.5rem;
+  gap: 1rem;
+  margin-top: 1rem;
 }

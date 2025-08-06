@@ -1,5 +1,5 @@
-// Arquivo: src/pages/CustomerDetailPage.jsx
-// Versão Final Corrigida
+// path: src/pages/CustomerDetailPage.jsx
+// FUNCIONALIDADE: Exibe o bairro e o CEP na secção de endereço.
 
 import React, { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
@@ -57,7 +57,14 @@ const CustomerDetailPage = () => {
 
   const { profile, objects, this_customer_is_contact_for, contacts_for_this_customer, main_contact_associations } = customerDetails;
   const customerToEdit = profile;
-  const fullAddress = profile.address ? `${profile.address.street_name}, ${profile.address_number || 'S/N'} - ${profile.address.city}/${profile.address.state}` : 'Endereço não informado';
+  
+  // Lógica para construir a string de endereço completa
+  const fullAddress = profile.address 
+    ? `${profile.address.street_name}, ${profile.address_number || 'S/N'}` +
+      `${profile.address.neighborhood ? ` - ${profile.address.neighborhood}` : ''}` +
+      `\n${profile.address.city}/${profile.address.state}` +
+      `${profile.address.cep ? ` - CEP: ${profile.address.cep}` : ''}`
+    : 'Endereço não informado';
 
   return (
     <div className={styles.container}>
@@ -77,7 +84,8 @@ const CustomerDetailPage = () => {
             <div className={styles.profileCard}><FaIdCard className={styles.icon} /> <p>{profile.cpf || 'Não informado'}</p></div>
             <div className={styles.profileCard}><FaBirthdayCake className={styles.icon} /> <p>{profile.birth_date ? new Date(profile.birth_date).toLocaleDateString('pt-BR', {timeZone: 'UTC'}) : 'Não informado'}</p></div>
             <div className={`${styles.profileCard} ${styles.addressCard}`}>
-              <FaMapMarkerAlt className={styles.icon} /><p>{fullAddress}</p>
+              <FaMapMarkerAlt className={styles.icon} />
+              <p style={{ whiteSpace: 'pre-line' }}>{fullAddress}</p>
             </div>
         </div>
 

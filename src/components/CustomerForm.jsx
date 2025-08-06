@@ -1,5 +1,5 @@
 // path: src/components/CustomerForm.jsx
-// MELHORIA (v4.5): Adicionado um spinner de carregamento visual durante a busca por CEP.
+// FUNCIONALIDADE: A busca de contactos foi corrigida e agora exibe o endereço nos resultados.
 
 import React, { useState, useEffect, useCallback } from "react";
 import styles from "./CustomerForm.module.css";
@@ -194,6 +194,7 @@ const CustomerForm = ({ onSave, onClose, customerToEdit, loading }) => {
                     {contactResults.map((contact) => (
                       <li key={contact.id} onClick={() => handleSelectContact(contact)}>
                         {contact.full_name}
+                        <span className={styles.searchResultAddress}>{contact.address_info}</span>
                       </li>
                     ))}
                   </ul>
@@ -207,7 +208,6 @@ const CustomerForm = ({ onSave, onClose, customerToEdit, loading }) => {
         <legend>Endereço</legend>
         <div className={styles.cepGroup}>
           <Input id="cep-lookup" name="cep-lookup" label="Buscar Endereço por CEP" value={cep} onChange={(e) => setCep(e.target.value)} />
-          {/* [MELHORIA] Adicionado o spinner de carregamento */}
           {cepLoading && <div className={styles.loader}></div>}
         </div>
 
@@ -223,7 +223,7 @@ const CustomerForm = ({ onSave, onClose, customerToEdit, loading }) => {
             <option value="">Selecione um endereço ou busque por CEP</option>
             {addressOptions.map((addr) => (
               <option key={addr.id} value={addr.id}>
-                {`${addr.street_name} - ${addr.city.name}/${addr.city.state.uf}`}
+                {`${addr.street_name}${addr.neighborhood ? ` (${addr.neighborhood})` : ''} - ${addr.city.name}/${addr.city.state.uf}`}
               </option>
             ))}
           </select>
