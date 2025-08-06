@@ -1,17 +1,18 @@
 // path: src/pages/ObjectsPage.jsx
-// FUNCIONALIDADE (v1.9): Otimizado o carregamento com paginação do lado do servidor.
+// FUNCIONALIDADE: Adicionada a opção de mensagem personalizada na notificação em lote por filtros.
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { supabase } from '../lib/supabase';
 import toast from 'react-hot-toast';
 import styles from './ObjectsPage.module.css';
-import { FaSearch, FaPlus, FaEdit, FaCheckCircle, FaUndoAlt, FaWhatsapp, FaArchive, FaHistory, FaPaperPlane, FaPhone, FaPhoneSlash, FaBoxOpen, FaCopy, FaBoxes, FaArrowUp, FaArrowDown, FaFilePdf, FaUndo, FaLink } from 'react-icons/fa';
+import { FaBell, FaSearch, FaPlus, FaEdit, FaCheckCircle, FaUndoAlt, FaWhatsapp, FaArchive, FaHistory, FaPaperPlane, FaPhone, FaPhoneSlash, FaBoxOpen, FaCopy, FaBoxes, FaArrowUp, FaArrowDown, FaFilePdf, FaUndo, FaLink } from 'react-icons/fa';
 import Input from '../components/Input';
 import Button from '../components/Button';
 import Modal from '../components/Modal';
 import ObjectForm from '../components/ObjectForm';
 import BulkObjectForm from '../components/BulkObjectForm';
 import BulkRegisteredForm from '../components/BulkRegisteredForm';
+import BulkNotifyForm from '../components/BulkNotifyForm';
 import ProgressBar from '../components/ProgressBar';
 import { handleSupabaseError } from '../utils/errorHandler';
 import TableSkeleton from '../components/TableSkeleton';
@@ -71,6 +72,7 @@ const ObjectsPage = () => {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isBulkSimpleModalOpen, setIsBulkSimpleModalOpen] = useState(false);
   const [isBulkRegisteredModalOpen, setIsBulkRegisteredModalOpen] = useState(false);
+  const [isBulkNotifyModalOpen, setIsBulkNotifyModalOpen] = useState(false);
   const [isReportModalOpen, setIsReportModalOpen] = useState(false);
   const [bulkReportData, setBulkReportData] = useState([]);
   const [isExportModalOpen, setIsExportModalOpen] = useState(false);
@@ -85,7 +87,6 @@ const ObjectsPage = () => {
   const [notificationContext, setNotificationContext] = useState(null);
   const [suggestionState, setSuggestionState] = useState({ isOpen: false, object: null, suggestions: [], loading: false });
   
-  // --- Estados para Paginação ---
   const [currentPage, setCurrentPage] = useState(1);
   const [totalObjects, setTotalObjects] = useState(0);
 
@@ -107,10 +108,7 @@ const ObjectsPage = () => {
       setObjects(currentObjects);
 
       if (currentObjects.length > 0) {
-        // Define a contagem total a partir do primeiro registro (ela é igual para todos)
         setTotalObjects(currentObjects[0].total_count || 0);
-
-        // Busca os telefones apenas para os destinatários da página atual
         const recipientNames = [...new Set(currentObjects.map(obj => obj.recipient_name))];
         const { data: phoneData, error: phoneError } = await supabase.rpc('get_phones_for_recipients', { p_recipient_names: recipientNames });
         if (phoneError) throw phoneError;
@@ -129,12 +127,48 @@ const ObjectsPage = () => {
 
   useEffect(() => { loadInitialData(); }, [loadInitialData]);
   
-  // Reseta para a primeira página ao mudar o filtro de busca ou de arquivados
   useEffect(() => {
     setCurrentPage(1);
   }, [debouncedSearchTerm, showArchived]);
 
+  const generateAndDownloadNotifyHTML = (objectsToNotify, rawMessage = '') => {
+    let linksHTML = '';
+    objectsToNotify.forEach(object => {
+      const phone = object.phone_to_use || contactMap[object.recipient_name];
+      if (phone) {
+        const personalizedExtraMessage = replaceVariables(rawMessage, object);
+        const message = getWhatsAppMessage(object, personalizedExtraMessage);
+        const url = `https://wa.me/55${phone.replace(/\D/g, '')}?text=${encodeURIComponent(message)}`;
+        linksHTML += `<div id="${object.control_number}" class="container" onclick="ocultarDiv(this)"><a href="${url}" target="_blank"><div class="imagem"><img src="https://i.imgur.com/S5h76II.png" alt="Ícone de mensagem" /><div class="texto">${object.control_number}</div></div></a></div>`;
+      }
+    });
 
+    if (!linksHTML) {
+      toast.error('Nenhum contato válido encontrado para os objetos nos filtros selecionados.');
+      return;
+    }
+    
+    const fullHtml = `<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8" /><title>Notificações WhatsApp</title><style>body{background:linear-gradient(to bottom left,#1a1d24,#272b35);min-height:100vh;font-family:sans-serif;padding:20px;margin:0}.grid-container{display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:20px}.container{cursor:pointer;text-align:center;transition:opacity .3s,transform .3s}.imagem{position:relative;display:inline-block}img{width:120px;border-radius:15px;box-shadow:0 4px 15px rgba(0,0,0,.4)}.texto{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);color:#fff;font-size:1.5rem;font-weight:700;text-shadow:2px 2px 4px rgba(0,0,0,.7)}a{text-decoration:none}.hidden{opacity:.2;transform:scale(.9);pointer-events:none}</style></head><body><div class="grid-container">${linksHTML}</div><script>function ocultarDiv(e){e.classList.add("hidden")}</script></body></html>`;
+    
+    const blob = new Blob([fullHtml], { type: 'text/html' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.setAttribute('download', 'notificacoes_whatsapp.html');
+    document.body.appendChild(link);
+    link.click();
+    
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+    toast.success('Arquivo de notificações gerado!');
+  };
+
+  const startBulkNotifyByFilterProcess = (filters) => {
+    setIsBulkNotifyModalOpen(false);
+    startNotificationProcess('bulk_by_filter', filters);
+  };
+
+  // ... (restante das suas funções handleSaveObject, handleBulkSave, etc. permanecem aqui) ...
   const handleSaveObject = async (formData) => {
     setIsSaving(true);
     const { error } = await supabase.rpc('create_or_update_object', {
@@ -246,41 +280,39 @@ const ObjectsPage = () => {
     setIsNotifyModalOpen(true);
   };
 
-  const handleSendNotifications = (rawMessageFromModal) => {
+  const handleSendNotifications = async (rawMessageFromModal) => {
     if (!notificationContext) return;
-    if (notificationContext.type === 'single') {
-      const object = notificationContext.object;
-      const personalizedExtraMessage = replaceVariables(rawMessageFromModal, object);
-      const phone = contactMap[object.recipient_name];
-      if (!phone) { toast.error('Nenhum contato válido encontrado.'); return; }
-      const message = getWhatsAppMessage(object, personalizedExtraMessage);
-      const url = `https://wa.me/55${phone.replace(/\D/g, '')}?text=${encodeURIComponent(message)}`;
-      window.open(url, '_blank');
-    } else if (notificationContext.type === 'bulk') {
-      const objectsToNotify = objects.filter(obj => selectedObjects.has(obj.control_number));
-      let linksHTML = '';
-      objectsToNotify.forEach(object => {
+    const { type, object } = notificationContext;
+
+    if (type === 'single') {
+        const personalizedExtraMessage = replaceVariables(rawMessageFromModal, object);
         const phone = contactMap[object.recipient_name];
-        if (phone) {
-          const personalizedExtraMessage = replaceVariables(rawMessageFromModal, object);
-          const message = getWhatsAppMessage(object, personalizedExtraMessage);
-          const url = `https://wa.me/55${phone.replace(/\D/g, '')}?text=${encodeURIComponent(message)}`;
-          linksHTML += `<div id="${object.control_number}" class="container" onclick="ocultarDiv(this)"><a href="${url}" target="_blank"><div class="imagem"><img src="https://i.imgur.com/S5h76II.png" alt="Ícone de mensagem" /><div class="texto">${object.control_number}</div></div></a></div>`;
+        if (!phone) { toast.error('Nenhum contato válido encontrado.'); return; }
+        const message = getWhatsAppMessage(object, personalizedExtraMessage);
+        const url = `https://wa.me/55${phone.replace(/\D/g, '')}?text=${encodeURIComponent(message)}`;
+        window.open(url, '_blank');
+    } else if (type === 'bulk') {
+        const objectsToNotify = objects.filter(obj => selectedObjects.has(obj.control_number));
+        generateAndDownloadNotifyHTML(objectsToNotify, rawMessageFromModal);
+    } else if (type === 'bulk_by_filter') {
+        const toastId = toast.loading('Buscando objetos e gerando notificações...');
+        const { data, error } = await supabase.rpc('get_objects_for_notification_by_filter', {
+            p_start_control: object.start_control || null,
+            p_end_control: object.end_control || null,
+            p_start_date: object.start_date || null,
+            p_end_date: object.end_date || null,
+        });
+
+        if (error) {
+            toast.error(handleSupabaseError(error), { id: toastId });
+        } else if (data && data.length > 0) {
+            generateAndDownloadNotifyHTML(data, rawMessageFromModal);
+            toast.success('Arquivo de notificações gerado!', { id: toastId });
+        } else {
+            toast.success('Nenhum objeto encontrado para os filtros selecionados.', { id: toastId });
         }
-      });
-      if (!linksHTML) { toast.error('Nenhum contato válido encontrado para os objetos selecionados.'); return; }
-      const fullHtml = `<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8" /><title>Notificações WhatsApp</title><style>body{background:linear-gradient(to bottom left,#1a1d24,#272b35);min-height:100vh;font-family:sans-serif;padding:20px;margin:0}.grid-container{display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:20px}.container{cursor:pointer;text-align:center;transition:opacity .3s,transform .3s}.imagem{position:relative;display:inline-block}img{width:120px;border-radius:15px;box-shadow:0 4px 15px rgba(0,0,0,.4)}.texto{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);color:#fff;font-size:1.5rem;font-weight:700;text-shadow:2px 2px 4px rgba(0,0,0,.7)}a{text-decoration:none}.hidden{opacity:.2;transform:scale(.9);pointer-events:none}</style></head><body><div class="grid-container">${linksHTML}</div><script>function ocultarDiv(e){e.classList.add("hidden")}</script></body></html>`;
-      const blob = new Blob([fullHtml], { type: 'text/html' });
-      const url = URL.createObjectURL(blob);
-      const link = document.createElement('a');
-      link.href = url;
-      link.setAttribute('download', 'notificacoes_whatsapp.html');
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      URL.revokeObjectURL(url);
-      toast.success('Arquivo de notificações gerado!');
     }
+
     setIsNotifyModalOpen(false);
     setNotificationContext(null);
   };
@@ -354,6 +386,7 @@ const ObjectsPage = () => {
       <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} title={objectToEdit ? 'Editar Objeto' : 'Adicionar Novo Objeto'}><ObjectForm onSave={handleSaveObject} onClose={() => setIsModalOpen(false)} objectToEdit={objectToEdit} loading={isSaving} /></Modal>
       <Modal isOpen={isBulkSimpleModalOpen} onClose={() => setIsBulkSimpleModalOpen(false)} title="Inserir Objetos Simples em Massa"><BulkObjectForm onSave={handleBulkSave} onClose={() => setIsBulkSimpleModalOpen(false)} loading={isSaving} /></Modal>
       <Modal isOpen={isBulkRegisteredModalOpen} onClose={() => setIsBulkRegisteredModalOpen(false)} title="Inserir Objetos Registrados em Massa"><BulkRegisteredForm onSave={handleBulkRegisteredSave} onClose={() => setIsBulkRegisteredModalOpen(false)} loading={isSaving} /></Modal>
+      <Modal isOpen={isBulkNotifyModalOpen} onClose={() => setIsBulkNotifyModalOpen(false)} title="Gerar Notificações em Lote"><BulkNotifyForm onSave={startBulkNotifyByFilterProcess} onClose={() => setIsBulkNotifyModalOpen(false)} loading={isSaving} /></Modal>
       <Modal isOpen={isReportModalOpen} onClose={() => setIsReportModalOpen(false)} title="Relatório de Inserção"><div className={styles.reportContainer}><table className={styles.reportTable}><thead><tr><th>Destinatário</th><th>Cód. Rastreio</th><th>N° Controle</th></tr></thead><tbody>{bulkReportData.map(item => (<tr key={item.number}><td>{item.name}</td><td>{item.code || '-'}</td><td><strong>{item.number}</strong></td></tr>))}</tbody></table><div className={styles.reportActions}><Button onClick={generatePDF} variant="secondary"><FaFilePdf /> Gerar PDF</Button><Button onClick={() => setIsReportModalOpen(false)}>Fechar</Button></div></div></Modal>
       <Modal isOpen={isExportModalOpen} onClose={() => setIsExportModalOpen(false)} title="Exportar Códigos de Rastreamento"><textarea ref={textareaRef} value={codesToExport} readOnly className={styles.exportTextarea} /><div className={styles.exportActions}><Button onClick={copyToClipboard}><FaCopy /> Copiar</Button></div></Modal>
       <PromptModal isOpen={isNotifyModalOpen} onClose={() => setIsNotifyModalOpen(false)} onSave={handleSendNotifications} title="Adicionar Mensagem Extra" label="Selecione um modelo ou digite uma mensagem" placeholder="Ex: Aproveite a nossa promoção!" confirmText="Enviar Notificações" isTextarea={true} />
@@ -371,6 +404,7 @@ const ObjectsPage = () => {
         <h1>{showArchived ? "Objetos Arquivados" : "Gerenciamento de Objetos"}</h1>
         <div className={styles.actions}>
           <div className={styles.searchInputWrapper}><Input id="search" placeholder="Buscar..." icon={FaSearch} value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} /></div>
+          <Button onClick={() => setIsBulkNotifyModalOpen(true)} variant="secondary"><FaBell /> Notificar em Lote</Button>
           {selectedObjects.size > 0 && <Button onClick={() => startNotificationProcess('bulk')} variant="secondary"><FaPaperPlane /> Notificar ({selectedObjects.size})</Button>}
           {selectedObjects.size > 0 && <Button onClick={handleExportTrackingCodes} variant="secondary"><FaCopy /> Exportar Códigos</Button>}
           <Button onClick={() => setShowArchived(!showArchived)} variant="secondary">{showArchived ? <FaBoxOpen /> : <FaArchive />} {showArchived ? "Ver Ativos" : "Ver Arquivados"}</Button>
@@ -401,9 +435,9 @@ const ObjectsPage = () => {
             <tbody>
               {objects.map(obj => {
                   const hasContact = !!contactMap[obj.recipient_name];
-                  const addressText = obj.addresses 
-                    ? `${obj.addresses.street_name}, ${obj.addresses.number || 'S/N'}`
-                    : 'Não informado';
+                  const addressText = obj.delivery_street_name 
+                    ? `${obj.delivery_street_name}, ${obj.delivery_address_number || 'S/N'}`
+                    : (obj.addresses ? `${obj.addresses.street_name}, ${obj.addresses.number || 'S/N'}` : 'Não informado');
                   return (
                     <tr key={obj.control_number}>
                       {!showArchived && <td className={styles.checkboxCell}>{obj.status === 'Aguardando Retirada' && <input type="checkbox" checked={selectedObjects.has(obj.control_number)} onChange={() => handleSelectObject(obj.control_number)} />}</td>}

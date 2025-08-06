@@ -191,7 +191,7 @@ BEGIN
 END;
 $$;
 
--- NOVA FUNÇÃO: Busca objetos para notificação em lote por filtros
+-- CORREÇÃO: Adicionado casting explícito (::TEXT) para garantir a correspondência de tipos.
 DROP FUNCTION IF EXISTS get_objects_for_notification_by_filter(INT, INT, DATE, DATE);
 CREATE OR REPLACE FUNCTION get_objects_for_notification_by_filter(
     p_start_control INT DEFAULT NULL,
@@ -210,46 +210,30 @@ LANGUAGE plpgsql
 AS $$
 BEGIN
     RETURN QUERY
-    WITH objects_to_notify AS (
-        SELECT
-            o.control_number,
-            o.recipient_name,
-            o.object_type,
-            o.storage_deadline,
-            -- Lógica para encontrar o telemóvel:
-            -- 1. Tenta o telemóvel do cliente associado ao objeto.
-            -- 2. Se não tiver, tenta o telemóvel do contato principal desse cliente.
-            COALESCE(c.cellphone, contact.cellphone) as phone_to_use
-        FROM
-            public.objects o
-        LEFT JOIN
-            public.customers c ON o.customer_id = c.id
-        LEFT JOIN
-            public.customers contact ON c.contact_customer_id = contact.id
-        WHERE
-            o.status = 'Aguardando Retirada'
-            AND o.is_archived = FALSE
-            -- Aplica o filtro de faixa de número de controlo
-            AND (
-                (p_start_control IS NULL OR p_end_control IS NULL) OR
-                o.control_number BETWEEN p_start_control AND p_end_control
-            )
-            -- Aplica o filtro de data de chegada
-            AND (
-                (p_start_date IS NULL OR p_end_date IS NULL) OR
-                o.arrival_date BETWEEN p_start_date AND p_end_date
-            )
-    )
     SELECT
-        otn.control_number,
-        otn.recipient_name,
-        otn.object_type,
-        otn.storage_deadline,
-        otn.phone_to_use
+        o.control_number,
+        o.recipient_name::TEXT,
+        o.object_type::TEXT,
+        o.storage_deadline,
+        COALESCE(c.cellphone, contact.cellphone)::TEXT AS phone_to_use
     FROM
-        objects_to_notify otn
+        public.objects o
+    LEFT JOIN
+        public.customers c ON o.customer_id = c.id
+    LEFT JOIN
+        public.customers contact ON c.contact_customer_id = contact.id
     WHERE
-        otn.phone_to_use IS NOT NULL AND otn.phone_to_use <> '';
+        o.status = 'Aguardando Retirada'
+        AND o.is_archived = FALSE
+        AND (
+            (p_start_control IS NULL OR p_end_control IS NULL) OR
+            o.control_number BETWEEN p_start_control AND p_end_control
+        )
+        AND (
+            (p_start_date IS NULL OR p_end_date IS NULL) OR
+            o.arrival_date BETWEEN p_start_date AND p_end_date
+        )
+        AND COALESCE(c.cellphone, contact.cellphone) IS NOT NULL 
+        AND COALESCE(c.cellphone, contact.cellphone) <> '';
 END;
 $$;
-

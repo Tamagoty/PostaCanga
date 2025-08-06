@@ -1,4 +1,4 @@
-// src/components/BulkNotifyForm.jsx
+// path: src/components/BulkNotifyForm.jsx
 // DESCRIÇÃO: Novo formulário para gerar notificações em lote por filtros.
 
 import React, { useState } from 'react';
