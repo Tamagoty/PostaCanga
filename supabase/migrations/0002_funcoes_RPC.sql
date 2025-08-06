@@ -1,14 +1,15 @@
+-- path: supabase/migrations/0002_funcoes_RPC.sql
 -- =============================================================================
--- || Arquivo supabase/mitations/0002_funcoes_RPC.sql
--- || FUNÇÕES RPC - POSTACANGA APP                                            ||
+-- || FUNÇÕES RPC - POSTACANGA APP (VERSÃO CORRIGIDA)                         ||
 -- =============================================================================
--- DESCRIÇÃO: Script contendo todas as funções de chamada de procedimento remoto (RPC)
---            utilizadas na aplicação.
+-- DESCRIÇÃO: Script com as funções RPC.
+-- CORREÇÃO (SEC-01): Adicionada verificação de permissão `is_admin()` no início
+-- de todas as funções administrativas que usam `SECURITY DEFINER` para fechar
+-- a brecha de segurança que permitia a sua execução por não-admins.
 
 --------------------------------------------------------------------------------
 -- FUNÇÕES BASE E AUXILIARES
 --------------------------------------------------------------------------------
--- Cria uma função "wrapper" imutável para unaccent da qual somos donos.
 CREATE OR REPLACE FUNCTION public.f_unaccent(text)
  RETURNS text
  LANGUAGE sql
@@ -23,8 +24,60 @@ DROP FUNCTION IF EXISTS public.get_my_role();
 CREATE OR REPLACE FUNCTION get_my_role() RETURNS TEXT AS $$ BEGIN RETURN (SELECT role FROM public.employees WHERE id = auth.uid()); END; $$ LANGUAGE plpgsql SECURITY DEFINER;
 
 --------------------------------------------------------------------------------
+-- FUNÇÕES DE GESTÃO (ADMIN)
+--------------------------------------------------------------------------------
+
+-- Apaga um funcionário e o seu registo de autenticação.
+DROP FUNCTION IF EXISTS public.delete_employee(UUID);
+CREATE OR REPLACE FUNCTION delete_employee(p_user_id UUID)
+RETURNS void
+LANGUAGE plpgsql
+SECURITY DEFINER AS $$
+BEGIN
+    -- VERIFICAÇÃO DE SEGURANÇA
+    IF NOT is_admin(auth.uid()) THEN
+        RAISE EXCEPTION 'Acesso negado. Apenas administradores podem executar esta ação.';
+    END IF;
+
+    IF auth.uid() = p_user_id THEN
+        RAISE EXCEPTION 'Um administrador não pode se auto-excluir.';
+    END IF;
+    DELETE FROM auth.users WHERE id = p_user_id;
+END;
+$$;
+
+--------------------------------------------------------------------------------
 -- FUNÇÕES DE GESTÃO DE OBJETOS
 --------------------------------------------------------------------------------
+
+-- Cria ou atualiza uma regra de rastreio.
+DROP FUNCTION IF EXISTS create_or_update_tracking_rule(integer, text, text, integer);
+CREATE OR REPLACE FUNCTION create_or_update_tracking_rule(p_rule_id INT, p_prefix TEXT, p_object_type TEXT, p_storage_days INT)
+RETURNS tracking_code_rules
+LANGUAGE plpgsql
+SECURITY DEFINER AS $$
+DECLARE
+    result_rule tracking_code_rules;
+BEGIN
+    -- VERIFICAÇÃO DE SEGURANÇA
+    IF NOT is_admin(auth.uid()) THEN
+        RAISE EXCEPTION 'Acesso negado. Apenas administradores podem executar esta ação.';
+    END IF;
+
+    INSERT INTO public.tracking_code_rules (id, prefix, object_type, storage_days)
+    VALUES (COALESCE(p_rule_id, nextval('tracking_code_rules_id_seq')), p_prefix, p_object_type, p_storage_days)
+    ON CONFLICT (prefix) DO UPDATE SET
+        object_type = EXCLUDED.object_type,
+        storage_days = EXCLUDED.storage_days
+    RETURNING * INTO result_rule;
+    RETURN result_rule;
+END;
+$$;
+
+--------------------------------------------------------------------------------
+-- FUNÇÕES DE USO GERAL (FUNCIONÁRIOS)
+--------------------------------------------------------------------------------
+
 -- Cria ou atualiza um objeto, com a lógica de priorizar o endereço do objeto.
 DROP FUNCTION IF EXISTS create_or_update_object(TEXT,TEXT,TEXT,INT,TEXT,TEXT,TEXT,TEXT,TEXT,TEXT);
 CREATE OR REPLACE FUNCTION create_or_update_object(
@@ -66,7 +119,7 @@ BEGIN
             delivery_city_name = p_city_name,
             delivery_state_uf = p_state_uf,
             delivery_cep = p_cep,
-            delivery_address_id = CASE WHEN p_street_name IS NULL THEN (SELECT address_id FROM customers WHERE id = v_customer_id) ELSE NULL END,
+            delivery_address_id = CASE WHEN p_street_name IS NOT NULL THEN NULL ELSE (SELECT address_id FROM customers WHERE id = v_customer_id) END,
             updated_at = NOW()
         WHERE control_number = p_control_number
         RETURNING * INTO result_object;
@@ -79,7 +132,7 @@ BEGIN
         VALUES (
             p_recipient_name, p_object_type, v_storage_deadline, p_tracking_code, v_customer_id,
             p_street_name, p_number, p_neighborhood, p_city_name, p_state_uf, p_cep,
-            CASE WHEN p_street_name IS NULL THEN (SELECT address_id FROM customers WHERE id = v_customer_id) ELSE NULL END
+            CASE WHEN p_street_name IS NOT NULL THEN NULL ELSE (SELECT address_id FROM customers WHERE id = v_customer_id) END
         )
         RETURNING * INTO result_object;
     END IF;
@@ -110,25 +163,16 @@ BEGIN
 
     FOREACH obj IN ARRAY p_objects
     LOOP
-        v_recipient_name := proper_case(obj.recipient_name);
-        v_street_name := proper_case(obj.street_name);
+        v_recipient_name := obj.recipient_name;
+        v_street_name := obj.street_name;
 
-        -- Tenta encontrar um cliente para associação, mas não é obrigatório
         SELECT id INTO v_customer_id FROM customers WHERE f_unaccent(full_name) ILIKE f_unaccent(v_recipient_name) LIMIT 1;
 
         INSERT INTO public.objects (
-            recipient_name,
-            object_type,
-            storage_deadline,
-            customer_id,
-            delivery_street_name -- Salva o endereço diretamente no objeto
+            recipient_name, object_type, storage_deadline, customer_id, delivery_street_name
         )
         VALUES (
-            v_recipient_name,
-            p_object_type,
-            v_storage_deadline,
-            v_customer_id,
-            v_street_name
+            v_recipient_name, p_object_type, v_storage_deadline, v_customer_id, v_street_name
         )
         RETURNING control_number INTO v_new_control_number;
 
@@ -139,6 +183,7 @@ BEGIN
     RETURN;
 END;
 $$;
+
 
 
 --------------------------------------------------------------------------------

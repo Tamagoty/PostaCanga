@@ -1,5 +1,7 @@
 // path: src/components/CustomerForm.jsx
-// FUNCIONALIDADE: A busca de contactos foi corrigida e agora exibe o endereço nos resultados.
+// CORREÇÃO (BUG-01): As funções de busca foram envolvidas em `useCallback`
+// e adicionadas corretamente aos arrays de dependência dos `useEffect`s
+// para garantir a execução correta e evitar loops de renderização.
 
 import React, { useState, useEffect, useCallback } from "react";
 import styles from "./CustomerForm.module.css";
@@ -38,8 +40,7 @@ const CustomerForm = ({ onSave, onClose, customerToEdit, loading }) => {
     else if (addresses) setAddressOptions(addresses);
   }, []);
 
-  useEffect(() => {
-    const autoFetchAddress = async () => {
+  const autoFetchAddress = useCallback(async () => {
       const cleanedCep = debouncedCep.replace(/\D/g, "");
       if (cleanedCep.length !== 8) {
         setFoundAddress(null);
@@ -70,15 +71,9 @@ const CustomerForm = ({ onSave, onClose, customerToEdit, loading }) => {
       } finally {
         setCepLoading(false);
       }
-    };
-
-    if (debouncedCep) {
-        autoFetchAddress();
-    }
   }, [debouncedCep, fetchAddressOptions]);
 
-  useEffect(() => {
-    const searchContacts = async () => {
+  const searchContacts = useCallback(async () => {
       if (debouncedContactSearch.length < 2) {
         setContactResults([]);
         return;
@@ -92,10 +87,17 @@ const CustomerForm = ({ onSave, onClose, customerToEdit, loading }) => {
         setContactResults(data || []);
       }
       setIsSearchingContacts(false);
-    };
-    
-    searchContacts();
   }, [debouncedContactSearch]);
+
+  useEffect(() => {
+    if (debouncedCep) {
+        autoFetchAddress();
+    }
+  }, [debouncedCep, autoFetchAddress]);
+
+  useEffect(() => {
+    searchContacts();
+  }, [searchContacts]);
 
   useEffect(() => {
     fetchAddressOptions();

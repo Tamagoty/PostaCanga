@@ -1,5 +1,6 @@
-// Arquivo: src/components/AddressForm.jsx
-// MELHORIA (v4): Busca de endereço por CEP agora é automática, sem botão.
+// path: src/components/AddressForm.jsx
+// CORREÇÃO (BUG-01): A função `autoFetchAddress` foi envolvida em `useCallback`
+// e adicionada corretamente ao array de dependências do `useEffect`.
 
 import React, { useState, useEffect, useCallback } from 'react';
 import styles from './CustomerForm.module.css';
@@ -19,42 +20,41 @@ const AddressForm = ({ onSave, onClose, addressToEdit, loading }) => {
   const [cepLoading, setCepLoading] = useState(false);
   const debouncedCep = useDebounce(formData.cep, 500);
 
-  useEffect(() => {
-    const autoFetchAddress = async () => {
-      const cleanedCep = debouncedCep.replace(/\D/g, '');
-      if (cleanedCep.length !== 8) return;
+  const autoFetchAddress = useCallback(async () => {
+    const cleanedCep = debouncedCep.replace(/\D/g, '');
+    if (cleanedCep.length !== 8) return;
 
-      setCepLoading(true);
-      try {
-        const response = await fetch(`https://viacep.com.br/ws/${cleanedCep}/json/`);
-        const data = await response.json();
-        if (data.erro) {
-          toast.error('CEP não encontrado.');
+    setCepLoading(true);
+    try {
+      const response = await fetch(`https://viacep.com.br/ws/${cleanedCep}/json/`);
+      const data = await response.json();
+      if (data.erro) {
+        toast.error('CEP não encontrado.');
+      } else {
+        const stateFound = states.find(s => s.uf === data.uf);
+        if (stateFound) {
+          setSelectedState(stateFound.id);
+          setFormData(prev => ({
+            ...prev,
+            street_name: data.logradouro,
+            neighborhood: data.bairro,
+            city_id: ''
+          }));
+          toast.success('Endereço encontrado!');
         } else {
-          const stateFound = states.find(s => s.uf === data.uf);
-          if (stateFound) {
-            setSelectedState(stateFound.id);
-            // A busca de cidades será acionada pelo useEffect de selectedState
-            // Após as cidades carregarem, o useEffect de cities/data.localidade irá selecionar a cidade
-            setFormData(prev => ({
-              ...prev,
-              street_name: data.logradouro,
-              neighborhood: data.bairro,
-              city_id: '' // Limpa para aguardar a seleção automática
-            }));
-            toast.success('Endereço encontrado!');
-          } else {
-            toast.error(`O estado "${data.uf}" não foi encontrado na nossa base de dados.`);
-          }
+          toast.error(`O estado "${data.uf}" não foi encontrado na nossa base de dados.`);
         }
-      } catch (error) {
-        toast.error('Falha ao buscar o CEP. Verifique a sua conexão.');
-      } finally {
-        setCepLoading(false);
       }
-    };
-    autoFetchAddress();
+    } catch (error) {
+      toast.error('Falha ao buscar o CEP. Verifique a sua conexão.');
+    } finally {
+      setCepLoading(false);
+    }
   }, [debouncedCep, states]);
+
+  useEffect(() => {
+    autoFetchAddress();
+  }, [autoFetchAddress]);
 
   useEffect(() => {
     supabase.from('states').select('*').order('uf').then(({ data, error }) => {
@@ -69,7 +69,6 @@ const AddressForm = ({ onSave, onClose, addressToEdit, loading }) => {
           if(error) toast.error(handleSupabaseError(error));
           else {
             setCities(data || []);
-            // Tenta selecionar a cidade que veio da API do ViaCEP
             const response = await fetch(`https://viacep.com.br/ws/${debouncedCep.replace(/\D/g, '')}/json/`);
             const cepData = await response.json();
             if (cepData.localidade) {
