@@ -1,5 +1,6 @@
 // path: src/pages/ObjectsPage.jsx
-// FUNCIONALIDADE: Adicionada a opção de mensagem personalizada na notificação em lote por filtros.
+// CORREÇÃO: A chamada da função autoTable foi corrigida para o formato
+// explícito (autoTable(doc, ...)), que é mais robusto com o Vite.
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { supabase } from '../lib/supabase';
@@ -19,7 +20,7 @@ import TableSkeleton from '../components/TableSkeleton';
 import EmptyState from '../components/EmptyState';
 import { ITEMS_PER_PAGE } from '../constants';
 import jsPDF from 'jspdf';
-import 'jspdf-autotable';
+import autoTable from 'jspdf-autotable'; // Importação corrigida
 import useDebounce from '../hooks/useDebounce';
 import PromptModal from '../components/PromptModal';
 import SuggestionModal from '../components/SuggestionModal';
@@ -168,7 +169,6 @@ const ObjectsPage = () => {
     startNotificationProcess('bulk_by_filter', filters);
   };
 
-  // ... (restante das suas funções handleSaveObject, handleBulkSave, etc. permanecem aqui) ...
   const handleSaveObject = async (formData) => {
     setIsSaving(true);
     const { error } = await supabase.rpc('create_or_update_object', {
@@ -331,14 +331,34 @@ const ObjectsPage = () => {
   };
 
   const generatePDF = () => {
-    const doc = new jsPDF();
-    doc.text("Relatório de Inserção em Massa", 14, 16);
-    doc.autoTable({
-      head: [['Destinatário', 'Cód. Rastreio', 'N° Controle']],
-      body: bulkReportData.map(item => [item.name, item.code || '-', item.number]),
-      startY: 20,
-    });
-    doc.save(`relatorio_${new Date().toISOString().split('T')[0]}.pdf`);
+    const toastId = toast.loading('A gerar PDF...');
+    try {
+      if (!bulkReportData || bulkReportData.length === 0) {
+        toast.error('Não há dados para gerar o relatório.', { id: toastId });
+        return;
+      }
+
+      const doc = new jsPDF();
+      doc.text("Relatório de Inserção em Massa", 14, 16);
+      
+      const tableBody = bulkReportData.map(item => [
+        item.name,
+        item.code || '-', // Garante que o valor é uma string
+        item.number
+      ]);
+
+      // Chamada corrigida
+      autoTable(doc, {
+        head: [['Destinatário', 'Cód. Rastreio', 'N° Controle']],
+        body: tableBody,
+        startY: 20,
+      });
+      doc.save(`relatorio_${new Date().toISOString().split('T')[0]}.pdf`);
+      toast.success('PDF gerado com sucesso!', { id: toastId });
+    } catch (error) {
+      console.error("Erro ao gerar PDF:", error);
+      toast.error('Ocorreu um erro ao gerar o PDF.', { id: toastId });
+    }
   };
 
   const handleOpenSuggestions = async (object) => {
