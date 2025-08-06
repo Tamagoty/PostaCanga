@@ -88,6 +88,59 @@ BEGIN
 END;
 $$;
 
+-- Inserção em massa de objetos simples, com endereço direto no objeto.
+DROP FUNCTION IF EXISTS bulk_create_simple_objects(TEXT,simple_object_input[]);
+CREATE OR REPLACE FUNCTION bulk_create_simple_objects(p_object_type TEXT, p_objects simple_object_input[])
+RETURNS TABLE (report_recipient_name TEXT, report_control_number INT)
+LANGUAGE plpgsql SECURITY DEFINER AS $$
+DECLARE
+    obj simple_object_input;
+    v_recipient_name TEXT;
+    v_street_name TEXT;
+    v_customer_id UUID;
+    v_storage_deadline DATE;
+    v_new_control_number INT;
+    v_storage_days INT;
+BEGIN
+    SELECT default_storage_days INTO v_storage_days FROM public.object_types WHERE name = p_object_type;
+    IF NOT FOUND THEN
+        v_storage_days := 20; -- Fallback
+    END IF;
+    v_storage_deadline := CURRENT_DATE + (v_storage_days || ' days')::INTERVAL;
+
+    FOREACH obj IN ARRAY p_objects
+    LOOP
+        v_recipient_name := proper_case(obj.recipient_name);
+        v_street_name := proper_case(obj.street_name);
+
+        -- Tenta encontrar um cliente para associação, mas não é obrigatório
+        SELECT id INTO v_customer_id FROM customers WHERE f_unaccent(full_name) ILIKE f_unaccent(v_recipient_name) LIMIT 1;
+
+        INSERT INTO public.objects (
+            recipient_name,
+            object_type,
+            storage_deadline,
+            customer_id,
+            delivery_street_name -- Salva o endereço diretamente no objeto
+        )
+        VALUES (
+            v_recipient_name,
+            p_object_type,
+            v_storage_deadline,
+            v_customer_id,
+            v_street_name
+        )
+        RETURNING control_number INTO v_new_control_number;
+
+        report_recipient_name := v_recipient_name;
+        report_control_number := v_new_control_number;
+        RETURN NEXT;
+    END LOOP;
+    RETURN;
+END;
+$$;
+
+
 --------------------------------------------------------------------------------
 -- FUNÇÕES DE CONSULTA E RELATÓRIOS
 --------------------------------------------------------------------------------
@@ -137,3 +190,66 @@ BEGIN
     RETURN COALESCE(export_data, '[]'::jsonb);
 END;
 $$;
+
+-- NOVA FUNÇÃO: Busca objetos para notificação em lote por filtros
+DROP FUNCTION IF EXISTS get_objects_for_notification_by_filter(INT, INT, DATE, DATE);
+CREATE OR REPLACE FUNCTION get_objects_for_notification_by_filter(
+    p_start_control INT DEFAULT NULL,
+    p_end_control INT DEFAULT NULL,
+    p_start_date DATE DEFAULT NULL,
+    p_end_date DATE DEFAULT NULL
+)
+RETURNS TABLE (
+    control_number INT,
+    recipient_name TEXT,
+    object_type TEXT,
+    storage_deadline DATE,
+    phone_to_use TEXT
+)
+LANGUAGE plpgsql
+AS $$
+BEGIN
+    RETURN QUERY
+    WITH objects_to_notify AS (
+        SELECT
+            o.control_number,
+            o.recipient_name,
+            o.object_type,
+            o.storage_deadline,
+            -- Lógica para encontrar o telemóvel:
+            -- 1. Tenta o telemóvel do cliente associado ao objeto.
+            -- 2. Se não tiver, tenta o telemóvel do contato principal desse cliente.
+            COALESCE(c.cellphone, contact.cellphone) as phone_to_use
+        FROM
+            public.objects o
+        LEFT JOIN
+            public.customers c ON o.customer_id = c.id
+        LEFT JOIN
+            public.customers contact ON c.contact_customer_id = contact.id
+        WHERE
+            o.status = 'Aguardando Retirada'
+            AND o.is_archived = FALSE
+            -- Aplica o filtro de faixa de número de controlo
+            AND (
+                (p_start_control IS NULL OR p_end_control IS NULL) OR
+                o.control_number BETWEEN p_start_control AND p_end_control
+            )
+            -- Aplica o filtro de data de chegada
+            AND (
+                (p_start_date IS NULL OR p_end_date IS NULL) OR
+                o.arrival_date BETWEEN p_start_date AND p_end_date
+            )
+    )
+    SELECT
+        otn.control_number,
+        otn.recipient_name,
+        otn.object_type,
+        otn.storage_deadline,
+        otn.phone_to_use
+    FROM
+        objects_to_notify otn
+    WHERE
+        otn.phone_to_use IS NOT NULL AND otn.phone_to_use <> '';
+END;
+$$;
+
