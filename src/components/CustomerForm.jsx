@@ -162,7 +162,19 @@ const CustomerForm = ({ onSave, onClose, customerToEdit, loading }) => {
       toast.error("O nome completo é obrigatório.");
       return;
     }
-    onSave(formData);
+    const payload = {
+      customer_id: customerToEdit?.id || null,
+      full_name: formData.full_name,
+      cpf: formData.cpf || null,
+      cellphone: formData.cellphone || null,
+      birth_date: formData.birth_date || null,
+      contact_customer_id: formData.contact_customer_id || null,
+      email: formData.email || null,
+      address_id: formData.address_id || null,
+      address_number: formData.address_number || null,
+      address_complement: formData.address_complement || null
+    };
+    onSave(payload);
   };
 
   return (

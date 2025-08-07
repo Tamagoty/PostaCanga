@@ -1,6 +1,6 @@
 // path: src/pages/AddressesPage.jsx
-// CORREÇÃO (v1.2): Implementada a busca inteligente de cidades com debounce
-// e corrigida a lógica de chamada das funções RPC.
+// CORREÇÃO (BUG-02): O payload enviado para a função `delete_address`
+// foi ajustado para corresponder ao nome do parâmetro esperado pela função SQL.
 
 import React, { useState, useEffect, useCallback } from 'react';
 import { supabase } from '../lib/supabase';
@@ -33,7 +33,6 @@ const AddressesPage = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const debouncedSearchTerm = useDebounce(searchTerm, 500);
 
-  // Estados para o filtro de cidade inteligente
   const [citySearchTerm, setCitySearchTerm] = useState('');
   const [cityResults, setCityResults] = useState([]);
   const [cityFilter, setCityFilter] = useState('');
@@ -43,7 +42,6 @@ const AddressesPage = () => {
   const [neighborhoods, setNeighborhoods] = useState([]);
   const [neighborhoodFilter, setNeighborhoodFilter] = useState('');
 
-  // Busca cidades dinamicamente
   useEffect(() => {
     if (debouncedCitySearch.length < 2) {
       setCityResults([]);
@@ -60,7 +58,6 @@ const AddressesPage = () => {
     searchCities();
   }, [debouncedCitySearch]);
 
-  // Busca bairros quando uma cidade é selecionada
   useEffect(() => {
     const fetchNeighborhoods = async () => {
       if (!cityFilter) {
@@ -75,7 +72,6 @@ const AddressesPage = () => {
     fetchNeighborhoods();
   }, [cityFilter]);
 
-  // Busca a lista principal de endereços
   const fetchAddresses = useCallback(async () => {
     setLoading(true);
     try {
@@ -142,12 +138,7 @@ const AddressesPage = () => {
 
   const handleSaveAddress = async (formData) => {
     setIsSaving(true);
-    const payload = {
-      p_address_id: addressToEdit?.id || null, p_cep: formData.cep,
-      p_street_name: formData.street_name, p_neighborhood: formData.neighborhood,
-      p_city_id: formData.city_id
-    };
-    const { error } = await supabase.rpc('create_or_update_address', payload);
+    const { error } = await supabase.rpc('create_or_update_address', formData);
     if (error) toast.error(handleSupabaseError(error));
     else {
       toast.success('Endereço salvo com sucesso!');
@@ -165,6 +156,7 @@ const AddressesPage = () => {
   const confirmDeleteAddress = async () => {
     if (!addressToDelete) return;
     setIsDeleting(true);
+    // [CORREÇÃO APLICADA AQUI]
     const { error } = await supabase.rpc('delete_address', { p_address_id: addressToDelete.id });
     if (error) toast.error(handleSupabaseError(error));
     else { toast.success('Endereço apagado.'); fetchAddresses(); }

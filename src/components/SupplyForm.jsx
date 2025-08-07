@@ -38,12 +38,14 @@ const SupplyForm = ({ onSave, onClose, supplyToEdit, loading }) => {
       toast.error('O nome do material é obrigatório.');
       return;
     }
-    const payload = {
-      ...formData,
-      p_supply_id: supplyToEdit?.id || null,
+       const payload = {
+          supply_id: supplyToEdit?.id || null,
+          name: formData.name,
+          description: formData.description,
+          initial_stock: formData.initial_stock,
+        };
+        onSave(payload);
     };
-    onSave(payload);
-  };
 
   return (
     <form onSubmit={handleSubmit} className={styles.form}>

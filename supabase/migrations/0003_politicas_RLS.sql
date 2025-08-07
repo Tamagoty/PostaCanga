@@ -1,28 +1,17 @@
+-- path: supabase/migrations/0003_seguranca.sql
 -- =============================================================================
--- || Arquivo supabase/mitations/0003_politicas_RLS.sql
--- || POLÍTICAS DE SEGURANÇA (RLS) - POSTACANGA APP                           ||
+-- || ARQUIVO MESTRE 3: SEGURANÇA (ROW LEVEL SECURITY)                        ||
 -- =============================================================================
--- DESCRIÇÃO: Script contendo todas as políticas de segurança a nível de linha (RLS)
---            utilizadas na aplicação.
+-- DESCRIÇÃO: Script idempotente para configurar toda a Segurança a Nível de Linha (RLS).
+-- VERSÃO: 1.1 - Adicionado CASCADE ao DROP FUNCTION para resolver dependências.
 
 --------------------------------------------------------------------------------
--- ORDEM DE EXECUÇÃO CORRIGIDA
+-- 1. FUNÇÃO HELPER DE ADMIN
 --------------------------------------------------------------------------------
+-- Apaga a função antiga e suas dependências (políticas) em cascata.
+DROP FUNCTION IF EXISTS is_admin(UUID) CASCADE;
 
--- PASSO 1: Remove todas as políticas existentes para quebrar as dependências.
-DO $$ DECLARE
-    r RECORD;
-BEGIN
-    FOR r IN (SELECT policyname, tablename FROM pg_policies WHERE schemaname = 'public') LOOP
-        EXECUTE 'DROP POLICY IF EXISTS ' || quote_ident(r.policyname) || ' ON ' || quote_ident(r.tablename) || ';';
-    END LOOP;
-END $$;
-
--- PASSO 2: Agora que não há dependências, a função pode ser recriada com segurança.
--- Verifica se um utilizador tem a permissão de 'admin'.
--- SECURITY DEFINER é usado para permitir que a função leia a tabela 'employees',
--- que de outra forma poderia ser restrita pela própria RLS.
-DROP FUNCTION IF EXISTS is_admin(UUID);
+-- Cria a função que verifica se um usuário tem a permissão de 'admin'.
 CREATE OR REPLACE FUNCTION is_admin(p_user_id UUID)
 RETURNS BOOLEAN
 LANGUAGE plpgsql
@@ -38,8 +27,10 @@ END;
 $$;
 
 --------------------------------------------------------------------------------
--- PASSO 3: ATIVAÇÃO DA RLS NAS TABELAS
+-- 2. ATIVAÇÃO DA RLS E CRIAÇÃO DAS POLÍTICAS
 --------------------------------------------------------------------------------
+
+-- Ativa a RLS em todas as tabelas
 ALTER TABLE public.states ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.cities ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.addresses ENABLE ROW LEVEL SECURITY;
@@ -56,19 +47,20 @@ ALTER TABLE public.app_settings ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.tasks ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.task_completions ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.system_links ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.message_templates ENABLE ROW LEVEL SECURITY;
 
---------------------------------------------------------------------------------
--- PASSO 4: RECRIAÇÃO DAS POLÍTICAS
---------------------------------------------------------------------------------
+-- Apaga políticas antigas para garantir um estado limpo (redundante com CASCADE, mas mantido por segurança)
+DO $$ DECLARE
+    r RECORD;
+BEGIN
+    FOR r IN (SELECT policyname, tablename FROM pg_policies WHERE schemaname = 'public') LOOP
+        EXECUTE 'DROP POLICY IF EXISTS ' || quote_ident(r.policyname) || ' ON ' || quote_ident(r.tablename) || ';';
+    END LOOP;
+END $$;
 
--- Políticas de Acesso Geral (Leitura para todos os autenticados)
+-- Cria as políticas de segurança
 CREATE POLICY "Allow read access to all authenticated users" ON public.states FOR SELECT TO authenticated USING (true);
 CREATE POLICY "Allow read access to all authenticated users" ON public.cities FOR SELECT TO authenticated USING (true);
-CREATE POLICY "Allow read access to object types" ON public.object_types FOR SELECT TO authenticated USING (true);
-CREATE POLICY "Allow read access to tracking rules" ON public.tracking_code_rules FOR SELECT TO authenticated USING (true);
-CREATE POLICY "Allow read access to app settings" ON public.app_settings FOR SELECT TO authenticated USING (true);
-
--- Políticas de Gestão (Acesso total para todos os autenticados)
 CREATE POLICY "Employees can manage data" ON public.addresses FOR ALL TO authenticated USING (true) WITH CHECK (true);
 CREATE POLICY "Employees can manage data" ON public.customers FOR ALL TO authenticated USING (true) WITH CHECK (true);
 CREATE POLICY "Employees can manage data" ON public.objects FOR ALL TO authenticated USING (true) WITH CHECK (true);
@@ -76,8 +68,7 @@ CREATE POLICY "Employees can manage data" ON public.office_supplies FOR ALL TO a
 CREATE POLICY "Employees can manage data" ON public.supply_stock_log FOR ALL TO authenticated USING (true) WITH CHECK (true);
 CREATE POLICY "Employees can manage data" ON public.bulk_import_reports FOR ALL TO authenticated USING (true) WITH CHECK (true);
 CREATE POLICY "Employees can manage data" ON public.system_links FOR ALL TO authenticated USING (true) WITH CHECK (true);
-
--- Políticas Específicas de Utilizador
+CREATE POLICY "Authenticated users can manage message templates" ON public.message_templates FOR ALL TO authenticated USING (true) WITH CHECK (true);
 CREATE POLICY "Users can manage their own themes" ON public.user_themes FOR ALL TO authenticated USING (user_id = auth.uid()) WITH CHECK (user_id = auth.uid());
 CREATE POLICY "Employees can view their own data" ON public.employees FOR SELECT TO authenticated USING (auth.uid() = id);
 

@@ -116,8 +116,15 @@ const AddressForm = ({ onSave, onClose, addressToEdit, loading }) => {
       toast.error('Logradouro e Cidade são obrigatórios.');
       return;
     }
-    onSave(formData);
-  };
+    const payload = {
+          address_id: addressToEdit?.id || null,
+          cep: formData.cep,
+          street_name: formData.street_name,
+          neighborhood: formData.neighborhood,
+          city_id: formData.city_id
+        };
+        onSave(payload);
+    };
 
   return (
     <form onSubmit={handleSubmit} className={styles.form}>
