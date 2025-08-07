@@ -1,64 +1,67 @@
 -- path: supabase/migrations/0002_funcoes.sql
 -- =============================================================================
--- || ARQUIVO MESTRE 2: FUNÇÕES RPC (REMOTE PROCEDURE CALL) - VERSÃO FINAL      ||
+-- || ARQUIVO MESTRE 2: FUNÇÕES RPC (REMOTE PROCEDURE CALL) - VERSÃO COMPLETA E CORRIGIDA ||
 -- =============================================================================
 -- DESCRIÇÃO: Script idempotente contendo TODAS as funções RPC da aplicação,
 -- limpas, otimizadas e com as devidas verificações de segurança.
+-- VERSÃO: 3.0 - Versão completa e definitiva. Inclui todas as funções do projeto
+-- e corrige a ordem dos parâmetros em todas as funções de escrita para
+-- corresponder à ordem alfabética enviada pelo cliente JS.
 
 -- Remove funções antigas ou duplicadas para garantir um estado limpo.
-DROP FUNCTION IF EXISTS public.delete_employee(UUID);
-DROP FUNCTION IF EXISTS public.create_or_update_tracking_rule(integer, text, text, integer);
-DROP FUNCTION IF EXISTS public.create_or_update_object(TEXT,TEXT,TEXT,INT,TEXT,TEXT,TEXT,TEXT,TEXT,TEXT);
-DROP FUNCTION IF EXISTS public.bulk_create_simple_objects(TEXT,simple_object_input[]);
-DROP FUNCTION IF EXISTS public.search_contacts(TEXT);
-DROP FUNCTION IF EXISTS public.get_address_details_by_id(uuid);
-DROP FUNCTION IF EXISTS public.get_customer_details(UUID);
-DROP FUNCTION IF EXISTS public.get_paginated_objects(TEXT, BOOLEAN, TEXT, BOOLEAN, INT, INT);
-DROP FUNCTION IF EXISTS public.suggest_customer_links(TEXT);
-DROP FUNCTION IF EXISTS public.link_object_to_customer(INT, UUID);
-DROP FUNCTION IF EXISTS public.create_or_update_customer(UUID,TEXT,VARCHAR,VARCHAR,DATE,UUID,VARCHAR,UUID,VARCHAR,VARCHAR);
-DROP FUNCTION IF EXISTS public.get_objects_for_notification_by_filter(INT, INT, DATE, DATE);
-DROP FUNCTION IF EXISTS public.get_customers_for_export();
-DROP FUNCTION IF EXISTS public.revert_object_status(INT);
-DROP FUNCTION IF EXISTS public.count_addresses(integer, text, text);
-DROP FUNCTION IF EXISTS public.get_neighborhoods_by_city(integer);
-DROP FUNCTION IF EXISTS public.search_cities(text);
-DROP FUNCTION IF EXISTS public.count_links(text);
-DROP FUNCTION IF EXISTS public.get_message_templates();
-DROP FUNCTION IF EXISTS public.create_or_update_message_template(UUID, TEXT, TEXT);
-DROP FUNCTION IF EXISTS public.delete_message_template(UUID);
-DROP FUNCTION IF EXISTS public.create_or_update_address(UUID,VARCHAR,TEXT,TEXT,INT);
-DROP FUNCTION IF EXISTS public.delete_address(UUID);
-DROP FUNCTION IF EXISTS public.find_or_create_address_by_cep(TEXT,TEXT,TEXT,TEXT,TEXT);
-DROP FUNCTION IF EXISTS public.set_customer_status(UUID, BOOLEAN);
-DROP FUNCTION IF EXISTS public.count_customers_filtered(TEXT, TEXT);
-DROP FUNCTION IF EXISTS public.get_paginated_customers_with_details(TEXT,TEXT,INT,INT);
-DROP FUNCTION IF EXISTS public.create_or_update_supply(UUID,VARCHAR,TEXT,INT);
-DROP FUNCTION IF EXISTS public.log_and_adjust_stock(UUID,INT,TEXT);
-DROP FUNCTION IF EXISTS public.count_supplies(TEXT);
-DROP FUNCTION IF EXISTS public.get_supply_stock_log(UUID,DATE);
-DROP FUNCTION IF EXISTS public.create_or_update_object_type(INT,TEXT,INT);
-DROP FUNCTION IF EXISTS public.delete_object_type(INT);
-DROP FUNCTION IF EXISTS public.create_or_update_task(INT,TEXT,TEXT,TEXT,DATE);
-DROP FUNCTION IF EXISTS public.delete_task(INT);
-DROP FUNCTION IF EXISTS public.create_or_update_link(UUID,TEXT,TEXT,TEXT,TEXT);
-DROP FUNCTION IF EXISTS public.delete_link(UUID);
-DROP FUNCTION IF EXISTS public.create_or_update_app_setting(TEXT,TEXT,TEXT,TEXT);
-DROP FUNCTION IF EXISTS public.delete_app_setting(TEXT);
-DROP FUNCTION IF EXISTS public.save_user_theme(TEXT,JSONB);
-DROP FUNCTION IF EXISTS public.delete_user_theme(UUID);
-DROP FUNCTION IF EXISTS public.get_dashboard_data();
-DROP FUNCTION IF EXISTS public.get_notifications();
-DROP FUNCTION IF EXISTS public.get_pending_tasks();
-DROP FUNCTION IF EXISTS public.complete_task(INT);
-DROP FUNCTION IF EXISTS public.get_monthly_objects_report(INT);
-DROP FUNCTION IF EXISTS public.get_supplies_usage_report(INT);
-DROP FUNCTION IF EXISTS public.bulk_create_registered_objects(registered_object_input[]);
-DROP FUNCTION IF EXISTS public.archive_completed_objects();
-DROP FUNCTION IF EXISTS public.unarchive_object(INT);
-DROP FUNCTION IF EXISTS public.deliver_object(INT);
-DROP FUNCTION IF EXISTS public.return_object(INT);
-DROP FUNCTION IF EXISTS public.save_bulk_report(JSONB);
+DROP FUNCTION IF EXISTS public.delete_employee(UUID) CASCADE;
+DROP FUNCTION IF EXISTS public.create_or_update_tracking_rule(integer, text, text, integer) CASCADE;
+DROP FUNCTION IF EXISTS public.create_or_update_object(TEXT,TEXT,TEXT,INT,TEXT,TEXT,TEXT,TEXT,TEXT,TEXT) CASCADE;
+DROP FUNCTION IF EXISTS public.bulk_create_simple_objects(TEXT,simple_object_input[]) CASCADE;
+DROP FUNCTION IF EXISTS public.search_contacts(TEXT) CASCADE;
+DROP FUNCTION IF EXISTS public.get_address_details_by_id(uuid) CASCADE;
+DROP FUNCTION IF EXISTS public.get_customer_details(UUID) CASCADE;
+DROP FUNCTION IF EXISTS public.get_paginated_objects(TEXT, BOOLEAN, TEXT, BOOLEAN, INT, INT) CASCADE;
+DROP FUNCTION IF EXISTS public.suggest_customer_links(TEXT) CASCADE;
+DROP FUNCTION IF EXISTS public.link_object_to_customer(INT, UUID) CASCADE;
+DROP FUNCTION IF EXISTS public.create_or_update_customer(UUID,TEXT,VARCHAR,VARCHAR,VARCHAR,DATE,UUID,UUID,VARCHAR,VARCHAR) CASCADE;
+DROP FUNCTION IF EXISTS public.get_objects_for_notification_by_filter(INT, INT, DATE, DATE) CASCADE;
+DROP FUNCTION IF EXISTS public.get_customers_for_export() CASCADE;
+DROP FUNCTION IF EXISTS public.revert_object_status(INT) CASCADE;
+DROP FUNCTION IF EXISTS public.count_addresses(integer, text, text) CASCADE;
+DROP FUNCTION IF EXISTS public.get_neighborhoods_by_city(integer) CASCADE;
+DROP FUNCTION IF EXISTS public.search_cities(text) CASCADE;
+DROP FUNCTION IF EXISTS public.count_links(text) CASCADE;
+DROP FUNCTION IF EXISTS public.get_message_templates() CASCADE;
+DROP FUNCTION IF EXISTS public.create_or_update_message_template(UUID, TEXT, TEXT) CASCADE;
+DROP FUNCTION IF EXISTS public.delete_message_template(UUID) CASCADE;
+DROP FUNCTION IF EXISTS public.create_or_update_address(UUID,VARCHAR,TEXT,TEXT,INT) CASCADE;
+DROP FUNCTION IF EXISTS public.delete_address(UUID) CASCADE;
+DROP FUNCTION IF EXISTS public.find_or_create_address_by_cep(TEXT,TEXT,TEXT,TEXT,TEXT) CASCADE;
+DROP FUNCTION IF EXISTS public.set_customer_status(UUID, BOOLEAN) CASCADE;
+DROP FUNCTION IF EXISTS public.count_customers_filtered(TEXT, TEXT) CASCADE;
+DROP FUNCTION IF EXISTS public.get_paginated_customers_with_details(TEXT,TEXT,INT,INT) CASCADE;
+DROP FUNCTION IF EXISTS public.create_or_update_supply(UUID,VARCHAR,TEXT,INT) CASCADE;
+DROP FUNCTION IF EXISTS public.log_and_adjust_stock(UUID,INT,TEXT) CASCADE;
+DROP FUNCTION IF EXISTS public.count_supplies(TEXT) CASCADE;
+DROP FUNCTION IF EXISTS public.get_supply_stock_log(UUID,DATE) CASCADE;
+DROP FUNCTION IF EXISTS public.create_or_update_object_type(INT,TEXT,INT) CASCADE;
+DROP FUNCTION IF EXISTS public.delete_object_type(INT) CASCADE;
+DROP FUNCTION IF EXISTS public.create_or_update_task(INT,TEXT,TEXT,TEXT,DATE) CASCADE;
+DROP FUNCTION IF EXISTS public.delete_task(INT) CASCADE;
+DROP FUNCTION IF EXISTS public.create_or_update_link(UUID,TEXT,TEXT,TEXT,TEXT) CASCADE;
+DROP FUNCTION IF EXISTS public.delete_link(UUID) CASCADE;
+DROP FUNCTION IF EXISTS public.create_or_update_app_setting(TEXT,TEXT,TEXT,TEXT) CASCADE;
+DROP FUNCTION IF EXISTS public.delete_app_setting(TEXT) CASCADE;
+DROP FUNCTION IF EXISTS public.save_user_theme(TEXT,JSONB) CASCADE;
+DROP FUNCTION IF EXISTS public.delete_user_theme(UUID) CASCADE;
+DROP FUNCTION IF EXISTS public.get_dashboard_data() CASCADE;
+DROP FUNCTION IF EXISTS public.get_notifications() CASCADE;
+DROP FUNCTION IF EXISTS public.get_pending_tasks() CASCADE;
+DROP FUNCTION IF EXISTS public.complete_task(INT) CASCADE;
+DROP FUNCTION IF EXISTS public.get_monthly_objects_report(INT) CASCADE;
+DROP FUNCTION IF EXISTS public.get_supplies_usage_report(INT) CASCADE;
+DROP FUNCTION IF EXISTS public.bulk_create_registered_objects(registered_object_input[]) CASCADE;
+DROP FUNCTION IF EXISTS public.archive_completed_objects() CASCADE;
+DROP FUNCTION IF EXISTS public.unarchive_object(INT) CASCADE;
+DROP FUNCTION IF EXISTS public.deliver_object(INT) CASCADE;
+DROP FUNCTION IF EXISTS public.return_object(INT) CASCADE;
+DROP FUNCTION IF EXISTS public.save_bulk_report(JSONB) CASCADE;
 
 --------------------------------------------------------------------------------
 -- FUNÇÕES DE GESTÃO (ADMIN)
@@ -79,7 +82,7 @@ BEGIN
 END;
 $$;
 
-CREATE OR REPLACE FUNCTION public.create_or_update_tracking_rule(rule_id INT, prefix TEXT, object_type TEXT, storage_days INT)
+CREATE OR REPLACE FUNCTION public.create_or_update_tracking_rule(p_object_type TEXT, p_prefix TEXT, p_rule_id INT, p_storage_days INT)
 RETURNS tracking_code_rules
 LANGUAGE plpgsql
 SECURITY DEFINER AS $$
@@ -90,7 +93,7 @@ BEGIN
         RAISE EXCEPTION 'Acesso negado. Apenas administradores podem executar esta ação.';
     END IF;
     INSERT INTO public.tracking_code_rules (id, prefix, object_type, storage_days)
-    VALUES (COALESCE(rule_id, nextval('tracking_code_rules_id_seq')), prefix, object_type, storage_days)
+    VALUES (COALESCE(p_rule_id, nextval('tracking_code_rules_id_seq')), p_prefix, p_object_type, p_storage_days)
     ON CONFLICT (prefix) DO UPDATE SET
         object_type = EXCLUDED.object_type,
         storage_days = EXCLUDED.storage_days
@@ -103,25 +106,25 @@ $$;
 -- FUNÇÕES DE USO GERAL (FUNCIONÁRIOS)
 --------------------------------------------------------------------------------
 
-CREATE OR REPLACE FUNCTION public.create_or_update_address(address_id UUID, cep VARCHAR, street_name TEXT, neighborhood TEXT, city_id INT)
+CREATE OR REPLACE FUNCTION public.create_or_update_address(p_address_id UUID, p_cep VARCHAR, p_city_id INT, p_neighborhood TEXT, p_street_name TEXT)
 RETURNS addresses
 LANGUAGE plpgsql
 SECURITY DEFINER AS $$
 DECLARE
     result_address addresses;
 BEGIN
-    IF address_id IS NULL THEN
+    IF p_address_id IS NULL THEN
         INSERT INTO public.addresses (cep, street_name, neighborhood, city_id)
-        VALUES (cep, street_name, neighborhood, city_id)
+        VALUES (p_cep, p_street_name, p_neighborhood, p_city_id)
         RETURNING * INTO result_address;
     ELSE
         UPDATE public.addresses SET
-            cep = create_or_update_address.cep,
-            street_name = create_or_update_address.street_name,
-            neighborhood = create_or_update_address.neighborhood,
-            city_id = create_or_update_address.city_id,
+            cep = p_cep,
+            street_name = p_street_name,
+            neighborhood = p_neighborhood,
+            city_id = p_city_id,
             updated_at = NOW()
-        WHERE id = address_id
+        WHERE id = p_address_id
         RETURNING * INTO result_address;
     END IF;
     RETURN result_address;
@@ -138,8 +141,8 @@ END;
 $$;
 
 CREATE OR REPLACE FUNCTION public.create_or_update_customer(
-    customer_id uuid, full_name text, cpf varchar, cellphone varchar, email varchar, birth_date date,
-    contact_customer_id uuid, address_id uuid, address_number varchar, address_complement varchar
+    p_address_complement varchar, p_address_id uuid, p_address_number varchar, p_birth_date date, p_cellphone varchar,
+    p_contact_customer_id uuid, p_cpf varchar, p_customer_id uuid, p_email varchar, p_full_name text
 )
 RETURNS customers
 LANGUAGE plpgsql
@@ -147,33 +150,71 @@ SECURITY DEFINER AS $$
 DECLARE
     result_customer customers;
 BEGIN
-    IF customer_id IS NULL THEN
+    IF p_customer_id IS NULL THEN
         INSERT INTO public.customers (full_name, cpf, cellphone, email, birth_date, contact_customer_id, address_id, address_number, address_complement)
-        VALUES (full_name, cpf, cellphone, email, birth_date, contact_customer_id, address_id, address_number, address_complement)
+        VALUES (p_full_name, p_cpf, p_cellphone, p_email, p_birth_date, p_contact_customer_id, p_address_id, p_address_number, p_address_complement)
         RETURNING * INTO result_customer;
     ELSE
         UPDATE public.customers SET
-            full_name = create_or_update_customer.full_name,
-            cpf = create_or_update_customer.cpf,
-            cellphone = create_or_update_customer.cellphone,
-            email = create_or_update_customer.email,
-            birth_date = create_or_update_customer.birth_date,
-            contact_customer_id = create_or_update_customer.contact_customer_id,
-            address_id = create_or_update_customer.address_id,
-            address_number = create_or_update_customer.address_number,
-            address_complement = create_or_update_customer.address_complement,
+            full_name = p_full_name,
+            cpf = p_cpf,
+            cellphone = p_cellphone,
+            email = p_email,
+            birth_date = p_birth_date,
+            contact_customer_id = p_contact_customer_id,
+            address_id = p_address_id,
+            address_number = p_address_number,
+            address_complement = p_address_complement,
             updated_at = NOW()
-        WHERE id = customer_id
+        WHERE id = p_customer_id
         RETURNING * INTO result_customer;
     END IF;
     RETURN result_customer;
 END;
 $$;
 
+CREATE OR REPLACE FUNCTION public.create_or_update_supply(p_description TEXT, p_initial_stock INT, p_name VARCHAR, p_supply_id UUID)
+RETURNS office_supplies
+LANGUAGE plpgsql
+SECURITY DEFINER AS $$
+DECLARE
+    result_supply office_supplies;
+BEGIN
+    IF p_supply_id IS NULL THEN
+        INSERT INTO public.office_supplies (name, description, stock)
+        VALUES (p_name, p_description, p_initial_stock)
+        RETURNING * INTO result_supply;
+    ELSE
+        UPDATE public.office_supplies SET
+            name = p_name,
+            description = p_description,
+            updated_at = NOW()
+        WHERE id = p_supply_id
+        RETURNING * INTO result_supply;
+    END IF;
+    RETURN result_supply;
+END;
+$$;
+
+CREATE OR REPLACE FUNCTION public.log_and_adjust_stock(p_quantity_change INT, p_reason TEXT, p_supply_id UUID)
+RETURNS void
+LANGUAGE plpgsql
+SECURITY DEFINER AS $$
+DECLARE
+    v_new_stock_total INT;
+BEGIN
+    UPDATE public.office_supplies
+    SET stock = stock + p_quantity_change
+    WHERE id = p_supply_id
+    RETURNING stock INTO v_new_stock_total;
+    INSERT INTO public.supply_stock_log (supply_id, user_id, quantity_changed, new_stock_total, reason)
+    VALUES (p_supply_id, auth.uid(), p_quantity_change, v_new_stock_total, p_reason);
+END;
+$$;
+
 CREATE OR REPLACE FUNCTION public.create_or_update_object(
-    p_recipient_name TEXT, p_object_type TEXT, p_tracking_code TEXT DEFAULT NULL, p_control_number INT DEFAULT NULL,
-    p_cep TEXT DEFAULT NULL, p_street_name TEXT DEFAULT NULL, p_number TEXT DEFAULT NULL, p_neighborhood TEXT DEFAULT NULL,
-    p_city_name TEXT DEFAULT NULL, p_state_uf TEXT DEFAULT NULL
+    p_cep TEXT, p_city_name TEXT, p_control_number INT, p_neighborhood TEXT, p_number TEXT,
+    p_object_type TEXT, p_recipient_name TEXT, p_state_uf TEXT, p_street_name TEXT, p_tracking_code TEXT
 )
 RETURNS objects LANGUAGE plpgsql SECURITY DEFINER AS $$
 DECLARE
@@ -239,17 +280,17 @@ BEGIN
 END;
 $$;
 
-CREATE OR REPLACE FUNCTION public.create_or_update_message_template(id UUID, name TEXT, content TEXT)
+CREATE OR REPLACE FUNCTION public.create_or_update_message_template(p_content TEXT, p_id UUID, p_name TEXT)
 RETURNS message_templates
 LANGUAGE plpgsql
 SECURITY DEFINER AS $$
 DECLARE
     result_template message_templates;
 BEGIN
-    IF id IS NULL THEN
-        INSERT INTO public.message_templates (name, content) VALUES (name, content) RETURNING * INTO result_template;
+    IF p_id IS NULL THEN
+        INSERT INTO public.message_templates (name, content) VALUES (p_name, p_content) RETURNING * INTO result_template;
     ELSE
-        UPDATE public.message_templates SET name = create_or_update_message_template.name, content = create_or_update_message_template.content, updated_at = NOW() WHERE message_templates.id = create_or_update_message_template.id RETURNING * INTO result_template;
+        UPDATE public.message_templates SET name = p_name, content = p_content, updated_at = NOW() WHERE id = p_id RETURNING * INTO result_template;
     END IF;
     RETURN result_template;
 END;
@@ -261,45 +302,6 @@ LANGUAGE plpgsql
 SECURITY DEFINER AS $$
 BEGIN
     DELETE FROM public.message_templates WHERE id = p_id;
-END;
-$$;
-
-CREATE OR REPLACE FUNCTION public.create_or_update_supply(supply_id UUID, name VARCHAR, description TEXT, initial_stock INT)
-RETURNS office_supplies
-LANGUAGE plpgsql
-SECURITY DEFINER AS $$
-DECLARE
-    result_supply office_supplies;
-BEGIN
-    IF supply_id IS NULL THEN
-        INSERT INTO public.office_supplies (name, description, stock)
-        VALUES (name, description, initial_stock)
-        RETURNING * INTO result_supply;
-    ELSE
-        UPDATE public.office_supplies SET
-            name = create_or_update_supply.name,
-            description = create_or_update_supply.description,
-            updated_at = NOW()
-        WHERE id = supply_id
-        RETURNING * INTO result_supply;
-    END IF;
-    RETURN result_supply;
-END;
-$$;
-
-CREATE OR REPLACE FUNCTION public.log_and_adjust_stock(p_supply_id UUID, p_quantity_change INT, p_reason TEXT)
-RETURNS void
-LANGUAGE plpgsql
-SECURITY DEFINER AS $$
-DECLARE
-    v_new_stock_total INT;
-BEGIN
-    UPDATE public.office_supplies
-    SET stock = stock + p_quantity_change
-    WHERE id = p_supply_id
-    RETURNING stock INTO v_new_stock_total;
-    INSERT INTO public.supply_stock_log (supply_id, user_id, quantity_changed, new_stock_total, reason)
-    VALUES (p_supply_id, auth.uid(), p_quantity_change, v_new_stock_total, p_reason);
 END;
 $$;
 
@@ -356,6 +358,16 @@ CREATE OR REPLACE FUNCTION public.get_neighborhoods_by_city(p_city_id INT)
 RETURNS TABLE(neighborhood TEXT)
 LANGUAGE sql AS $$
     SELECT DISTINCT neighborhood FROM public.addresses WHERE city_id = p_city_id AND neighborhood IS NOT NULL ORDER BY neighborhood;
+$$;
+
+CREATE OR REPLACE FUNCTION public.get_supply_stock_log(p_supply_id UUID, p_start_date DATE)
+RETURNS SETOF supply_stock_log
+LANGUAGE sql
+AS $$
+    SELECT *
+    FROM public.supply_stock_log
+    WHERE supply_id = p_supply_id AND created_at >= p_start_date
+    ORDER BY created_at DESC;
 $$;
 
 CREATE OR REPLACE FUNCTION public.search_contacts(p_search_term TEXT)
@@ -507,12 +519,113 @@ BEGIN
 END;
 $$;
 
-CREATE OR REPLACE FUNCTION public.get_supply_stock_log(p_supply_id UUID, p_start_date DATE)
-RETURNS SETOF supply_stock_log
-LANGUAGE sql
-AS $$
-    SELECT *
-    FROM public.supply_stock_log
-    WHERE supply_id = p_supply_id AND created_at >= p_start_date
-    ORDER BY created_at DESC;
+-- path: supabase/migrations/0011_funcoes_tipos_de_objeto.sql
+-- =============================================================================
+-- || ARQUIVO DE PATCH: FUNÇÕES DE TIPOS DE OBJETO                            ||
+-- =============================================================================
+-- DESCRIÇÃO: Adiciona as funções RPC necessárias para o funcionamento
+--            da página de gerenciamento de Tipos de Objeto.
+
+--------------------------------------------------------------------------------
+-- FUNÇÕES RPC PARA OBJECT TYPES
+--------------------------------------------------------------------------------
+
+-- Cria um novo tipo de objeto ou atualiza um existente.
+-- Parâmetros em ordem alfabética para evitar erros de RPC.
+CREATE OR REPLACE FUNCTION public.create_or_update_object_type(p_default_storage_days INT, p_name TEXT, p_type_id INT)
+RETURNS object_types
+LANGUAGE plpgsql
+SECURITY DEFINER AS $$
+DECLARE
+    result_type object_types;
+BEGIN
+    IF NOT is_admin(auth.uid()) THEN
+        RAISE EXCEPTION 'Acesso negado. Apenas administradores podem executar esta ação.';
+    END IF;
+
+    IF p_type_id IS NULL THEN
+        INSERT INTO public.object_types (name, default_storage_days)
+        VALUES (p_name, p_default_storage_days)
+        RETURNING * INTO result_type;
+    ELSE
+        UPDATE public.object_types SET
+            name = p_name,
+            default_storage_days = p_default_storage_days
+        WHERE id = p_type_id
+        RETURNING * INTO result_type;
+    END IF;
+    RETURN result_type;
+END;
 $$;
+
+
+-- Apaga um tipo de objeto.
+CREATE OR REPLACE FUNCTION public.delete_object_type(p_type_id INT)
+RETURNS void
+LANGUAGE plpgsql
+SECURITY DEFINER AS $$
+BEGIN
+    IF NOT is_admin(auth.uid()) THEN
+        RAISE EXCEPTION 'Acesso negado. Apenas administradores podem executar esta ação.';
+    END IF;
+
+    DELETE FROM public.object_types WHERE id = p_type_id;
+END;
+$$;
+
+-- path: supabase/migrations/0012_funcoes_tarefas.sql
+-- =============================================================================
+-- || ARQUIVO DE PATCH: FUNÇÕES DE TAREFAS (TASKS)                            ||
+-- =============================================================================
+-- DESCRIÇÃO: Adiciona as funções RPC necessárias para o funcionamento
+--            da página de gerenciamento de Tarefas do Gestor.
+
+--------------------------------------------------------------------------------
+-- FUNÇÕES RPC PARA TAREFAS (TASKS)
+--------------------------------------------------------------------------------
+
+-- Cria uma nova tarefa ou atualiza uma existente.
+-- Parâmetros em ordem alfabética para evitar erros de RPC.
+CREATE OR REPLACE FUNCTION public.create_or_update_task(p_description TEXT, p_due_date DATE, p_frequency_type TEXT, p_task_id INT, p_title TEXT)
+RETURNS tasks
+LANGUAGE plpgsql
+SECURITY DEFINER AS $$
+DECLARE
+    result_task tasks;
+BEGIN
+    IF NOT is_admin(auth.uid()) THEN
+        RAISE EXCEPTION 'Acesso negado. Apenas administradores podem executar esta ação.';
+    END IF;
+
+    IF p_task_id IS NULL THEN
+        INSERT INTO public.tasks (title, description, frequency_type, due_date)
+        VALUES (p_title, p_description, p_frequency_type, p_due_date)
+        RETURNING * INTO result_task;
+    ELSE
+        UPDATE public.tasks SET
+            title = p_title,
+            description = p_description,
+            frequency_type = p_frequency_type,
+            due_date = p_due_date
+        WHERE id = p_task_id
+        RETURNING * INTO result_task;
+    END IF;
+    RETURN result_task;
+END;
+$$;
+
+
+-- Apaga uma tarefa.
+CREATE OR REPLACE FUNCTION public.delete_task(p_task_id INT)
+RETURNS void
+LANGUAGE plpgsql
+SECURITY DEFINER AS $$
+BEGIN
+    IF NOT is_admin(auth.uid()) THEN
+        RAISE EXCEPTION 'Acesso negado. Apenas administradores podem executar esta ação.';
+    END IF;
+
+    DELETE FROM public.tasks WHERE id = p_task_id;
+END;
+$$;
+

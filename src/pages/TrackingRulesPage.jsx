@@ -1,5 +1,6 @@
 // path: src/pages/TrackingRulesPage.jsx
-// CORREÇÃO: A página foi corrigida para usar a nova assinatura do hook useResourceManagement.
+// CORREÇÃO (BUG-02): O payload enviado para a função `create_or_update_tracking_rule`
+// foi ajustado para corresponder aos novos nomes de parâmetros (com prefixo p_).
 
 import React, { useCallback } from 'react';
 import { supabase } from '../lib/supabase';
@@ -44,7 +45,14 @@ const TrackingRulesPage = () => {
 
   const handleSaveRule = async (formData) => {
     setIsSaving(true);
-    const { error } = await supabase.rpc('create_or_update_tracking_rule', formData);
+    // [CORREÇÃO APLICADA AQUI]
+    const payload = {
+      p_rule_id: ruleToEdit?.id || null,
+      p_prefix: formData.prefix,
+      p_object_type: formData.object_type,
+      p_storage_days: formData.storage_days
+    };
+    const { error } = await supabase.rpc('create_or_update_tracking_rule', payload);
     if (error) toast.error(handleSupabaseError(error));
     else {
       toast.success('Regra salva com sucesso!');
