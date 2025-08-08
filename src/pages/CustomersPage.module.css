@@ -24,10 +24,9 @@
   gap: 1rem;
 }
 
-/* CORREÇÃO: Nova regra para ajustar a largura dos botões diretos */
 .actions > :global(button) {
   width: auto;
-  flex-shrink: 0; /* Impede que os botões encolham */
+  flex-shrink: 0;
 }
 
 .searchInputWrapper {
@@ -47,10 +46,17 @@
 .filterGroup > button {
   width: auto;
   flex-grow: 1;
-  border: none !important; /* Remove a borda dos botões dentro do grupo */
+  border: none !important;
 }
 
-/* Grid de Cards */
+.viewToggle {
+  display: flex;
+  background-color: var(--bg-secondary);
+  padding: 0.25rem;
+  border-radius: var(--border-radius);
+  border: 1px solid var(--border-color);
+}
+
 .grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
@@ -72,10 +78,10 @@
   box-shadow: var(--shadow-lg);
 }
 
-.card.inactive {
+.inactiveCard {
   opacity: 0.6;
 }
-.card.inactive:hover {
+.inactiveCard:hover {
   opacity: 0.8;
 }
 
@@ -118,20 +124,6 @@
   font-weight: 500;
 }
 
-.contactInfo {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  color: var(--accent-primary) !important;
-  background-color: rgba(59, 130, 246, 0.1);
-  padding: 0.5rem;
-  border-radius: var(--border-radius);
-}
-
-.contactInfo strong {
-  color: var(--accent-primary) !important;
-}
-
 .cardFooter {
   padding: 1rem 1.5rem;
   background-color: var(--bg-tertiary);
@@ -159,7 +151,6 @@
   border-color: var(--accent-primary);
 }
 
-/* Novos estilos para a paginação */
 .pagination {
   display: flex;
   justify-content: center;
@@ -172,27 +163,57 @@
   width: auto;
 }
 
-.pageJumpForm {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
+/* Estilos para a Tabela */
+.tableContainer {
+  overflow-x: auto;
+  background-color: var(--bg-secondary);
+  border-radius: var(--border-radius);
 }
 
-.pageJumpForm span {
-  font-weight: 500;
+.table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.table th, .table td {
+  padding: 1rem;
+  text-align: left;
+  border-bottom: 1px solid var(--border-color);
+  vertical-align: middle;
+}
+
+.table th {
   color: var(--text-secondary);
+  font-size: 0.875rem;
+  text-transform: uppercase;
 }
 
-.pageInputWrapper {
-  width: 70px;
+.table tbody tr:last-child td {
+  border-bottom: none;
 }
 
-/* CORREÇÃO: Ajustado o padding do input da página para que fique harmonioso */
-.pageInput :global(input) {
-  text-align: center;
-  padding: 0.75rem !important;
+.tableActions {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
 }
 
+.statusIndicator {
+    padding: 0.25rem 0.75rem;
+    border-radius: 9999px;
+    font-weight: 600;
+    font-size: 0.8rem;
+}
+
+.statusIndicator.active {
+    background-color: rgba(16, 185, 129, 0.2);
+    color: #10b981;
+}
+
+.statusIndicator.inactive {
+    background-color: rgba(239, 68, 68, 0.2);
+    color: #ef4444;
+}
 
 @media (min-width: 900px) {
   .header {

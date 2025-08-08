@@ -1,12 +1,13 @@
 // path: src/pages/CustomerDetailPage.jsx
-// VERSÃO 2: Adicionada funcionalidade de exclusão de cliente com modal de confirmação.
+// VERSÃO 4: Refatorado o card de contacto para exibir o ícone do WhatsApp e ser
+// um link clicável apenas se o cliente estiver ativo e tiver telemóvel.
 
 import React, { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import toast from 'react-hot-toast';
 import styles from './CustomerDetailPage.module.css';
-import { FaArrowLeft, FaEdit, FaUser, FaMapMarkerAlt, FaPhone, FaBirthdayCake, FaIdCard, FaUsers, FaTrash } from 'react-icons/fa';
+import { FaArrowLeft, FaEdit, FaUser, FaMapMarkerAlt, FaPhone, FaBirthdayCake, FaIdCard, FaUsers, FaTrash, FaWhatsapp } from 'react-icons/fa';
 import Button from '../components/Button';
 import ProgressBar from '../components/ProgressBar';
 import Modal from '../components/Modal';
@@ -35,19 +36,7 @@ const CustomerDetailPage = () => {
 
   const handleSaveCustomer = async (formData) => {
     setIsSaving(true);
-    const payload = {
-      p_customer_id: customerDetails?.profile.id || null,
-      p_full_name: formData.full_name,
-      p_cpf: formData.cpf || null,
-      p_cellphone: formData.cellphone || null,
-      p_birth_date: formData.birth_date || null,
-      p_contact_customer_id: formData.contact_customer_id || null,
-      p_email: formData.email || null,
-      p_address_id: formData.address_id || null,
-      p_address_number: formData.address_number || null,
-      p_address_complement: formData.address_complement || null
-    };
-    const { error } = await supabase.rpc('create_or_update_customer', payload);
+    const { error } = await supabase.rpc('create_or_update_customer', formData);
     if (error) { toast.error(handleSupabaseError(error)); }
     else { toast.success('Cliente atualizado!'); setIsEditModalOpen(false); fetchDetails(); }
     setIsSaving(false);
@@ -78,6 +67,9 @@ const CustomerDetailPage = () => {
       `\n${profile.address.city}/${profile.address.state}` +
       `${profile.address.cep ? ` - CEP: ${profile.address.cep}` : ''}`
     : 'Endereço não informado';
+    
+  const phoneToWhatsApp = profile.cellphone ? `55${profile.cellphone.replace(/\D/g, '')}` : null;
+  const canWhatsApp = profile.is_active && phoneToWhatsApp;
 
   return (
     <div className={styles.container}>
@@ -109,7 +101,21 @@ const CustomerDetailPage = () => {
       <div className={styles.mainGrid}>
         <div className={styles.profileSection}>
             <div className={styles.profileCard}><FaUser className={styles.icon} /> <h3>{profile.full_name}</h3></div>
-            <div className={styles.profileCard}><FaPhone className={styles.icon} /> <p>{profile.cellphone ? maskPhone(profile.cellphone) : 'Não informado'}</p></div>
+            
+            <div className={styles.profileCard}>
+                {canWhatsApp ? (
+                    <a href={`https://wa.me/${phoneToWhatsApp}`} target="_blank" rel="noopener noreferrer" className={styles.contactLink} title="Enviar WhatsApp">
+                        <FaWhatsapp className={`${styles.icon} ${styles.whatsappIcon}`} />
+                        <p>{maskPhone(profile.cellphone)}</p>
+                    </a>
+                ) : (
+                    <>
+                        <FaPhone className={styles.icon} /> 
+                        <p>{profile.cellphone ? maskPhone(profile.cellphone) : 'Não informado'}</p>
+                    </>
+                )}
+            </div>
+
             <div className={styles.profileCard}><FaIdCard className={styles.icon} /> <p>{profile.cpf || 'Não informado'}</p></div>
             <div className={styles.profileCard}><FaBirthdayCake className={styles.icon} /> <p>{profile.birth_date ? new Date(profile.birth_date).toLocaleDateString('pt-BR', {timeZone: 'UTC'}) : 'Não informado'}</p></div>
             <div className={`${styles.profileCard} ${styles.addressCard}`}>

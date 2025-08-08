@@ -1,11 +1,12 @@
 // path: src/pages/CustomersPage.jsx
-// REATORAÇÃO: Página refatorada para usar o hook customizado useResourceManagement.
+// REATORAÇÃO: Adicionada a opção de alternar entre visualização em cartões e tabela.
+// A lógica de exportação foi movida para um utilitário.
 
 import React, { useState, useCallback } from 'react';
 import { supabase } from '../lib/supabase';
 import toast from 'react-hot-toast';
 import styles from './CustomersPage.module.css';
-import { FaSearch, FaPlus, FaEye, FaUserCircle, FaPhoneAlt, FaArrowLeft, FaArrowRight, FaFileCsv, FaUsers } from 'react-icons/fa';
+import { FaSearch, FaPlus, FaEye, FaUserCircle, FaArrowLeft, FaArrowRight, FaFileCsv, FaUsers, FaTh, FaList } from 'react-icons/fa';
 import Input from '../components/Input';
 import Button from '../components/Button';
 import Modal from '../components/Modal';
@@ -18,12 +19,13 @@ import EmptyState from '../components/EmptyState';
 import CardSkeleton from '../components/CardSkeleton';
 import { maskPhone } from '../utils/masks';
 import useResourceManagement from '../hooks/useResourceManagement';
+import { exportCustomersToGoogleCSV } from '../utils/exportUtils'; // Importação da função de exportação
 
 const CustomersPage = () => {
   const navigate = useNavigate();
   const [statusFilter, setStatusFilter] = useState('all');
+  const [viewMode, setViewMode] = useState('card'); // 'card' ou 'table'
 
-  // 1. Definir a função que busca os dados específicos desta página
   const fetchCustomersFn = useCallback(async ({ page, itemsPerPage, searchTerm }) => {
     const from = page * itemsPerPage;
     const { data: count, error: countError } = await supabase.rpc('count_customers_filtered', { 
@@ -33,17 +35,16 @@ const CustomersPage = () => {
     if (countError) return { error: countError };
 
     const { data, error: dataError } = await supabase.rpc('get_paginated_customers_with_details', {
+      p_limit: itemsPerPage,
+      p_offset: from,
       p_search_term: searchTerm,
       p_status_filter: statusFilter,
-      p_offset: from,
-      p_limit: itemsPerPage
     });
     if (dataError) return { error: dataError };
     
     return { data, count };
-  }, [statusFilter]); // A função de busca depende do filtro de status
+  }, [statusFilter]);
 
-  // 2. Usar o hook, passando a função de busca
   const {
     data: customers,
     loading,
@@ -63,19 +64,7 @@ const CustomersPage = () => {
 
   const handleSaveCustomer = async (formData) => {
     setIsSaving(true);
-    const payload = {
-      p_customer_id: customerToEdit?.id || null,
-      p_full_name: formData.full_name,
-      p_cpf: formData.cpf || null,
-      p_cellphone: formData.cellphone || null,
-      p_birth_date: formData.birth_date || null,
-      p_contact_customer_id: formData.contact_customer_id || null,
-      p_email: formData.email || null,
-      p_address_id: formData.address_id || null,
-      p_address_number: formData.address_number || null,
-      p_address_complement: formData.address_complement || null
-    };
-    const { error } = await supabase.rpc('create_or_update_customer', payload);
+    const { error } = await supabase.rpc('create_or_update_customer', formData);
     if (error) { toast.error(handleSupabaseError(error)); }
     else { toast.success(`Cliente ${customerToEdit ? 'atualizado' : 'criado'}!`); handleCloseModal(); fetchCustomers(); }
     setIsSaving(false);
@@ -92,45 +81,70 @@ const CustomersPage = () => {
   const handleExportCSV = async () => {
     const toastId = toast.loading('A preparar exportação...');
     const { data: customersToExport, error } = await supabase.rpc('get_customers_for_export');
-    if (error || !customersToExport || customersToExport.length === 0) {
-      toast.error(error ? handleSupabaseError(error) : 'Nenhum cliente com telefone para exportar.', { id: toastId });
+    toast.dismiss(toastId);
+    if (error) {
+      toast.error(handleSupabaseError(error));
       return;
     }
-    const headers = "First Name,Birthday,Notes,Labels,E-mail 1 - Label,E-mail 1 - Value,Phone 1 - Label,Phone 1 - Value,Address 1 - Label,Address 1 - Street,Address 1 - Extended Address,Address 1 - City,Address 1 - Region,Address 1 - Postal Code,Address 1 - Country";
-    const rows = customersToExport.map(c => {
-      const firstName = `${c.full_name} ${c.is_active ? '✅' : '❌'}`;
-      const birthday = c.birth_date ? new Date(c.birth_date).toLocaleDateString('pt-BR', { timeZone: 'UTC' }) : '';
-      const notes = c.associated_contacts || '';
-      const labels = 'AC AD';
-      const emailLabel = 'Home';
-      const emailValue = c.email || '';
-      const phoneLabel = 'Mobile';
-      let phoneValue = (c.cellphone_to_use || '').replace(/\D/g, '');
-      if (phoneValue.length === 11 && !phoneValue.startsWith('0')) {
-        phoneValue = `0${phoneValue}`;
-      }
-      const addressLabel = 'Home';
-      const street = `${c.street_name || ''}, ${c.address_number || 'SN'}`;
-      const extendedAddress = c.neighborhood || '';
-      const city = c.city_name || '';
-      const region = c.state_uf || '';
-      const postalCode = c.cep || '';
-      const country = 'Brasil';
-      const fields = [firstName, birthday, notes, labels, emailLabel, emailValue, phoneLabel, phoneValue, addressLabel, street, extendedAddress, city, region, postalCode, country];
-      return fields.map(field => `"${(field || '').toString().replace(/"/g, '""')}"`).join(',');
-    });
-    const csvContent = "data:text/csv;charset=utf-8," + [headers, ...rows].join("\n");
-    const encodedUri = encodeURI(csvContent);
-    const link = document.createElement("a");
-    link.setAttribute("href", encodedUri);
-    link.setAttribute("download", "google_contacts.csv");
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    toast.success("Exportação concluída!", { id: toastId });
+    exportCustomersToGoogleCSV(customersToExport);
   };
 
   const totalPages = Math.ceil(totalCount / ITEMS_PER_PAGE);
+
+  const renderTableView = () => (
+    <div className={styles.tableContainer}>
+      <table className={styles.table}>
+        <thead>
+          <tr>
+            <th>Status</th>
+            <th>Nome Completo</th>
+            <th>Telemóvel</th>
+            <th>Endereço</th>
+            <th>Ações</th>
+          </tr>
+        </thead>
+        <tbody>
+          {customers.map(customer => (
+            <tr key={customer.id}>
+              <td data-label="Status">
+                <span className={`${styles.statusIndicator} ${customer.is_active ? styles.active : styles.inactive}`}>
+                  {customer.is_active ? 'Ativo' : 'Inativo'}
+                </span>
+              </td>
+              <td data-label="Nome">{customer.full_name}</td>
+              <td data-label="Telemóvel">{customer.cellphone ? maskPhone(customer.cellphone) : 'N/A'}</td>
+              <td data-label="Endereço">{customer.address_info}</td>
+              <td data-label="Ações" className={styles.tableActions}>
+                <ToggleSwitch id={`toggle-table-${customer.id}`} checked={customer.is_active} onChange={() => handleToggleStatus(customer)} />
+                <Button variant="icon" onClick={() => navigate(`/customers/${customer.id}`)} title="Ver Detalhes">
+                  <FaEye />
+                </Button>
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+
+  const renderCardView = () => (
+    <div className={styles.grid}>
+      {customers.map(customer => (
+        <div key={customer.id} className={`${styles.card} ${!customer.is_active ? styles.inactiveCard : ''}`}>
+          <div className={styles.cardHeader}><FaUserCircle className={styles.cardIcon} /><h3 className={styles.cardTitle}>{customer.full_name}</h3></div>
+          <div className={styles.cardBody}>
+            <p><strong>CPF:</strong> {customer.cpf || 'Não informado'}</p>
+            <p><strong>Telemóvel:</strong> {customer.cellphone ? maskPhone(customer.cellphone) : 'Não informado'}</p>
+            <p><strong>Endereço:</strong> {customer.address_info}</p>
+          </div>
+          <div className={styles.cardFooter}>
+            <ToggleSwitch id={`toggle-card-${customer.id}`} checked={customer.is_active} onChange={() => handleToggleStatus(customer)} />
+            <button className={styles.actionButton} onClick={() => navigate(`/customers/${customer.id}`)}><FaEye /> Detalhes</button>
+          </div>
+        </div>
+      ))}
+    </div>
+  );
 
   return (
     <div className={styles.container}>
@@ -142,50 +156,35 @@ const CustomersPage = () => {
         <h1>Gerenciamento de Clientes</h1>
         <div className={styles.actions}>
           <div className={styles.searchInputWrapper}>
-            <Input id="search" placeholder="Buscar por nome, CPF ou telemóvel..." icon={FaSearch} value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} />
+            <Input id="search" placeholder="Buscar por nome ou CPF..." icon={FaSearch} value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} />
           </div>
           <div className={styles.filterGroup}>
             <Button variant={statusFilter === 'active' ? 'primary' : 'secondary'} onClick={() => setStatusFilter('active')}>Ativos</Button>
             <Button variant={statusFilter === 'inactive' ? 'primary' : 'secondary'} onClick={() => setStatusFilter('inactive')}>Inativos</Button>
             <Button variant={statusFilter === 'all' ? 'primary' : 'secondary'} onClick={() => setStatusFilter('all')}>Todos</Button>
           </div>
+          <div className={styles.viewToggle}>
+            <Button variant={viewMode === 'card' ? 'primary' : 'icon'} onClick={() => setViewMode('card')} title="Visualização em Cartões"><FaTh /></Button>
+            <Button variant={viewMode === 'table' ? 'primary' : 'icon'} onClick={() => setViewMode('table')} title="Visualização em Tabela"><FaList /></Button>
+          </div>
           <Button onClick={handleExportCSV} variant="secondary"><FaFileCsv /> Exportar CSV</Button>
           <Button onClick={() => handleOpenModal(null)}><FaPlus /> Novo Cliente</Button>
         </div>
       </header>
 
-      <div className={styles.grid}>
-        {loading ? (
-          Array.from({ length: 6 }).map((_, index) => <CardSkeleton key={index} />)
-        ) : customers.length > 0 ? (
-          customers.map(customer => (
-            <div key={customer.id} className={`${styles.card} ${!customer.is_active ? styles.inactive : ''}`}>
-              <div className={styles.cardHeader}><FaUserCircle className={styles.cardIcon} /><h3 className={styles.cardTitle}>{customer.full_name}</h3></div>
-              <div className={styles.cardBody}>
-                <p><strong>CPF:</strong> {customer.cpf || 'Não informado'}</p>
-                {customer.cellphone ? (<p><strong>Telemóvel:</strong> {maskPhone(customer.cellphone)}</p>) 
-                : customer.contact ? (<p className={styles.contactInfo}><FaPhoneAlt /> <span>Contato por: <strong>{customer.contact.full_name}</strong> ({maskPhone(customer.contact.cellphone)})</span></p>) 
-                : (<p><strong>Telemóvel:</strong> Não informado</p>)}
-                <p><strong>Endereço:</strong> {customer.addresses ? `${customer.addresses.street_name}, ${customer.address_number || 'S/N'}` : 'Não informado'}</p>
-              </div>
-              <div className={styles.cardFooter}>
-                <ToggleSwitch id={`toggle-${customer.id}`} checked={customer.is_active} onChange={() => handleToggleStatus(customer)} />
-                <button className={styles.actionButton} onClick={() => navigate(`/customers/${customer.id}`)}><FaEye /> Detalhes</button>
-              </div>
-            </div>
-          ))
-        ) : (
-          <EmptyState
-            icon={FaUsers}
-            title={searchTerm ? "Nenhum resultado" : "Nenhum cliente"}
-            message={
-              searchTerm
-                ? <>Nenhum cliente encontrado para a busca <strong>"{searchTerm}"</strong>.</>
-                : "Ainda não há clientes cadastrados ou nenhum corresponde ao filtro selecionado."
-            }
-          />
-        )}
-      </div>
+      {loading ? (
+        <div className={styles.grid}>
+          {Array.from({ length: 6 }).map((_, index) => <CardSkeleton key={index} />)}
+        </div>
+      ) : customers.length > 0 ? (
+        viewMode === 'card' ? renderCardView() : renderTableView()
+      ) : (
+        <EmptyState
+          icon={FaUsers}
+          title={searchTerm ? "Nenhum resultado" : "Nenhum cliente"}
+          message={searchTerm ? <>Nenhum cliente encontrado para a busca <strong>"{searchTerm}"</strong>.</> : "Ainda não há clientes cadastrados."}
+        />
+      )}
 
       {totalPages > 1 && (
         <div className={styles.pagination}>
