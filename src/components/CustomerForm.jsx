@@ -1,17 +1,19 @@
 // path: src/components/CustomerForm.jsx
-// CORREÇÃO (BUG-01): As funções de busca foram envolvidas em `useCallback`
-// e adicionadas corretamente aos arrays de dependência dos `useEffect`s
-// para garantir a execução correta e evitar loops de renderização.
+// VERSÃO 7: Corrigida a lógica de busca de CEP genérico para garantir que o modal
+// de novo endereço seja aberto corretamente e a execução seja interrompida.
 
 import React, { useState, useEffect, useCallback } from "react";
 import styles from "./CustomerForm.module.css";
 import Input from "./Input";
 import Button from "./Button";
+import Modal from "./Modal";
+import AddressForm from "./AddressForm";
 import toast from "react-hot-toast";
 import { supabase } from "../lib/supabase";
 import { handleSupabaseError } from '../utils/errorHandler';
-import { maskCPF, maskPhone } from '../utils/masks';
+import { maskCPF, maskPhone, maskCEP } from '../utils/masks';
 import useDebounce from '../hooks/useDebounce';
+import { FaPlus } from "react-icons/fa";
 
 const CustomerForm = ({ onSave, onClose, customerToEdit, loading }) => {
   const initialFormData = {
@@ -27,6 +29,10 @@ const CustomerForm = ({ onSave, onClose, customerToEdit, loading }) => {
   const [selectedContactName, setSelectedContactName] = useState("");
   const [foundAddress, setFoundAddress] = useState(null);
   const [isSearchingContacts, setIsSearchingContacts] = useState(false);
+  
+  const [isAddressModalOpen, setIsAddressModalOpen] = useState(false);
+  const [isSavingAddress, setIsSavingAddress] = useState(false);
+  const [cepForManualAdd, setCepForManualAdd] = useState("");
 
   const debouncedCep = useDebounce(cep, 500);
   const debouncedContactSearch = useDebounce(contactSearch, 500);
@@ -49,24 +55,76 @@ const CustomerForm = ({ onSave, onClose, customerToEdit, loading }) => {
       
       setCepLoading(true);
       setFoundAddress(null);
+      setFormData(prev => ({ ...prev, address_id: '' }));
+
       try {
-        const response = await fetch(`https://viacep.com.br/ws/${cleanedCep}/json/`);
-        const data = await response.json();
-        if (data.erro) {
-          toast.error("CEP não encontrado.");
-        } else {
-          const { data: addressId, error } = await supabase.rpc("find_or_create_address_by_cep", {
-              p_cep: data.cep, p_street_name: data.logradouro, p_neighborhood: data.bairro,
-              p_city_name: data.localidade, p_state_uf: data.uf,
-          });
-          if (error) throw error;
-          
-          await fetchAddressOptions();
-          setFormData((prev) => ({ ...prev, address_id: addressId }));
-          setFoundAddress({ street: data.logradouro, city: data.localidade, state: data.uf });
-          toast.success("Endereço encontrado e selecionado!");
+        const viaCepResponse = await fetch(`https://viacep.com.br/ws/${cleanedCep}/json/`);
+        const viaCepData = await viaCepResponse.json();
+
+        if (viaCepData.erro) {
+          toast.error("CEP não encontrado. Cadastre o endereço manualmente.");
+          setCepForManualAdd(debouncedCep);
+          setIsAddressModalOpen(true);
+          setCepLoading(false);
+          return;
         }
+
+        const isGenericCep = !viaCepData.logradouro;
+
+        if (isGenericCep) {
+          toast.info("CEP de cidade/região. Especifique a rua para cadastrar.");
+          setCepForManualAdd(debouncedCep);
+          setIsAddressModalOpen(true);
+          setCepLoading(false);
+          return;
+        }
+        
+        const { data: existingAddress, error: findError } = await supabase.rpc('find_address_by_details', {
+            p_cep: viaCepData.cep,
+            p_street_name: viaCepData.logradouro,
+            p_city_name: viaCepData.localidade,
+            p_state_uf: viaCepData.uf
+        });
+
+        if (findError) throw findError;
+
+        if (existingAddress) {
+          setFormData(prev => ({ ...prev, address_id: existingAddress.id }));
+          setFoundAddress({ street: existingAddress.street_name, city: viaCepData.localidade, state: viaCepData.uf });
+          toast.success("Endereço existente selecionado!");
+        } else {
+          toast.loading('Endereço novo, a cadastrar...');
+          
+          const { data: cityData, error: cityError } = await supabase
+              .from('cities')
+              .select('id')
+              .ilike('name', viaCepData.localidade)
+              .single();
+
+          if (cityError || !cityData) {
+              toast.error('Cidade do CEP não encontrada no banco de dados.');
+              throw cityError || new Error('Cidade não encontrada');
+          }
+
+          const { data: newAddress, error: createError } = await supabase.rpc('create_or_update_address', {
+              p_cep: viaCepData.cep.replace(/\D/g, ''),
+              p_street_name: viaCepData.logradouro,
+              p_neighborhood: viaCepData.bairro,
+              p_city_id: cityData.id,
+              p_address_id: null
+          });
+
+          if (createError) throw createError;
+          
+          toast.dismiss();
+          toast.success('Endereço novo cadastrado e selecionado!');
+          await fetchAddressOptions();
+          setFormData(prev => ({ ...prev, address_id: newAddress.id }));
+          setFoundAddress({ street: newAddress.street_name, city: viaCepData.localidade, state: viaCepData.uf });
+        }
+
       } catch (error) {
+        toast.dismiss();
         toast.error(handleSupabaseError(error));
       } finally {
         setCepLoading(false);
@@ -106,10 +164,14 @@ const CustomerForm = ({ onSave, onClose, customerToEdit, loading }) => {
   useEffect(() => {
     if (customerToEdit) {
       setFormData({
-        full_name: customerToEdit.full_name || "", cpf: customerToEdit.cpf || "", cellphone: customerToEdit.cellphone || "",
+        full_name: customerToEdit.full_name || "", 
+        cpf: customerToEdit.cpf || "", 
+        cellphone: customerToEdit.cellphone || "",
         birth_date: customerToEdit.birth_date ? new Date(customerToEdit.birth_date).toISOString().split("T")[0] : "",
-        email: customerToEdit.email || "", contact_customer_id: customerToEdit.contact_customer_id || "",
-        address_id: customerToEdit.address_id || "", address_number: customerToEdit.address_number || "",
+        email: customerToEdit.email || "", 
+        contact_customer_id: customerToEdit.contact_customer_id || "",
+        address_id: customerToEdit.address_id || "",
+        address_number: customerToEdit.address_number || "",
         address_complement: customerToEdit.address_complement || "",
       });
 
@@ -155,6 +217,10 @@ const CustomerForm = ({ onSave, onClose, customerToEdit, loading }) => {
       setFormData((prev) => ({ ...prev, [name]: value }));
     }
   };
+  
+  const handleCepChange = (e) => {
+    setCep(maskCEP(e.target.value));
+  };
 
   const handleSubmit = (e) => {
     e.preventDefault();
@@ -162,100 +228,119 @@ const CustomerForm = ({ onSave, onClose, customerToEdit, loading }) => {
       toast.error("O nome completo é obrigatório.");
       return;
     }
-    const payload = {
-      customer_id: customerToEdit?.id || null,
-      full_name: formData.full_name,
-      cpf: formData.cpf || null,
-      cellphone: formData.cellphone || null,
-      birth_date: formData.birth_date || null,
-      contact_customer_id: formData.contact_customer_id || null,
-      email: formData.email || null,
-      address_id: formData.address_id || null,
-      address_number: formData.address_number || null,
-      address_complement: formData.address_complement || null
-    };
-    onSave(payload);
+    onSave(formData);
+  };
+
+  const handleSaveNewAddress = async (addressData) => {
+    setIsSavingAddress(true);
+    const { data: newAddress, error } = await supabase.rpc('create_or_update_address', addressData);
+
+    if (error) {
+        toast.error(handleSupabaseError(error));
+    } else {
+        toast.success('Novo endereço criado com sucesso!');
+        await fetchAddressOptions();
+        setFormData(prev => ({ ...prev, address_id: newAddress.id }));
+        setIsAddressModalOpen(false);
+    }
+    setIsSavingAddress(false);
   };
 
   return (
-    <form onSubmit={handleSubmit} className={styles.form}>
-      <fieldset className={styles.fieldset}>
-        <legend>Dados Pessoais e Contato</legend>
-        <Input id="full_name" name="full_name" label="Nome Completo" value={formData.full_name} onChange={handleChange} required />
-        <div className={styles.grid}>
-          <Input id="cpf" name="cpf" label="CPF" value={formData.cpf} onChange={handleChange} />
-          <Input id="birth_date" name="birth_date" label="Data de Nascimento" type="date" value={formData.birth_date} onChange={handleChange} />
-        </div>
-        <Input id="cellphone" name="cellphone" label="Telemóvel" value={formData.cellphone} onChange={handleChange} />
-        <Input id="email" name="email" label="E-mail" type="email" value={formData.email} onChange={handleChange} />
+    <>
+      <Modal isOpen={isAddressModalOpen} onClose={() => setIsAddressModalOpen(false)} title="Adicionar Novo Endereço">
+          <AddressForm 
+            onSave={handleSaveNewAddress}
+            onClose={() => setIsAddressModalOpen(false)}
+            initialCep={cep}
+            loading={isSavingAddress}
+          />
+      </Modal>
 
-        {!formData.cellphone && (
+      <form onSubmit={handleSubmit} className={styles.form}>
+        <fieldset className={styles.fieldset}>
+          <legend>Dados Pessoais e Contato</legend>
+          <Input id="full_name" name="full_name" label="Nome Completo" value={formData.full_name} onChange={handleChange} required />
+          <div className={styles.grid}>
+            <Input id="cpf" name="cpf" label="CPF" value={formData.cpf} onChange={handleChange} />
+            <Input id="birth_date" name="birth_date" label="Data de Nascimento" type="date" value={formData.birth_date} onChange={handleChange} />
+          </div>
+          <Input id="cellphone" name="cellphone" label="Telemóvel" value={formData.cellphone} onChange={handleChange} />
+          <Input id="email" name="email" label="E-mail" type="email" value={formData.email} onChange={handleChange} />
+
+          {!formData.cellphone && (
+            <div className={styles.formGroup}>
+              <label>Associar a um Contato</label>
+              {selectedContactName ? (
+                <div className={styles.selectedContact}>
+                  <span>{selectedContactName}</span>
+                  <button type="button" onClick={() => { setSelectedContactName(""); setFormData((prev) => ({ ...prev, contact_customer_id: "" })); }}>
+                    Alterar
+                  </button>
+                </div>
+              ) : (
+                <div className={styles.searchWrapper}>
+                  <Input id="contact-search" placeholder="Digite para buscar um contato..." value={contactSearch} onChange={(e) => setContactSearch(e.target.value)} />
+                  {isSearchingContacts && <div className={styles.loaderSmall}></div>}
+                  {contactResults.length > 0 && (
+                    <ul className={styles.searchResults}>
+                      {contactResults.map((contact) => (
+                        <li key={contact.id} onClick={() => handleSelectContact(contact)}>
+                          {contact.full_name}
+                          <span className={styles.searchResultAddress}>{contact.address_info}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
+        </fieldset>
+        <fieldset className={styles.fieldset}>
+          <legend>Endereço</legend>
+          <div className={styles.cepGroup}>
+            <Input id="cep-lookup" name="cep-lookup" label="Buscar Endereço por CEP" value={cep} onChange={handleCepChange} maxLength="9" />
+            {cepLoading && <div className={styles.loader}></div>}
+          </div>
+
+          {foundAddress && (
+            <div className={styles.foundAddressDisplay}>
+              {foundAddress.street}, {foundAddress.city}/{foundAddress.state}
+            </div>
+          )}
+
           <div className={styles.formGroup}>
-            <label>Associar a um Contato</label>
-            {selectedContactName ? (
-              <div className={styles.selectedContact}>
-                <span>{selectedContactName}</span>
-                <button type="button" onClick={() => { setSelectedContactName(""); setFormData((prev) => ({ ...prev, contact_customer_id: "" })); }}>
-                  Alterar
-                </button>
-              </div>
-            ) : (
-              <div className={styles.searchWrapper}>
-                <Input id="contact-search" placeholder="Digite para buscar um contato..." value={contactSearch} onChange={(e) => setContactSearch(e.target.value)} />
-                {isSearchingContacts && <div className={styles.loaderSmall}></div>}
-                {contactResults.length > 0 && (
-                  <ul className={styles.searchResults}>
-                    {contactResults.map((contact) => (
-                      <li key={contact.id} onClick={() => handleSelectContact(contact)}>
-                        {contact.full_name}
-                        <span className={styles.searchResultAddress}>{contact.address_info}</span>
-                      </li>
-                    ))}
-                  </ul>
-                )}
-              </div>
-            )}
+            <label htmlFor="address_id">Rua / Logradouro</label>
+            <div className={styles.addressSelectGroup}>
+              <select id="address_id" name="address_id" value={formData.address_id || ''} onChange={handleChange} className={styles.select}>
+                <option value="">Selecione um endereço ou busque por CEP</option>
+                {addressOptions.map((addr) => (
+                  <option key={addr.id} value={addr.id}>
+                    {`${addr.street_name}${addr.neighborhood ? ` (${addr.neighborhood})` : ''} - ${addr.city.name}/${addr.city.state.uf}`}
+                  </option>
+                ))}
+              </select>
+              <button type="button" onClick={() => setIsAddressModalOpen(true)} className={styles.newAddressBtn}>
+                <FaPlus /> Novo
+              </button>
+            </div>
           </div>
-        )}
-      </fieldset>
-      <fieldset className={styles.fieldset}>
-        <legend>Endereço</legend>
-        <div className={styles.cepGroup}>
-          <Input id="cep-lookup" name="cep-lookup" label="Buscar Endereço por CEP" value={cep} onChange={(e) => setCep(e.target.value)} />
-          {cepLoading && <div className={styles.loader}></div>}
-        </div>
-
-        {foundAddress && (
-          <div className={styles.foundAddressDisplay}>
-            {foundAddress.street}, {foundAddress.city}/{foundAddress.state}
+          <div className={styles.grid}>
+            <Input id="address_number" name="address_number" label="Número" value={formData.address_number} onChange={handleChange} />
+            <Input id="address_complement" name="address_complement" label="Complemento" value={formData.address_complement} onChange={handleChange} placeholder="Apto, Bloco, etc." />
           </div>
-        )}
-
-        <div className={styles.formGroup}>
-          <label htmlFor="address_id">Rua / Logradouro</label>
-          <select id="address_id" name="address_id" value={formData.address_id} onChange={handleChange} className={styles.select}>
-            <option value="">Selecione um endereço ou busque por CEP</option>
-            {addressOptions.map((addr) => (
-              <option key={addr.id} value={addr.id}>
-                {`${addr.street_name}${addr.neighborhood ? ` (${addr.neighborhood})` : ''} - ${addr.city.name}/${addr.city.state.uf}`}
-              </option>
-            ))}
-          </select>
+        </fieldset>
+        <div className={styles.formActions}>
+          <Button type="button" variant="secondary" onClick={onClose} disabled={loading}>
+            Cancelar
+          </Button>
+          <Button type="submit" loading={loading} disabled={loading}>
+            {loading ? "A Guardar..." : "Guardar Cliente"}
+          </Button>
         </div>
-        <div className={styles.grid}>
-          <Input id="address_number" name="address_number" label="Número" value={formData.address_number} onChange={handleChange} />
-          <Input id="address_complement" name="address_complement" label="Complemento" value={formData.address_complement} onChange={handleChange} placeholder="Apto, Bloco, etc." />
-        </div>
-      </fieldset>
-      <div className={styles.formActions}>
-        <Button type="button" variant="secondary" onClick={onClose} disabled={loading}>
-          Cancelar
-        </Button>
-        <Button type="submit" loading={loading} disabled={loading}>
-          {loading ? "A Guardar..." : "Guardar Cliente"}
-        </Button>
-      </div>
-    </form>
+      </form>
+    </>
   );
 };
 

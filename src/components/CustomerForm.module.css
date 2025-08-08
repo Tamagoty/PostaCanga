@@ -96,7 +96,6 @@
   margin-top: 1rem;
 }
 
-/* Novos estilos */
 .searchWrapper {
   position: relative;
 }
@@ -159,4 +158,30 @@
   font-size: 0.9rem;
   margin-top: -0.5rem;
   margin-bottom: 1rem;
+}
+
+.addressSelectGroup {
+  display: flex;
+  gap: 0.5rem;
+  align-items: stretch;
+}
+
+.addressSelectGroup .select {
+  flex-grow: 1;
+}
+
+.newAddressBtn {
+  flex-shrink: 0;
+  padding: 0.75rem 1rem;
+  background-color: var(--bg-tertiary);
+  border: 1px solid var(--border-color);
+  color: var(--text-primary);
+  font-weight: 500;
+  border-radius: var(--border-radius); /* Adicionado o arredondamento */
+  transition: background-color 0.2s, border-color 0.2s;
+}
+
+.newAddressBtn:hover {
+    background-color: var(--border-color);
+    border-color: var(--border-color);
 }

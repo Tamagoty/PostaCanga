@@ -1,7 +1,11 @@
-// Arquivo: src/utils/masks.js
+// path: src/utils/masks.js
 // DESCRIÇÃO: Funções utilitárias para aplicar máscaras de formatação em campos de formulário.
 
-// Aplica a máscara de CPF (###.###.###-##)
+/**
+ * Aplica a máscara de CPF (###.###.###-##)
+ * @param {string} value O valor do input.
+ * @returns {string} O valor com a máscara aplicada.
+ */
 export const maskCPF = (value) => {
   if (!value) return "";
   return value
@@ -12,7 +16,11 @@ export const maskCPF = (value) => {
     .substring(0, 14); // Limita o tamanho
 };
 
-// Aplica a máscara de Telemóvel ((##) #.####-####)
+/**
+ * Aplica a máscara de Telemóvel ((##) #.####-####) de forma progressiva.
+ * @param {string} value O valor do input.
+ * @returns {string} O valor com a máscara aplicada.
+ */
 export const maskPhone = (value) => {
   if (!value) return "";
   // Limpa o valor, deixando apenas os dígitos
@@ -38,4 +46,19 @@ export const maskPhone = (value) => {
   }
 
   return formattedValue;
+};
+
+/**
+ * Aplica a máscara de CEP (XXXXX-XXX) e permite apenas números.
+ * @param {string} value O valor do input.
+ * @returns {string} O valor com a máscara aplicada.
+ */
+export const maskCEP = (value) => {
+  if (!value) return "";
+  // Remove todos os caracteres que não são dígitos
+  value = value.replace(/\D/g, '');
+  // Adiciona o hífen após o quinto dígito
+  value = value.replace(/^(\d{5})(\d)/, '$1-$2');
+  // Limita o comprimento total para 9 caracteres (incluindo o hífen)
+  return value.slice(0, 9);
 };

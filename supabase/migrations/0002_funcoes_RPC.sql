@@ -1,12 +1,11 @@
--- path: supabase/migrations/0002_funcoes.sql
+-- path: supabase/migrations/0002_funcoes_RPC.sql
 -- =============================================================================
 -- || ARQUIVO MESTRE 2: FUNÇÕES RPC (REMOTE PROCEDURE CALL) - VERSÃO COMPLETA E CORRIGIDA ||
 -- =============================================================================
 -- DESCRIÇÃO: Script idempotente contendo TODAS as funções RPC da aplicação,
 -- limpas, otimizadas e com as devidas verificações de segurança.
--- VERSÃO: 3.0 - Versão completa e definitiva. Inclui todas as funções do projeto
--- e corrige a ordem dos parâmetros em todas as funções de escrita para
--- corresponder à ordem alfabética enviada pelo cliente JS.
+-- VERSÃO: 3.1 - Funções perdidas recriadas e adicionadas.
+-- =============================================================================
 
 -- Remove funções antigas ou duplicadas para garantir um estado limpo.
 DROP FUNCTION IF EXISTS public.delete_employee(UUID) CASCADE;
@@ -102,115 +101,42 @@ BEGIN
 END;
 $$;
 
---------------------------------------------------------------------------------
--- FUNÇÕES DE USO GERAL (FUNCIONÁRIOS)
---------------------------------------------------------------------------------
-
-CREATE OR REPLACE FUNCTION public.create_or_update_address(p_address_id UUID, p_cep VARCHAR, p_city_id INT, p_neighborhood TEXT, p_street_name TEXT)
-RETURNS addresses
+CREATE OR REPLACE FUNCTION public.create_or_update_app_setting(p_description TEXT, p_key TEXT, p_label TEXT, p_value TEXT)
+RETURNS app_settings
 LANGUAGE plpgsql
 SECURITY DEFINER AS $$
 DECLARE
-    result_address addresses;
+    result_setting app_settings;
 BEGIN
-    IF p_address_id IS NULL THEN
-        INSERT INTO public.addresses (cep, street_name, neighborhood, city_id)
-        VALUES (p_cep, p_street_name, p_neighborhood, p_city_id)
-        RETURNING * INTO result_address;
-    ELSE
-        UPDATE public.addresses SET
-            cep = p_cep,
-            street_name = p_street_name,
-            neighborhood = p_neighborhood,
-            city_id = p_city_id,
-            updated_at = NOW()
-        WHERE id = p_address_id
-        RETURNING * INTO result_address;
+    IF NOT is_admin(auth.uid()) THEN
+        RAISE EXCEPTION 'Acesso negado. Apenas administradores podem executar esta ação.';
     END IF;
-    RETURN result_address;
+    INSERT INTO public.app_settings(key, value, description, label)
+    VALUES (p_key, p_value, p_description, p_label)
+    ON CONFLICT (key) DO UPDATE SET
+        value = EXCLUDED.value,
+        description = EXCLUDED.description,
+        label = EXCLUDED.label
+    RETURNING * INTO result_setting;
+    RETURN result_setting;
 END;
 $$;
 
-CREATE OR REPLACE FUNCTION public.delete_address(p_address_id UUID)
+CREATE OR REPLACE FUNCTION public.delete_app_setting(p_key TEXT)
 RETURNS void
 LANGUAGE plpgsql
 SECURITY DEFINER AS $$
 BEGIN
-    DELETE FROM public.addresses WHERE id = p_address_id;
-END;
-$$;
-
-CREATE OR REPLACE FUNCTION public.create_or_update_customer(
-    p_address_complement varchar, p_address_id uuid, p_address_number varchar, p_birth_date date, p_cellphone varchar,
-    p_contact_customer_id uuid, p_cpf varchar, p_customer_id uuid, p_email varchar, p_full_name text
-)
-RETURNS customers
-LANGUAGE plpgsql
-SECURITY DEFINER AS $$
-DECLARE
-    result_customer customers;
-BEGIN
-    IF p_customer_id IS NULL THEN
-        INSERT INTO public.customers (full_name, cpf, cellphone, email, birth_date, contact_customer_id, address_id, address_number, address_complement)
-        VALUES (p_full_name, p_cpf, p_cellphone, p_email, p_birth_date, p_contact_customer_id, p_address_id, p_address_number, p_address_complement)
-        RETURNING * INTO result_customer;
-    ELSE
-        UPDATE public.customers SET
-            full_name = p_full_name,
-            cpf = p_cpf,
-            cellphone = p_cellphone,
-            email = p_email,
-            birth_date = p_birth_date,
-            contact_customer_id = p_contact_customer_id,
-            address_id = p_address_id,
-            address_number = p_address_number,
-            address_complement = p_address_complement,
-            updated_at = NOW()
-        WHERE id = p_customer_id
-        RETURNING * INTO result_customer;
+    IF NOT is_admin(auth.uid()) THEN
+        RAISE EXCEPTION 'Acesso negado. Apenas administradores podem executar esta ação.';
     END IF;
-    RETURN result_customer;
+    DELETE FROM public.app_settings WHERE key = p_key;
 END;
 $$;
 
-CREATE OR REPLACE FUNCTION public.create_or_update_supply(p_description TEXT, p_initial_stock INT, p_name VARCHAR, p_supply_id UUID)
-RETURNS office_supplies
-LANGUAGE plpgsql
-SECURITY DEFINER AS $$
-DECLARE
-    result_supply office_supplies;
-BEGIN
-    IF p_supply_id IS NULL THEN
-        INSERT INTO public.office_supplies (name, description, stock)
-        VALUES (p_name, p_description, p_initial_stock)
-        RETURNING * INTO result_supply;
-    ELSE
-        UPDATE public.office_supplies SET
-            name = p_name,
-            description = p_description,
-            updated_at = NOW()
-        WHERE id = p_supply_id
-        RETURNING * INTO result_supply;
-    END IF;
-    RETURN result_supply;
-END;
-$$;
-
-CREATE OR REPLACE FUNCTION public.log_and_adjust_stock(p_quantity_change INT, p_reason TEXT, p_supply_id UUID)
-RETURNS void
-LANGUAGE plpgsql
-SECURITY DEFINER AS $$
-DECLARE
-    v_new_stock_total INT;
-BEGIN
-    UPDATE public.office_supplies
-    SET stock = stock + p_quantity_change
-    WHERE id = p_supply_id
-    RETURNING stock INTO v_new_stock_total;
-    INSERT INTO public.supply_stock_log (supply_id, user_id, quantity_changed, new_stock_total, reason)
-    VALUES (p_supply_id, auth.uid(), p_quantity_change, v_new_stock_total, p_reason);
-END;
-$$;
+--------------------------------------------------------------------------------
+-- FUNÇÕES DE OBJETOS (PACOTES)
+--------------------------------------------------------------------------------
 
 CREATE OR REPLACE FUNCTION public.create_or_update_object(
     p_cep TEXT, p_city_name TEXT, p_control_number INT, p_neighborhood TEXT, p_number TEXT,
@@ -257,12 +183,49 @@ BEGIN
 END;
 $$;
 
-CREATE OR REPLACE FUNCTION public.revert_object_status(p_control_number INT)
-RETURNS void
+CREATE OR REPLACE FUNCTION public.bulk_create_registered_objects(p_objects registered_object_input[])
+RETURNS TABLE (report_recipient_name TEXT, report_tracking_code TEXT, report_control_number INT)
 LANGUAGE plpgsql
 SECURITY DEFINER AS $$
+DECLARE
+    obj registered_object_input;
+    v_customer_id UUID;
+    v_storage_deadline DATE;
+    v_storage_days INT;
+    v_new_control_number INT;
 BEGIN
-    UPDATE public.objects SET status = 'Aguardando Retirada' WHERE control_number = p_control_number;
+    FOREACH obj IN ARRAY p_objects LOOP
+        -- Determina o prazo de guarda
+        SELECT COALESCE(tcr.storage_days, ot.default_storage_days, 20)
+        INTO v_storage_days
+        FROM public.object_types ot
+        LEFT JOIN public.tracking_code_rules tcr ON SUBSTRING(obj.tracking_code FROM 1 FOR 2) = tcr.prefix
+        WHERE ot.name = obj.object_type;
+
+        v_storage_deadline := CURRENT_DATE + (v_storage_days || ' days')::INTERVAL;
+
+        -- Tenta encontrar o cliente pelo nome
+        SELECT id INTO v_customer_id
+        FROM public.customers
+        WHERE f_unaccent(full_name) ILIKE f_unaccent(obj.recipient_name)
+        LIMIT 1;
+
+        -- Insere o objeto
+        INSERT INTO public.objects (
+            recipient_name, object_type, tracking_code, storage_deadline, customer_id,
+            delivery_street_name, delivery_address_number
+        ) VALUES (
+            obj.recipient_name, obj.object_type, obj.tracking_code, v_storage_deadline, v_customer_id,
+            obj.street_name, obj.address_number
+        ) RETURNING control_number INTO v_new_control_number;
+
+        -- Adiciona ao relatório de saída
+        report_recipient_name := obj.recipient_name;
+        report_tracking_code := obj.tracking_code;
+        report_control_number := v_new_control_number;
+        RETURN NEXT;
+    END LOOP;
+    RETURN;
 END;
 $$;
 
@@ -279,6 +242,406 @@ BEGIN
         control_number = p_control_number;
 END;
 $$;
+
+CREATE OR REPLACE FUNCTION public.revert_object_status(p_control_number INT)
+RETURNS void
+LANGUAGE plpgsql
+SECURITY DEFINER AS $$
+BEGIN
+    UPDATE public.objects SET status = 'Aguardando Retirada', updated_at = NOW() WHERE control_number = p_control_number;
+END;
+$$;
+
+CREATE OR REPLACE FUNCTION public.deliver_object(p_control_number INT)
+RETURNS void
+LANGUAGE plpgsql
+SECURITY DEFINER AS $$
+BEGIN
+    UPDATE public.objects SET status = 'Entregue', updated_at = NOW() WHERE control_number = p_control_number;
+END;
+$$;
+
+CREATE OR REPLACE FUNCTION public.return_object(p_control_number INT)
+RETURNS void
+LANGUAGE plpgsql
+SECURITY DEFINER AS $$
+BEGIN
+    UPDATE public.objects SET status = 'Devolvido', updated_at = NOW() WHERE control_number = p_control_number;
+END;
+$$;
+
+CREATE OR REPLACE FUNCTION public.archive_completed_objects()
+RETURNS void
+LANGUAGE plpgsql
+SECURITY DEFINER AS $$
+BEGIN
+    IF NOT is_admin(auth.uid()) THEN
+        RAISE EXCEPTION 'Acesso negado. Apenas administradores podem executar esta ação.';
+    END IF;
+
+    UPDATE public.objects
+    SET is_archived = TRUE
+    WHERE
+        status IN ('Entregue', 'Devolvido')
+        AND is_archived = FALSE
+        AND updated_at < (NOW() - INTERVAL '30 days');
+END;
+$$;
+
+CREATE OR REPLACE FUNCTION public.unarchive_object(p_control_number INT)
+RETURNS void
+LANGUAGE plpgsql
+SECURITY DEFINER AS $$
+BEGIN
+    UPDATE public.objects
+    SET is_archived = FALSE
+    WHERE control_number = p_control_number;
+END;
+$$;
+
+--------------------------------------------------------------------------------
+-- FUNÇÕES DE CLIENTES (CUSTOMERS)
+--------------------------------------------------------------------------------
+
+CREATE OR REPLACE FUNCTION public.create_or_update_customer(
+    p_address_complement varchar, p_address_id uuid, p_address_number varchar, p_birth_date date, p_cellphone varchar,
+    p_contact_customer_id uuid, p_cpf varchar, p_customer_id uuid, p_email varchar, p_full_name text
+)
+RETURNS customers
+LANGUAGE plpgsql
+SECURITY DEFINER AS $$
+DECLARE
+    result_customer customers;
+BEGIN
+    IF p_customer_id IS NULL THEN
+        INSERT INTO public.customers (full_name, cpf, cellphone, email, birth_date, contact_customer_id, address_id, address_number, address_complement)
+        VALUES (p_full_name, p_cpf, p_cellphone, p_email, p_birth_date, p_contact_customer_id, p_address_id, p_address_number, p_address_complement)
+        RETURNING * INTO result_customer;
+    ELSE
+        UPDATE public.customers SET
+            full_name = p_full_name,
+            cpf = p_cpf,
+            cellphone = p_cellphone,
+            email = p_email,
+            birth_date = p_birth_date,
+            contact_customer_id = p_contact_customer_id,
+            address_id = p_address_id,
+            address_number = p_address_number,
+            address_complement = p_address_complement,
+            updated_at = NOW()
+        WHERE id = p_customer_id
+        RETURNING * INTO result_customer;
+    END IF;
+    RETURN result_customer;
+END;
+$$;
+
+CREATE OR REPLACE FUNCTION public.set_customer_status(p_customer_id UUID, p_is_active BOOLEAN)
+RETURNS void
+LANGUAGE plpgsql
+SECURITY DEFINER AS $$
+BEGIN
+    UPDATE public.customers
+    SET is_active = p_is_active, updated_at = NOW()
+    WHERE id = p_customer_id;
+END;
+$$;
+
+CREATE OR REPLACE FUNCTION public.count_customers_filtered(p_search_term TEXT, p_status_filter TEXT)
+RETURNS INT
+LANGUAGE plpgsql AS $$
+DECLARE
+    total_count INT;
+BEGIN
+    SELECT COUNT(*)
+    INTO total_count
+    FROM public.customers
+    WHERE
+        (p_search_term IS NULL OR p_search_term = '' OR
+         (f_unaccent(full_name) ILIKE f_unaccent('%' || p_search_term || '%') OR
+          cpf ILIKE '%' || p_search_term || '%'))
+    AND
+        (p_status_filter IS NULL OR
+         (p_status_filter = 'active' AND is_active = TRUE) OR
+         (p_status_filter = 'inactive' AND is_active = FALSE));
+    RETURN total_count;
+END;
+$$;
+
+CREATE OR REPLACE FUNCTION public.get_paginated_customers_with_details(p_search_term TEXT, p_status_filter TEXT, p_page_size INT, p_page_offset INT)
+RETURNS TABLE (
+    id UUID,
+    full_name TEXT,
+    cpf VARCHAR,
+    cellphone VARCHAR,
+    is_active BOOLEAN,
+    address_info TEXT,
+    total_count BIGINT
+)
+LANGUAGE plpgsql AS $$
+BEGIN
+    RETURN QUERY
+    WITH filtered_customers AS (
+        SELECT c.*
+        FROM public.customers c
+        WHERE
+            (p_search_term IS NULL OR p_search_term = '' OR
+             (f_unaccent(c.full_name) ILIKE f_unaccent('%' || p_search_term || '%') OR
+              c.cpf ILIKE '%' || p_search_term || '%'))
+        AND
+            (p_status_filter IS NULL OR
+             (p_status_filter = 'active' AND c.is_active = TRUE) OR
+             (p_status_filter = 'inactive' AND c.is_active = FALSE))
+    )
+    SELECT
+        fc.id,
+        fc.full_name,
+        fc.cpf,
+        fc.cellphone,
+        fc.is_active,
+        COALESCE(a.street_name || ', ' || fc.address_number || ' - ' || a.neighborhood, 'Endereço não informado') AS address_info,
+        (SELECT count(*) FROM filtered_customers) AS total_count
+    FROM filtered_customers fc
+    LEFT JOIN public.addresses a ON fc.address_id = a.id
+    ORDER BY fc.full_name
+    LIMIT p_page_size
+    OFFSET p_page_offset;
+END;
+$$;
+
+--------------------------------------------------------------------------------
+-- FUNÇÕES DE ENDEREÇOS (ADDRESSES)
+--------------------------------------------------------------------------------
+
+CREATE OR REPLACE FUNCTION public.create_or_update_address(p_address_id UUID, p_cep VARCHAR, p_city_id INT, p_neighborhood TEXT, p_street_name TEXT)
+RETURNS addresses
+LANGUAGE plpgsql
+SECURITY DEFINER AS $$
+DECLARE
+    result_address addresses;
+BEGIN
+    IF p_address_id IS NULL THEN
+        INSERT INTO public.addresses (cep, street_name, neighborhood, city_id)
+        VALUES (p_cep, p_street_name, p_neighborhood, p_city_id)
+        RETURNING * INTO result_address;
+    ELSE
+        UPDATE public.addresses SET
+            cep = p_cep,
+            street_name = p_street_name,
+            neighborhood = p_neighborhood,
+            city_id = p_city_id,
+            updated_at = NOW()
+        WHERE id = p_address_id
+        RETURNING * INTO result_address;
+    END IF;
+    RETURN result_address;
+END;
+$$;
+
+CREATE OR REPLACE FUNCTION public.delete_address(p_address_id UUID)
+RETURNS void
+LANGUAGE plpgsql
+SECURITY DEFINER AS $$
+BEGIN
+    DELETE FROM public.addresses WHERE id = p_address_id;
+END;
+$$;
+
+CREATE OR REPLACE FUNCTION public.find_or_create_address_by_cep(p_cep TEXT, p_street_name TEXT, p_neighborhood TEXT, p_city_name TEXT, p_state_uf TEXT)
+RETURNS addresses
+LANGUAGE plpgsql
+SECURITY DEFINER AS $$
+DECLARE
+    v_city_id INT;
+    v_address_id UUID;
+    result_address addresses;
+BEGIN
+    -- Encontrar a cidade
+    SELECT c.id INTO v_city_id
+    FROM public.cities c
+    JOIN public.states s ON c.state_id = s.id
+    WHERE f_unaccent(c.name) ILIKE f_unaccent(p_city_name) AND s.uf ILIKE p_state_uf
+    LIMIT 1;
+
+    IF v_city_id IS NULL THEN
+        RAISE EXCEPTION 'Cidade não encontrada: %, %', p_city_name, p_state_uf;
+    END IF;
+
+    -- Tentar encontrar o endereço
+    SELECT a.id INTO v_address_id
+    FROM public.addresses a
+    WHERE a.cep = p_cep
+      AND f_unaccent(a.street_name) ILIKE f_unaccent(p_street_name)
+      AND a.city_id = v_city_id
+    LIMIT 1;
+
+    IF v_address_id IS NOT NULL THEN
+        SELECT * INTO result_address FROM public.addresses WHERE id = v_address_id;
+    ELSE
+        -- Criar novo endereço se não existir
+        INSERT INTO public.addresses (cep, street_name, neighborhood, city_id)
+        VALUES (p_cep, p_street_name, p_neighborhood, v_city_id)
+        RETURNING * INTO result_address;
+    END IF;
+
+    RETURN result_address;
+END;
+$$;
+
+--------------------------------------------------------------------------------
+-- FUNÇÕES DE MATERIAIS (SUPPLIES)
+--------------------------------------------------------------------------------
+
+CREATE OR REPLACE FUNCTION public.create_or_update_supply(p_description TEXT, p_initial_stock INT, p_name VARCHAR, p_supply_id UUID)
+RETURNS office_supplies
+LANGUAGE plpgsql
+SECURITY DEFINER AS $$
+DECLARE
+    result_supply office_supplies;
+BEGIN
+    IF p_supply_id IS NULL THEN
+        INSERT INTO public.office_supplies (name, description, stock)
+        VALUES (p_name, p_description, p_initial_stock)
+        RETURNING * INTO result_supply;
+    ELSE
+        UPDATE public.office_supplies SET
+            name = p_name,
+            description = p_description,
+            updated_at = NOW()
+        WHERE id = p_supply_id
+        RETURNING * INTO result_supply;
+    END IF;
+    RETURN result_supply;
+END;
+$$;
+
+CREATE OR REPLACE FUNCTION public.log_and_adjust_stock(p_quantity_change INT, p_reason TEXT, p_supply_id UUID)
+RETURNS void
+LANGUAGE plpgsql
+SECURITY DEFINER AS $$
+DECLARE
+    v_new_stock_total INT;
+BEGIN
+    UPDATE public.office_supplies
+    SET stock = stock + p_quantity_change
+    WHERE id = p_supply_id
+    RETURNING stock INTO v_new_stock_total;
+    INSERT INTO public.supply_stock_log (supply_id, user_id, quantity_changed, new_stock_total, reason)
+    VALUES (p_supply_id, auth.uid(), p_quantity_change, v_new_stock_total, p_reason);
+END;
+$$;
+
+--------------------------------------------------------------------------------
+-- FUNÇÕES DE TAREFAS (TASKS)
+--------------------------------------------------------------------------------
+
+CREATE OR REPLACE FUNCTION public.create_or_update_task(p_description TEXT, p_due_date DATE, p_frequency_type TEXT, p_task_id INT, p_title TEXT)
+RETURNS tasks
+LANGUAGE plpgsql
+SECURITY DEFINER AS $$
+DECLARE
+    result_task tasks;
+BEGIN
+    IF NOT is_admin(auth.uid()) THEN
+        RAISE EXCEPTION 'Acesso negado. Apenas administradores podem executar esta ação.';
+    END IF;
+
+    IF p_task_id IS NULL THEN
+        INSERT INTO public.tasks (title, description, frequency_type, due_date)
+        VALUES (p_title, p_description, p_frequency_type, p_due_date)
+        RETURNING * INTO result_task;
+    ELSE
+        UPDATE public.tasks SET
+            title = p_title,
+            description = p_description,
+            frequency_type = p_frequency_type,
+            due_date = p_due_date
+        WHERE id = p_task_id
+        RETURNING * INTO result_task;
+    END IF;
+    RETURN result_task;
+END;
+$$;
+
+CREATE OR REPLACE FUNCTION public.delete_task(p_task_id INT)
+RETURNS void
+LANGUAGE plpgsql
+SECURITY DEFINER AS $$
+BEGIN
+    IF NOT is_admin(auth.uid()) THEN
+        RAISE EXCEPTION 'Acesso negado. Apenas administradores podem executar esta ação.';
+    END IF;
+    DELETE FROM public.tasks WHERE id = p_task_id;
+END;
+$$;
+
+CREATE OR REPLACE FUNCTION public.complete_task(p_task_id INT)
+RETURNS void
+LANGUAGE plpgsql
+SECURITY DEFINER AS $$
+BEGIN
+    INSERT INTO public.task_completions (task_id, user_id, completed_at)
+    VALUES (p_task_id, auth.uid(), NOW());
+END;
+$$;
+
+--------------------------------------------------------------------------------
+-- FUNÇÕES DE LINKS DO SISTEMA
+--------------------------------------------------------------------------------
+
+CREATE OR REPLACE FUNCTION public.create_or_update_link(p_description TEXT, p_details TEXT, p_id UUID, p_name TEXT, p_url TEXT)
+RETURNS system_links
+LANGUAGE plpgsql
+SECURITY DEFINER AS $$
+DECLARE
+    result_link system_links;
+BEGIN
+    IF p_id IS NULL THEN
+        INSERT INTO public.system_links (name, url, description, details)
+        VALUES (p_name, p_url, p_description, p_details)
+        RETURNING * INTO result_link;
+    ELSE
+        UPDATE public.system_links SET
+            name = p_name,
+            url = p_url,
+            description = p_description,
+            details = p_details,
+            updated_at = NOW()
+        WHERE id = p_id
+        RETURNING * INTO result_link;
+    END IF;
+    RETURN result_link;
+END;
+$$;
+
+CREATE OR REPLACE FUNCTION public.delete_link(p_link_id UUID)
+RETURNS void
+LANGUAGE plpgsql
+SECURITY DEFINER AS $$
+BEGIN
+    DELETE FROM public.system_links WHERE id = p_link_id;
+END;
+$$;
+
+CREATE OR REPLACE FUNCTION public.count_links(p_search_term TEXT)
+RETURNS INT
+LANGUAGE plpgsql AS $$
+DECLARE
+    total_count INT;
+BEGIN
+    SELECT COUNT(*)
+    INTO total_count
+    FROM public.system_links
+    WHERE p_search_term IS NULL OR p_search_term = '' OR
+          (f_unaccent(name) ILIKE f_unaccent('%' || p_search_term || '%') OR
+           f_unaccent(description) ILIKE f_unaccent('%' || p_search_term || '%'));
+    RETURN total_count;
+END;
+$$;
+
+--------------------------------------------------------------------------------
+-- FUNÇÕES DE MODELOS DE MENSAGEM
+--------------------------------------------------------------------------------
 
 CREATE OR REPLACE FUNCTION public.create_or_update_message_template(p_content TEXT, p_id UUID, p_name TEXT)
 RETURNS message_templates
@@ -306,8 +669,89 @@ END;
 $$;
 
 --------------------------------------------------------------------------------
--- FUNÇÕES DE CONSULTA (SELECT)
+-- FUNÇÕES DE TEMAS DE USUÁRIO
 --------------------------------------------------------------------------------
+
+CREATE OR REPLACE FUNCTION public.save_user_theme(p_theme_colors JSONB, p_theme_name TEXT)
+RETURNS user_themes
+LANGUAGE plpgsql
+SECURITY DEFINER AS $$
+DECLARE
+    result_theme user_themes;
+BEGIN
+    INSERT INTO public.user_themes (user_id, theme_name, theme_colors)
+    VALUES (auth.uid(), p_theme_name, p_theme_colors)
+    ON CONFLICT (user_id, theme_name) DO UPDATE SET
+        theme_colors = EXCLUDED.theme_colors
+    RETURNING * INTO result_theme;
+    RETURN result_theme;
+END;
+$$;
+
+CREATE OR REPLACE FUNCTION public.delete_user_theme(p_theme_id UUID)
+RETURNS void
+LANGUAGE plpgsql
+SECURITY DEFINER AS $$
+BEGIN
+    DELETE FROM public.user_themes WHERE id = p_theme_id AND user_id = auth.uid();
+END;
+$$;
+
+--------------------------------------------------------------------------------
+-- FUNÇÕES DE TIPOS DE OBJETO
+--------------------------------------------------------------------------------
+
+CREATE OR REPLACE FUNCTION public.create_or_update_object_type(p_default_storage_days INT, p_name TEXT, p_type_id INT)
+RETURNS object_types
+LANGUAGE plpgsql
+SECURITY DEFINER AS $$
+DECLARE
+    result_type object_types;
+BEGIN
+    IF NOT is_admin(auth.uid()) THEN
+        RAISE EXCEPTION 'Acesso negado. Apenas administradores podem executar esta ação.';
+    END IF;
+
+    IF p_type_id IS NULL THEN
+        INSERT INTO public.object_types (name, default_storage_days)
+        VALUES (p_name, p_default_storage_days)
+        RETURNING * INTO result_type;
+    ELSE
+        UPDATE public.object_types SET
+            name = p_name,
+            default_storage_days = p_default_storage_days
+        WHERE id = p_type_id
+        RETURNING * INTO result_type;
+    END IF;
+    RETURN result_type;
+END;
+$$;
+
+
+CREATE OR REPLACE FUNCTION public.delete_object_type(p_type_id INT)
+RETURNS void
+LANGUAGE plpgsql
+SECURITY DEFINER AS $$
+BEGIN
+    IF NOT is_admin(auth.uid()) THEN
+        RAISE EXCEPTION 'Acesso negado. Apenas administradores podem executar esta ação.';
+    END IF;
+    DELETE FROM public.object_types WHERE id = p_type_id;
+END;
+$$;
+
+--------------------------------------------------------------------------------
+-- FUNÇÕES DE RELATÓRIOS E CONSULTAS
+--------------------------------------------------------------------------------
+CREATE OR REPLACE FUNCTION public.save_bulk_report(p_report_data JSONB)
+RETURNS void
+LANGUAGE plpgsql
+SECURITY DEFINER AS $$
+BEGIN
+    INSERT INTO public.bulk_import_reports (report_data, user_id)
+    VALUES (p_report_data, auth.uid());
+END;
+$$;
 
 CREATE OR REPLACE FUNCTION public.count_addresses(p_city_id INT, p_neighborhood TEXT, p_search_term TEXT)
 RETURNS INT
@@ -519,113 +963,35 @@ BEGIN
 END;
 $$;
 
--- path: supabase/migrations/0011_funcoes_tipos_de_objeto.sql
--- =============================================================================
--- || ARQUIVO DE PATCH: FUNÇÕES DE TIPOS DE OBJETO                            ||
--- =============================================================================
--- DESCRIÇÃO: Adiciona as funções RPC necessárias para o funcionamento
---            da página de gerenciamento de Tipos de Objeto.
-
---------------------------------------------------------------------------------
--- FUNÇÕES RPC PARA OBJECT TYPES
---------------------------------------------------------------------------------
-
--- Cria um novo tipo de objeto ou atualiza um existente.
--- Parâmetros em ordem alfabética para evitar erros de RPC.
-CREATE OR REPLACE FUNCTION public.create_or_update_object_type(p_default_storage_days INT, p_name TEXT, p_type_id INT)
-RETURNS object_types
-LANGUAGE plpgsql
-SECURITY DEFINER AS $$
-DECLARE
-    result_type object_types;
+CREATE OR REPLACE FUNCTION public.get_monthly_objects_report(p_year INT)
+RETURNS TABLE (month_number TEXT, object_type TEXT, object_count BIGINT)
+LANGUAGE plpgsql AS $$
 BEGIN
-    IF NOT is_admin(auth.uid()) THEN
-        RAISE EXCEPTION 'Acesso negado. Apenas administradores podem executar esta ação.';
-    END IF;
-
-    IF p_type_id IS NULL THEN
-        INSERT INTO public.object_types (name, default_storage_days)
-        VALUES (p_name, p_default_storage_days)
-        RETURNING * INTO result_type;
-    ELSE
-        UPDATE public.object_types SET
-            name = p_name,
-            default_storage_days = p_default_storage_days
-        WHERE id = p_type_id
-        RETURNING * INTO result_type;
-    END IF;
-    RETURN result_type;
+    RETURN QUERY
+    SELECT
+        to_char(arrival_date, 'YYYY-MM') as month_number,
+        o.object_type,
+        count(*) as object_count
+    FROM public.objects o
+    WHERE extract(year from o.arrival_date) = p_year
+    GROUP BY month_number, o.object_type
+    ORDER BY month_number, o.object_type;
 END;
 $$;
 
-
--- Apaga um tipo de objeto.
-CREATE OR REPLACE FUNCTION public.delete_object_type(p_type_id INT)
-RETURNS void
-LANGUAGE plpgsql
-SECURITY DEFINER AS $$
+CREATE OR REPLACE FUNCTION public.get_supplies_usage_report(p_year INT)
+RETURNS TABLE (month_number TEXT, supply_name TEXT, total_used BIGINT)
+LANGUAGE plpgsql AS $$
 BEGIN
-    IF NOT is_admin(auth.uid()) THEN
-        RAISE EXCEPTION 'Acesso negado. Apenas administradores podem executar esta ação.';
-    END IF;
-
-    DELETE FROM public.object_types WHERE id = p_type_id;
+    RETURN QUERY
+    SELECT
+        to_char(sl.created_at, 'YYYY-MM') as month_number,
+        s.name as supply_name,
+        SUM(sl.quantity_changed * -1) as total_used
+    FROM public.supply_stock_log sl
+    JOIN public.office_supplies s ON sl.supply_id = s.id
+    WHERE sl.quantity_changed < 0 AND extract(year from sl.created_at) = p_year
+    GROUP BY month_number, s.name
+    ORDER BY month_number, s.name;
 END;
 $$;
-
--- path: supabase/migrations/0012_funcoes_tarefas.sql
--- =============================================================================
--- || ARQUIVO DE PATCH: FUNÇÕES DE TAREFAS (TASKS)                            ||
--- =============================================================================
--- DESCRIÇÃO: Adiciona as funções RPC necessárias para o funcionamento
---            da página de gerenciamento de Tarefas do Gestor.
-
---------------------------------------------------------------------------------
--- FUNÇÕES RPC PARA TAREFAS (TASKS)
---------------------------------------------------------------------------------
-
--- Cria uma nova tarefa ou atualiza uma existente.
--- Parâmetros em ordem alfabética para evitar erros de RPC.
-CREATE OR REPLACE FUNCTION public.create_or_update_task(p_description TEXT, p_due_date DATE, p_frequency_type TEXT, p_task_id INT, p_title TEXT)
-RETURNS tasks
-LANGUAGE plpgsql
-SECURITY DEFINER AS $$
-DECLARE
-    result_task tasks;
-BEGIN
-    IF NOT is_admin(auth.uid()) THEN
-        RAISE EXCEPTION 'Acesso negado. Apenas administradores podem executar esta ação.';
-    END IF;
-
-    IF p_task_id IS NULL THEN
-        INSERT INTO public.tasks (title, description, frequency_type, due_date)
-        VALUES (p_title, p_description, p_frequency_type, p_due_date)
-        RETURNING * INTO result_task;
-    ELSE
-        UPDATE public.tasks SET
-            title = p_title,
-            description = p_description,
-            frequency_type = p_frequency_type,
-            due_date = p_due_date
-        WHERE id = p_task_id
-        RETURNING * INTO result_task;
-    END IF;
-    RETURN result_task;
-END;
-$$;
-
-
--- Apaga uma tarefa.
-CREATE OR REPLACE FUNCTION public.delete_task(p_task_id INT)
-RETURNS void
-LANGUAGE plpgsql
-SECURITY DEFINER AS $$
-BEGIN
-    IF NOT is_admin(auth.uid()) THEN
-        RAISE EXCEPTION 'Acesso negado. Apenas administradores podem executar esta ação.';
-    END IF;
-
-    DELETE FROM public.tasks WHERE id = p_task_id;
-END;
-$$;
-
