@@ -1,13 +1,15 @@
 -- path: supabase/migrations/0002_funcoes_RPC.sql
 -- =============================================================================
--- || ARQUIVO MESTRE 2: FUNÇÕES RPC (REMOTE PROCEDURE CALL) - VERSÃO COMPLETA E CORRIGIDA ||
+-- || ARQUIVO MESTRE 2: FUNÇÕES RPC (REMOTE PROCEDURE CALL) - VERSÃO COMPILADA E FINAL ||
 -- =============================================================================
 -- DESCRIÇÃO: Script idempotente contendo TODAS as funções RPC da aplicação,
--- limpas, otimizadas e com as devidas verificações de segurança.
--- VERSÃO: 3.1 - Funções perdidas recriadas e adicionadas.
+-- limpas, otimizadas e com as devidas verificações de segurança. Inclui todas
+-- as correções e novas funções desenvolvidas.
+-- VERSÃO: 4.0 - Final da Sessão
 -- =============================================================================
 
--- Remove funções antigas ou duplicadas para garantir um estado limpo.
+-- 1. LIMPEZA GERAL: Remove todas as funções existentes para evitar conflitos e lixo.
+-- O uso de CASCADE garante que as políticas de segurança dependentes sejam recriadas.
 DROP FUNCTION IF EXISTS public.delete_employee(UUID) CASCADE;
 DROP FUNCTION IF EXISTS public.create_or_update_tracking_rule(integer, text, text, integer) CASCADE;
 DROP FUNCTION IF EXISTS public.create_or_update_object(TEXT,TEXT,TEXT,INT,TEXT,TEXT,TEXT,TEXT,TEXT,TEXT) CASCADE;
@@ -19,6 +21,7 @@ DROP FUNCTION IF EXISTS public.get_paginated_objects(TEXT, BOOLEAN, TEXT, BOOLEA
 DROP FUNCTION IF EXISTS public.suggest_customer_links(TEXT) CASCADE;
 DROP FUNCTION IF EXISTS public.link_object_to_customer(INT, UUID) CASCADE;
 DROP FUNCTION IF EXISTS public.create_or_update_customer(UUID,TEXT,VARCHAR,VARCHAR,VARCHAR,DATE,UUID,UUID,VARCHAR,VARCHAR) CASCADE;
+DROP FUNCTION IF EXISTS public.create_or_update_customer(uuid, text, text, text, date, uuid, text, uuid, text, text) CASCADE; -- Assinatura antiga
 DROP FUNCTION IF EXISTS public.get_objects_for_notification_by_filter(INT, INT, DATE, DATE) CASCADE;
 DROP FUNCTION IF EXISTS public.get_customers_for_export() CASCADE;
 DROP FUNCTION IF EXISTS public.revert_object_status(INT) CASCADE;
@@ -32,9 +35,10 @@ DROP FUNCTION IF EXISTS public.delete_message_template(UUID) CASCADE;
 DROP FUNCTION IF EXISTS public.create_or_update_address(UUID,VARCHAR,TEXT,TEXT,INT) CASCADE;
 DROP FUNCTION IF EXISTS public.delete_address(UUID) CASCADE;
 DROP FUNCTION IF EXISTS public.find_or_create_address_by_cep(TEXT,TEXT,TEXT,TEXT,TEXT) CASCADE;
+DROP FUNCTION IF EXISTS public.find_address_by_details(TEXT,TEXT,TEXT,TEXT) CASCADE;
 DROP FUNCTION IF EXISTS public.set_customer_status(UUID, BOOLEAN) CASCADE;
 DROP FUNCTION IF EXISTS public.count_customers_filtered(TEXT, TEXT) CASCADE;
-DROP FUNCTION IF EXISTS public.get_paginated_customers_with_details(TEXT,TEXT,INT,INT) CASCADE;
+DROP FUNCTION IF EXISTS public.get_paginated_customers_with_details(INT,INT,TEXT,TEXT) CASCADE;
 DROP FUNCTION IF EXISTS public.create_or_update_supply(UUID,VARCHAR,TEXT,INT) CASCADE;
 DROP FUNCTION IF EXISTS public.log_and_adjust_stock(UUID,INT,TEXT) CASCADE;
 DROP FUNCTION IF EXISTS public.count_supplies(TEXT) CASCADE;
@@ -63,6 +67,9 @@ DROP FUNCTION IF EXISTS public.return_object(INT) CASCADE;
 DROP FUNCTION IF EXISTS public.save_bulk_report(JSONB) CASCADE;
 
 --------------------------------------------------------------------------------
+-- 2. RECRIAÇÃO DAS FUNÇÕES
+--------------------------------------------------------------------------------
+
 -- FUNÇÕES DE GESTÃO (ADMIN)
 --------------------------------------------------------------------------------
 
@@ -195,7 +202,6 @@ DECLARE
     v_new_control_number INT;
 BEGIN
     FOREACH obj IN ARRAY p_objects LOOP
-        -- Determina o prazo de guarda
         SELECT COALESCE(tcr.storage_days, ot.default_storage_days, 20)
         INTO v_storage_days
         FROM public.object_types ot
@@ -204,13 +210,11 @@ BEGIN
 
         v_storage_deadline := CURRENT_DATE + (v_storage_days || ' days')::INTERVAL;
 
-        -- Tenta encontrar o cliente pelo nome
         SELECT id INTO v_customer_id
         FROM public.customers
         WHERE f_unaccent(full_name) ILIKE f_unaccent(obj.recipient_name)
         LIMIT 1;
 
-        -- Insere o objeto
         INSERT INTO public.objects (
             recipient_name, object_type, tracking_code, storage_deadline, customer_id,
             delivery_street_name, delivery_address_number
@@ -219,7 +223,6 @@ BEGIN
             obj.street_name, obj.address_number
         ) RETURNING control_number INTO v_new_control_number;
 
-        -- Adiciona ao relatório de saída
         report_recipient_name := obj.recipient_name;
         report_tracking_code := obj.tracking_code;
         report_control_number := v_new_control_number;
@@ -361,14 +364,14 @@ BEGIN
          (f_unaccent(full_name) ILIKE f_unaccent('%' || p_search_term || '%') OR
           cpf ILIKE '%' || p_search_term || '%'))
     AND
-        (p_status_filter IS NULL OR
+        (p_status_filter IS NULL OR p_status_filter = 'all' OR
          (p_status_filter = 'active' AND is_active = TRUE) OR
          (p_status_filter = 'inactive' AND is_active = FALSE));
     RETURN total_count;
 END;
 $$;
 
-CREATE OR REPLACE FUNCTION public.get_paginated_customers_with_details(p_search_term TEXT, p_status_filter TEXT, p_page_size INT, p_page_offset INT)
+CREATE OR REPLACE FUNCTION public.get_paginated_customers_with_details(p_limit INT, p_offset INT, p_search_term TEXT, p_status_filter TEXT)
 RETURNS TABLE (
     id UUID,
     full_name TEXT,
@@ -389,23 +392,23 @@ BEGIN
              (f_unaccent(c.full_name) ILIKE f_unaccent('%' || p_search_term || '%') OR
               c.cpf ILIKE '%' || p_search_term || '%'))
         AND
-            (p_status_filter IS NULL OR
+            (p_status_filter IS NULL OR p_status_filter = 'all' OR
              (p_status_filter = 'active' AND c.is_active = TRUE) OR
              (p_status_filter = 'inactive' AND c.is_active = FALSE))
     )
     SELECT
         fc.id,
-        fc.full_name,
+        fc.full_name::text,
         fc.cpf,
         fc.cellphone,
         fc.is_active,
-        COALESCE(a.street_name || ', ' || fc.address_number || ' - ' || a.neighborhood, 'Endereço não informado') AS address_info,
+        COALESCE(a.street_name || ', ' || fc.address_number || ' - ' || a.neighborhood, 'Endereço não informado')::text AS address_info,
         (SELECT count(*) FROM filtered_customers) AS total_count
     FROM filtered_customers fc
     LEFT JOIN public.addresses a ON fc.address_id = a.id
     ORDER BY fc.full_name
-    LIMIT p_page_size
-    OFFSET p_page_offset;
+    LIMIT p_limit
+    OFFSET p_offset;
 END;
 $$;
 
@@ -419,14 +422,16 @@ LANGUAGE plpgsql
 SECURITY DEFINER AS $$
 DECLARE
     result_address addresses;
+    v_cleaned_cep TEXT;
 BEGIN
+    v_cleaned_cep := regexp_replace(p_cep, '\D', '', 'g');
     IF p_address_id IS NULL THEN
         INSERT INTO public.addresses (cep, street_name, neighborhood, city_id)
-        VALUES (p_cep, p_street_name, p_neighborhood, p_city_id)
+        VALUES (v_cleaned_cep, p_street_name, p_neighborhood, p_city_id)
         RETURNING * INTO result_address;
     ELSE
         UPDATE public.addresses SET
-            cep = p_cep,
+            cep = v_cleaned_cep,
             street_name = p_street_name,
             neighborhood = p_neighborhood,
             city_id = p_city_id,
@@ -447,16 +452,22 @@ BEGIN
 END;
 $$;
 
-CREATE OR REPLACE FUNCTION public.find_or_create_address_by_cep(p_cep TEXT, p_street_name TEXT, p_neighborhood TEXT, p_city_name TEXT, p_state_uf TEXT)
+CREATE OR REPLACE FUNCTION public.find_address_by_details(
+    p_cep TEXT,
+    p_street_name TEXT,
+    p_city_name TEXT,
+    p_state_uf TEXT
+)
 RETURNS addresses
 LANGUAGE plpgsql
-SECURITY DEFINER AS $$
+AS $$
 DECLARE
+    v_cleaned_cep TEXT;
     v_city_id INT;
-    v_address_id UUID;
     result_address addresses;
 BEGIN
-    -- Encontrar a cidade
+    v_cleaned_cep := regexp_replace(p_cep, '\D', '', 'g');
+
     SELECT c.id INTO v_city_id
     FROM public.cities c
     JOIN public.states s ON c.state_id = s.id
@@ -464,25 +475,15 @@ BEGIN
     LIMIT 1;
 
     IF v_city_id IS NULL THEN
-        RAISE EXCEPTION 'Cidade não encontrada: %, %', p_city_name, p_state_uf;
+        RETURN NULL;
     END IF;
 
-    -- Tentar encontrar o endereço
-    SELECT a.id INTO v_address_id
+    SELECT * INTO result_address
     FROM public.addresses a
-    WHERE a.cep = p_cep
+    WHERE a.cep = v_cleaned_cep
       AND f_unaccent(a.street_name) ILIKE f_unaccent(p_street_name)
       AND a.city_id = v_city_id
     LIMIT 1;
-
-    IF v_address_id IS NOT NULL THEN
-        SELECT * INTO result_address FROM public.addresses WHERE id = v_address_id;
-    ELSE
-        -- Criar novo endereço se não existir
-        INSERT INTO public.addresses (cep, street_name, neighborhood, city_id)
-        VALUES (p_cep, p_street_name, p_neighborhood, v_city_id)
-        RETURNING * INTO result_address;
-    END IF;
 
     RETURN result_address;
 END;
