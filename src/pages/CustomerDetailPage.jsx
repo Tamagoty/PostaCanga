@@ -1,12 +1,12 @@
 // path: src/pages/CustomerDetailPage.jsx
-// FUNCIONALIDADE: Exibe o bairro e o CEP na secção de endereço.
+// VERSÃO 2: Adicionada funcionalidade de exclusão de cliente com modal de confirmação.
 
 import React, { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import toast from 'react-hot-toast';
 import styles from './CustomerDetailPage.module.css';
-import { FaArrowLeft, FaEdit, FaUser, FaMapMarkerAlt, FaPhone, FaBirthdayCake, FaIdCard, FaUsers } from 'react-icons/fa';
+import { FaArrowLeft, FaEdit, FaUser, FaMapMarkerAlt, FaPhone, FaBirthdayCake, FaIdCard, FaUsers, FaTrash } from 'react-icons/fa';
 import Button from '../components/Button';
 import ProgressBar from '../components/ProgressBar';
 import Modal from '../components/Modal';
@@ -19,7 +19,8 @@ const CustomerDetailPage = () => {
   const navigate = useNavigate();
   const [customerDetails, setCustomerDetails] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
 
   const fetchDetails = useCallback(async () => {
@@ -48,8 +49,21 @@ const CustomerDetailPage = () => {
     };
     const { error } = await supabase.rpc('create_or_update_customer', payload);
     if (error) { toast.error(handleSupabaseError(error)); }
-    else { toast.success('Cliente atualizado!'); setIsModalOpen(false); fetchDetails(); }
+    else { toast.success('Cliente atualizado!'); setIsEditModalOpen(false); fetchDetails(); }
     setIsSaving(false);
+  };
+
+  const handleDeleteCustomer = async () => {
+    setIsSaving(true);
+    const { error } = await supabase.rpc('delete_customer', { p_customer_id: customerId });
+    if (error) {
+        toast.error(handleSupabaseError(error));
+    } else {
+        toast.success('Cliente excluído com sucesso!');
+        navigate('/customers');
+    }
+    setIsSaving(false);
+    setIsDeleteModalOpen(false);
   };
 
   if (loading) return <div className={styles.loading}>A carregar detalhes...</div>;
@@ -58,7 +72,6 @@ const CustomerDetailPage = () => {
   const { profile, objects, this_customer_is_contact_for, contacts_for_this_customer, main_contact_associations } = customerDetails;
   const customerToEdit = profile;
   
-  // Lógica para construir a string de endereço completa
   const fullAddress = profile.address 
     ? `${profile.address.street_name}, ${profile.address_number || 'S/N'}` +
       `${profile.address.neighborhood ? ` - ${profile.address.neighborhood}` : ''}` +
@@ -68,13 +81,29 @@ const CustomerDetailPage = () => {
 
   return (
     <div className={styles.container}>
-      <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} title="Editar Cliente">
-        <CustomerForm onSave={handleSaveCustomer} onClose={() => setIsModalOpen(false)} customerToEdit={customerToEdit} loading={isSaving} />
+      <Modal isOpen={isEditModalOpen} onClose={() => setIsEditModalOpen(false)} title="Editar Cliente">
+        <CustomerForm onSave={handleSaveCustomer} onClose={() => setIsEditModalOpen(false)} customerToEdit={customerToEdit} loading={isSaving} />
+      </Modal>
+
+      <Modal isOpen={isDeleteModalOpen} onClose={() => setIsDeleteModalOpen(false)} title="Confirmar Exclusão">
+        <div className={styles.deleteConfirm}>
+            <p>Tem a certeza de que deseja excluir o cliente <strong>{profile.full_name}</strong>?</p>
+            <p>Esta ação não pode ser desfeita.</p>
+            <div className={styles.deleteActions}>
+                <Button variant="secondary" onClick={() => setIsDeleteModalOpen(false)} disabled={isSaving}>Cancelar</Button>
+                <Button variant="danger" onClick={handleDeleteCustomer} loading={isSaving} disabled={isSaving}>
+                    {isSaving ? 'A excluir...' : 'Sim, excluir'}
+                </Button>
+            </div>
+        </div>
       </Modal>
 
       <header className={styles.header}>
         <Button variant="secondary" onClick={() => navigate('/customers')}><FaArrowLeft /> Voltar</Button>
-        <Button onClick={() => setIsModalOpen(true)}><FaEdit /> Editar Cliente</Button>
+        <div className={styles.headerActions}>
+            <Button onClick={() => setIsEditModalOpen(true)}><FaEdit /> Editar Cliente</Button>
+            <Button variant="danger" onClick={() => setIsDeleteModalOpen(true)}><FaTrash /> Excluir Cliente</Button>
+        </div>
       </header>
 
       <div className={styles.mainGrid}>

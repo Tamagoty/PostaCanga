@@ -2,14 +2,11 @@
 -- =============================================================================
 -- || ARQUIVO MESTRE 2: FUNÇÕES RPC (REMOTE PROCEDURE CALL) - VERSÃO COMPILADA E FINAL ||
 -- =============================================================================
--- DESCRIÇÃO: Script idempotente contendo TODAS as funções RPC da aplicação,
--- limpas, otimizadas e com as devidas verificações de segurança. Inclui todas
--- as correções e novas funções desenvolvidas.
--- VERSÃO: 4.0 - Final da Sessão
+-- DESCRIÇÃO: Script idempotente contendo TODAS as funções RPC da aplicação.
+-- VERSÃO: 4.1 - Adicionada a função delete_customer com verificação de segurança.
 -- =============================================================================
 
--- 1. LIMPEZA GERAL: Remove todas as funções existentes para evitar conflitos e lixo.
--- O uso de CASCADE garante que as políticas de segurança dependentes sejam recriadas.
+-- 1. LIMPEZA GERAL
 DROP FUNCTION IF EXISTS public.delete_employee(UUID) CASCADE;
 DROP FUNCTION IF EXISTS public.create_or_update_tracking_rule(integer, text, text, integer) CASCADE;
 DROP FUNCTION IF EXISTS public.create_or_update_object(TEXT,TEXT,TEXT,INT,TEXT,TEXT,TEXT,TEXT,TEXT,TEXT) CASCADE;
@@ -21,7 +18,8 @@ DROP FUNCTION IF EXISTS public.get_paginated_objects(TEXT, BOOLEAN, TEXT, BOOLEA
 DROP FUNCTION IF EXISTS public.suggest_customer_links(TEXT) CASCADE;
 DROP FUNCTION IF EXISTS public.link_object_to_customer(INT, UUID) CASCADE;
 DROP FUNCTION IF EXISTS public.create_or_update_customer(UUID,TEXT,VARCHAR,VARCHAR,VARCHAR,DATE,UUID,UUID,VARCHAR,VARCHAR) CASCADE;
-DROP FUNCTION IF EXISTS public.create_or_update_customer(uuid, text, text, text, date, uuid, text, uuid, text, text) CASCADE; -- Assinatura antiga
+DROP FUNCTION IF EXISTS public.create_or_update_customer(uuid, text, text, text, date, uuid, text, uuid, text, text) CASCADE;
+DROP FUNCTION IF EXISTS public.delete_customer(uuid) CASCADE;
 DROP FUNCTION IF EXISTS public.get_objects_for_notification_by_filter(INT, INT, DATE, DATE) CASCADE;
 DROP FUNCTION IF EXISTS public.get_customers_for_export() CASCADE;
 DROP FUNCTION IF EXISTS public.revert_object_status(INT) CASCADE;
@@ -336,6 +334,32 @@ BEGIN
         RETURNING * INTO result_customer;
     END IF;
     RETURN result_customer;
+END;
+$$;
+
+CREATE OR REPLACE FUNCTION public.delete_customer(p_customer_id uuid)
+RETURNS void
+LANGUAGE plpgsql
+SECURITY DEFINER AS $$
+DECLARE
+  has_objects boolean;
+BEGIN
+  -- Verifica se o cliente tem objetos associados
+  SELECT EXISTS (
+    SELECT 1 FROM public.objects WHERE customer_id = p_customer_id
+  ) INTO has_objects;
+
+  IF has_objects THEN
+    RAISE EXCEPTION 'Não é possível excluir o cliente pois ele possui objetos em seu histórico.';
+  END IF;
+
+  -- Verifica se este cliente é um contato para outros
+  IF EXISTS (SELECT 1 FROM public.customers WHERE contact_customer_id = p_customer_id) THEN
+     UPDATE public.customers SET contact_customer_id = NULL WHERE contact_customer_id = p_customer_id;
+  END IF;
+
+  -- Procede com a exclusão
+  DELETE FROM public.customers WHERE id = p_customer_id;
 END;
 $$;
 
