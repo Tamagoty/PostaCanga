@@ -4,7 +4,7 @@ import { supabase } from '../lib/supabase';
 import toast from 'react-hot-toast';
 import { handleSupabaseError } from '../utils/errorHandler';
 
-export const useObjects = ({ debouncedSearchTerm, showArchived, itemsPerPage }) => {
+export const useObjects = ({ debouncedSearchTerm, itemsPerPage, statusFilters }) => {
   const [objects, setObjects] = useState([]);
   const [contactMap, setContactMap] = useState({});
   const [loading, setLoading] = useState(true);
@@ -15,13 +15,22 @@ export const useObjects = ({ debouncedSearchTerm, showArchived, itemsPerPage }) 
   const fetchObjects = useCallback(async () => {
     setLoading(true);
     try {
+      const showArchived = statusFilters.has('Arquivados');
+      
+      // Se 'Arquivados' estiver selecionado, ignoramos os outros filtros de status.
+      // Caso contrário, usamos os filtros selecionados.
+      const filtersArray = showArchived 
+        ? null 
+        : (statusFilters.size > 0 ? Array.from(statusFilters) : []);
+
       const { data, error } = await supabase.rpc('get_paginated_objects', {
         p_search_term: debouncedSearchTerm,
         p_show_archived: showArchived,
         p_sort_key: sortConfig.key,
         p_sort_direction_asc: sortConfig.direction === 'asc',
         p_page_size: itemsPerPage,
-        p_page_offset: (currentPage - 1) * itemsPerPage
+        p_page_offset: (currentPage - 1) * itemsPerPage,
+        p_status_filters: filtersArray
       });
 
       if (error) throw error;
@@ -45,7 +54,7 @@ export const useObjects = ({ debouncedSearchTerm, showArchived, itemsPerPage }) 
     } finally {
       setLoading(false);
     }
-  }, [showArchived, sortConfig, debouncedSearchTerm, currentPage, itemsPerPage]);
+  }, [sortConfig, debouncedSearchTerm, currentPage, itemsPerPage, statusFilters]);
 
   useEffect(() => {
     fetchObjects();
@@ -53,7 +62,7 @@ export const useObjects = ({ debouncedSearchTerm, showArchived, itemsPerPage }) 
 
   useEffect(() => {
     setCurrentPage(1);
-  }, [debouncedSearchTerm, showArchived, itemsPerPage]);
+  }, [debouncedSearchTerm, itemsPerPage, statusFilters]);
 
   const requestSort = (key) => {
     let direction = 'asc';

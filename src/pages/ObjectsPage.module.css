@@ -2,7 +2,7 @@
 .container {
   display: flex;
   flex-direction: column;
-  gap: 2rem;
+  gap: 1.5rem; /* Reduzido o espaçamento geral */
 }
 .header {
   display: flex;
@@ -32,6 +32,52 @@
   font-size: 0.875rem;
   white-space: nowrap;
 }
+
+.filterActions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 1rem;
+    padding: 1rem;
+    background-color: var(--bg-secondary);
+    border-radius: var(--border-radius);
+    align-items: center;
+    justify-content: space-between; /* Separa os grupos */
+}
+.filterGroup {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.75rem;
+}
+.filterButton {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.5rem 1rem;
+    border-radius: var(--border-radius);
+    border: 1px solid var(--border-color);
+    background-color: var(--bg-tertiary);
+    color: var(--text-secondary);
+    cursor: pointer;
+    transition: all 0.2s ease-in-out;
+    font-weight: 500;
+}
+.filterButton:hover {
+    background-color: var(--bg-primary);
+    color: var(--text-primary);
+}
+.filterButton.active {
+    background-color: var(--accent-primary);
+    color: white;
+    border-color: var(--accent-primary-hover);
+}
+.filterButton.active svg {
+    color: white;
+}
+.archiveActionButton {
+    /* O botão agora é um componente Button, que já tem estilos base */
+    /* Não precisa de `margin-left: auto` por causa do space-between no container */
+}
+
 .tableContainer {
   overflow-x: auto;
   background-color: var(--bg-secondary);
@@ -138,7 +184,7 @@
 .actionButton.whatsapp:hover { color: #25D366; }
 .actionButton.deliver:hover { color: var(--accent-secondary); }
 .actionButton.return:hover { color: var(--accent-danger); }
-.actionButton.link:hover { color: #f59e0b; } /* Cor para o novo botão */
+.actionButton.link:hover { color: #f59e0b; }
 
 @media (min-width: 900px) {
   .header { flex-direction: row; justify-content: space-between; align-items: center; }
@@ -154,6 +200,7 @@
   .checkboxCell::before { display: none; }
   .recipientSub { padding-left: 0; }
   .recipientName { flex-direction: column; align-items: flex-end; gap: 0.25rem; }
+  .filterActions { flex-direction: column; gap: 1rem; }
 }
 
 .exportTextarea {
@@ -168,23 +215,3 @@
 .reportTable th, .reportTable td { padding: 0.75rem; text-align: left; border-bottom: 1px solid var(--border-color); }
 .reportTable td strong { font-size: 1.1rem; color: var(--accent-primary); }
 .reportActions { margin-top: 1.5rem; display: flex; justify-content: flex-end; gap: 1rem; }
-
-/* --- Estilos para Paginação --- */
-.pagination {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 1rem;
-  color: var(--text-secondary);
-}
-.paginationControls {
-  display: flex;
-  align-items: center;
-  gap: 1rem;
-}
-.paginationControls button {
-  width: auto;
-}
-.paginationInfo {
-    font-size: 0.875rem;
-}

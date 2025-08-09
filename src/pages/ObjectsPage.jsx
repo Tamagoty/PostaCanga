@@ -3,7 +3,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
 import toast from 'react-hot-toast';
 import styles from './ObjectsPage.module.css';
-import { FaBell, FaSearch, FaPlus, FaEdit, FaCheckCircle, FaUndoAlt, FaWhatsapp, FaArchive, FaHistory, FaPaperPlane, FaPhone, FaPhoneSlash, FaBoxOpen, FaCopy, FaBoxes, FaArrowUp, FaArrowDown, FaFilePdf, FaUndo, FaLink, FaFileCsv } from 'react-icons/fa';
+import { FaBell, FaSearch, FaPlus, FaEdit, FaCheckCircle, FaUndoAlt, FaWhatsapp, FaArchive, FaHistory, FaPaperPlane, FaPhone, FaPhoneSlash, FaBoxOpen, FaCopy, FaBoxes, FaArrowUp, FaArrowDown, FaFilePdf, FaUndo, FaLink, FaFileCsv, FaExclamationTriangle } from 'react-icons/fa';
 import Input from '../components/Input';
 import Button from '../components/Button';
 import Modal from '../components/Modal';
@@ -72,18 +72,18 @@ const ObjectsPage = () => {
   const [isExportModalOpen, setIsExportModalOpen] = useState(false);
   const [codesToExport, setCodesToExport] = useState('');
   const [objectToEdit, setObjectToEdit] = useState(null);
-  const [showArchived, setShowArchived] = useState(false);
   const [selectedObjects, setSelectedObjects] = useState(new Set());
   const [isComposerModalOpen, setIsComposerModalOpen] = useState(false);
   const [notificationContext, setNotificationContext] = useState(null);
   const [objectToSuggestFor, setObjectToSuggestFor] = useState(null);
   const [itemsPerPage, setItemsPerPage] = useState(20);
   const [appSettings, setAppSettings] = useState(null);
+  const [statusFilters, setStatusFilters] = useState(new Set(['Aguardando Retirada']));
   const textareaRef = useRef(null);
   const debouncedSearchTerm = useDebounce(searchTerm, 500);
 
   const { objects, contactMap, loading, currentPage, setCurrentPage, sortConfig, requestSort, totalPages, refetch } = useObjects({
-    debouncedSearchTerm, showArchived, itemsPerPage
+    debouncedSearchTerm, itemsPerPage, statusFilters
   });
 
   useEffect(() => {
@@ -97,6 +97,32 @@ const ObjectsPage = () => {
     };
     fetchAppSettings();
   }, []);
+
+  const handleFilterToggle = (filter) => {
+    setStatusFilters(prevFilters => {
+      const newFilters = new Set(prevFilters);
+
+      if (filter === 'Arquivados') {
+        return new Set(['Arquivados']);
+      }
+      
+      if (newFilters.has('Arquivados')) {
+          return new Set([filter]);
+      }
+
+      if (newFilters.has(filter)) {
+        newFilters.delete(filter);
+      } else {
+        newFilters.add(filter);
+      }
+      
+      if (newFilters.size === 0) {
+        return new Set(['Aguardando Retirada']);
+      }
+      
+      return newFilters;
+    });
+  };
 
   const generateAndDownloadNotifyHTML = (objectsToNotify, rawMessage = '') => {
     let linksHTML = '';
@@ -176,14 +202,19 @@ const ObjectsPage = () => {
   };
 
   const handleArchiveAction = async () => {
-    const toastId = toast.loading('Arquivando objetos concluídos...');
+    const toastId = toast.loading('A arquivar objetos concluídos...');
     const { error } = await supabase.rpc('archive_completed_objects');
-    if (error) toast.error(handleSupabaseError(error), { id: toastId });
-    else { toast.success('Objetos arquivados!', { id: toastId }); refetch(); }
+    if (error) {
+      toast.error(handleSupabaseError(error), { id: toastId });
+    } else {
+      toast.success('Objetos arquivados!', { id: toastId });
+      // [CORREÇÃO] Volta para a visualização padrão para que o utilizador veja o resultado
+      setStatusFilters(new Set(['Aguardando Retirada']));
+    }
   };
   
   const handleUnarchive = async (controlNumber) => {
-    const toastId = toast.loading('Recuperando objeto...');
+    const toastId = toast.loading('A recuperar objeto...');
     const { error } = await supabase.rpc('unarchive_object', { p_control_number: controlNumber });
     if (error) toast.error(handleSupabaseError(error), { id: toastId });
     else { toast.success('Objeto recuperado!', { id: toastId }); refetch(); }
@@ -197,7 +228,7 @@ const ObjectsPage = () => {
   };
 
   const handleRevertStatus = async (controlNumber) => {
-    const toastId = toast.loading('Revertendo status do objeto...');
+    const toastId = toast.loading('A reverter status do objeto...');
     const { error } = await supabase.rpc('revert_object_status', { p_control_number: controlNumber });
     if (error) { toast.error(handleSupabaseError(error), { id: toastId }); }
     else { toast.success('Status revertido para "Aguardando Retirada"!', { id: toastId }); refetch(); }
@@ -329,7 +360,7 @@ const ObjectsPage = () => {
   };
 
   const handleExportExpiring = async () => {
-    const toastId = toast.loading('Gerando CSV...');
+    const toastId = toast.loading('A gerar CSV...');
     const { data, error } = await supabase.rpc('get_expiring_objects');
 
     if (error) {
@@ -338,7 +369,7 @@ const ObjectsPage = () => {
     }
 
     if (!data || data.length === 0) {
-      toast.success('Nenhum objeto vencendo nos próximos 3 dias.', { id: toastId });
+      toast.success('Nenhum objeto a vencer nos próximos 3 dias.', { id: toastId });
       return;
     }
 
@@ -354,7 +385,7 @@ const ObjectsPage = () => {
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
-    toast.success('CSV com objetos vencendo foi gerado!', { id: toastId });
+    toast.success('CSV com objetos a vencer foi gerado!', { id: toastId });
   };
 
   return (
@@ -365,35 +396,56 @@ const ObjectsPage = () => {
       <Modal isOpen={isBulkNotifyModalOpen} onClose={() => setIsBulkNotifyModalOpen(false)} title="Gerar Notificações em Lote"><BulkNotifyForm onSave={startBulkNotifyByFilterProcess} onClose={() => setIsBulkNotifyModalOpen(false)} loading={isSaving} /></Modal>
       <Modal isOpen={isReportModalOpen} onClose={() => setIsReportModalOpen(false)} title="Relatório de Inserção"><div className={styles.reportContainer}><table className={styles.reportTable}><thead><tr><th>Destinatário</th><th>Cód. Rastreio</th><th>N° Controle</th></tr></thead><tbody>{bulkReportData.map(item => (<tr key={item.number}><td>{item.name}</td><td>{item.code || '-'}</td><td><strong>{item.number}</strong></td></tr>))}</tbody></table><div className={styles.reportActions}><Button onClick={generatePDF} variant="secondary"><FaFilePdf /> Gerar PDF</Button><Button onClick={() => setIsReportModalOpen(false)}>Fechar</Button></div></div></Modal>
       <Modal isOpen={isExportModalOpen} onClose={() => setIsExportModalOpen(false)} title="Exportar Códigos de Rastreamento"><textarea ref={textareaRef} value={codesToExport} readOnly className={styles.exportTextarea} /><div className={styles.exportActions}><Button onClick={copyToClipboard}><FaCopy /> Copiar</Button></div></Modal>
-      
       <Modal isOpen={isComposerModalOpen} onClose={() => setIsComposerModalOpen(false)} title="Compositor de Mensagens">
         <MessageComposerModal onSave={handleSendNotifications} onClose={() => setIsComposerModalOpen(false)} loading={isSaving} />
       </Modal>
-
       <SuggestionModal isOpen={!!objectToSuggestFor} onClose={() => setObjectToSuggestFor(null)} object={objectToSuggestFor} onLink={handleLinkObject} loading={isSaving} />
 
       <header className={styles.header}>
-        <h1>{showArchived ? "Objetos Arquivados" : "Gerenciamento de Objetos"}</h1>
+        <h1>Gerenciamento de Objetos</h1>
         <div className={styles.actions}>
           <div className={styles.searchInputWrapper}><Input id="search" placeholder="Buscar..." icon={FaSearch} value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} /></div>
           <Button onClick={handleExportExpiring} variant="secondary"><FaFileCsv /> Exportar Vencimentos</Button>
           <Button onClick={() => setIsBulkNotifyModalOpen(true)} variant="secondary"><FaBell /> Notificar em Lote</Button>
           {selectedObjects.size > 0 && <Button onClick={() => startNotificationProcess('bulk')} variant="secondary"><FaPaperPlane /> Notificar ({selectedObjects.size})</Button>}
           {selectedObjects.size > 0 && <Button onClick={handleExportTrackingCodes} variant="secondary"><FaCopy /> Exportar Códigos</Button>}
-          <Button onClick={() => setShowArchived(!showArchived)} variant="secondary">{showArchived ? <FaBoxOpen /> : <FaArchive />} {showArchived ? "Ver Ativos" : "Ver Arquivados"}</Button>
-          {!showArchived && <Button onClick={handleArchiveAction}><FaArchive /> Arquivar Concluídos</Button>}
           <Button onClick={() => setIsBulkRegisteredModalOpen(true)} variant="secondary"><FaBoxes /> Inserir Registrados</Button>
           <Button onClick={() => setIsBulkSimpleModalOpen(true)} variant="secondary"><FaBoxes /> Inserir Simples</Button>
           <Button onClick={() => { setObjectToEdit(null); setIsModalOpen(true); }}><FaPlus /> Novo Objeto</Button>
         </div>
       </header>
       
+      <div className={styles.filterActions}>
+          <div className={styles.filterGroup}>
+            <button className={`${styles.filterButton} ${statusFilters.has('Aguardando Retirada') ? styles.active : ''}`} onClick={() => handleFilterToggle('Aguardando Retirada')}>
+                <FaBoxOpen /> Aguardando
+            </button>
+            <button className={`${styles.filterButton} ${statusFilters.has('Vencidos') ? styles.active : ''}`} onClick={() => handleFilterToggle('Vencidos')}>
+                <FaExclamationTriangle /> Vencidos
+            </button>
+            <button className={`${styles.filterButton} ${statusFilters.has('Entregue') ? styles.active : ''}`} onClick={() => handleFilterToggle('Entregue')}>
+                <FaCheckCircle /> Entregues
+            </button>
+            <button className={`${styles.filterButton} ${statusFilters.has('Devolvido') ? styles.active : ''}`} onClick={() => handleFilterToggle('Devolvido')}>
+                <FaUndoAlt /> Devolvidos
+            </button>
+            <button className={`${styles.filterButton} ${statusFilters.has('Arquivados') ? styles.active : ''}`} onClick={() => handleFilterToggle('Arquivados')}>
+                <FaArchive /> Arquivados
+            </button>
+          </div>
+          {!statusFilters.has('Arquivados') && (
+            <Button onClick={handleArchiveAction} variant="secondary" className={styles.archiveActionButton}>
+                <FaArchive /> Arquivar Concluídos
+            </Button>
+          )}
+      </div>
+
       <div className={styles.tableContainer}>
         {loading ? <TableSkeleton columns={6} rows={itemsPerPage} /> : (
           <table className={styles.table}>
             <thead>
               <tr>
-                {!showArchived && <th className={styles.checkboxCell}><input type="checkbox" onChange={handleSelectAll} checked={selectedObjects.size > 0 && selectedObjects.size === objects.filter(o => o.status === 'Aguardando Retirada').length} /></th>}
+                {!statusFilters.has('Arquivados') && <th className={styles.checkboxCell}><input type="checkbox" onChange={handleSelectAll} checked={selectedObjects.size > 0 && selectedObjects.size === objects.filter(o => o.status === 'Aguardando Retirada').length} /></th>}
                 <th onClick={() => requestSort('control_number')} className={styles.sortableHeader}>N° Controle {getSortIcon('control_number')}</th>
                 <th onClick={() => requestSort('recipient_name')} className={styles.sortableHeader}>Destinatário {getSortIcon('recipient_name')}</th>
                 <th>Endereço</th>
@@ -407,7 +459,7 @@ const ObjectsPage = () => {
                   const addressText = getAddressText(obj);
                   return (
                     <tr key={obj.control_number}>
-                      {!showArchived && <td className={styles.checkboxCell}>{obj.status === 'Aguardando Retirada' && <input type="checkbox" checked={selectedObjects.has(obj.control_number)} onChange={() => handleSelectObject(obj.control_number)} />}</td>}
+                      {!statusFilters.has('Arquivados') && <td className={styles.checkboxCell}>{obj.status === 'Aguardando Retirada' && <input type="checkbox" checked={selectedObjects.has(obj.control_number)} onChange={() => handleSelectObject(obj.control_number)} />}</td>}
                       <td data-label="N° Controle">{obj.control_number}</td>
                       <td data-label="Destinatário">
                         <div className={styles.recipientInfo}>
