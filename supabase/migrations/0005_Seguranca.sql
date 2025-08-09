@@ -1,4 +1,4 @@
--- supabase/migrations/0005_Seguranca.sql
+-- path: supabase/migrations/0005_Seguranca_Final.sql
 -- =============================================================================
 -- || ARQUIVO 5: SEGURANÇA (ROW LEVEL SECURITY)                               ||
 -- =============================================================================
@@ -8,27 +8,17 @@
 --------------------------------------------------------------------------------
 -- 1. FUNÇÃO HELPER DE ADMIN
 --------------------------------------------------------------------------------
--- Cria a função que verifica se um usuário tem a permissão de 'admin'.
 DROP FUNCTION IF EXISTS is_admin(UUID) CASCADE;
 CREATE OR REPLACE FUNCTION is_admin(p_user_id UUID)
-RETURNS BOOLEAN
-LANGUAGE plpgsql
-SECURITY DEFINER
-AS $$
+RETURNS BOOLEAN LANGUAGE plpgsql SECURITY DEFINER AS $$
 BEGIN
-    RETURN EXISTS (
-        SELECT 1
-        FROM public.employees
-        WHERE id = p_user_id AND role = 'admin'
-    );
+    RETURN EXISTS (SELECT 1 FROM public.employees WHERE id = p_user_id AND role = 'admin');
 END;
 $$;
 
 --------------------------------------------------------------------------------
 -- 2. ATIVAÇÃO DA RLS E CRIAÇÃO DAS POLÍTICAS
 --------------------------------------------------------------------------------
-
--- Ativa a RLS em todas as tabelas
 ALTER TABLE public.states ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.cities ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.addresses ENABLE ROW LEVEL SECURITY;
@@ -47,16 +37,13 @@ ALTER TABLE public.task_completions ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.system_links ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.message_templates ENABLE ROW LEVEL SECURITY;
 
--- Apaga políticas antigas para garantir um estado limpo
-DO $$ DECLARE
-    r RECORD;
+DO $$ DECLARE r RECORD;
 BEGIN
     FOR r IN (SELECT policyname, tablename FROM pg_policies WHERE schemaname = 'public') LOOP
         EXECUTE 'DROP POLICY IF EXISTS ' || quote_ident(r.policyname) || ' ON ' || quote_ident(r.tablename) || ';';
     END LOOP;
 END $$;
 
--- Cria as políticas de segurança
 CREATE POLICY "Allow read access to all authenticated users" ON public.states FOR SELECT TO authenticated USING (true);
 CREATE POLICY "Allow read access to all authenticated users" ON public.cities FOR SELECT TO authenticated USING (true);
 CREATE POLICY "Employees can manage data" ON public.addresses FOR ALL TO authenticated USING (true) WITH CHECK (true);
@@ -70,7 +57,6 @@ CREATE POLICY "Authenticated users can manage message templates" ON public.messa
 CREATE POLICY "Users can manage their own themes" ON public.user_themes FOR ALL TO authenticated USING (user_id = auth.uid()) WITH CHECK (user_id = auth.uid());
 CREATE POLICY "Employees can view their own data" ON public.employees FOR SELECT TO authenticated USING (auth.uid() = id);
 
--- Políticas de Administrador
 CREATE POLICY "Admins can manage employees" ON public.employees FOR ALL TO authenticated USING (is_admin(auth.uid())) WITH CHECK (is_admin(auth.uid()));
 CREATE POLICY "Admins can manage object types" ON public.object_types FOR ALL TO authenticated USING (is_admin(auth.uid())) WITH CHECK (is_admin(auth.uid()));
 CREATE POLICY "Admins can manage tracking rules" ON public.tracking_code_rules FOR ALL TO authenticated USING (is_admin(auth.uid())) WITH CHECK (is_admin(auth.uid()));

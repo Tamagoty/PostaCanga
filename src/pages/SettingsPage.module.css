@@ -1,14 +1,15 @@
 /* path: src/pages/SettingsPage.module.css */
-/* MELHORIA: Adicionado estilo para o conteúdo do template */
 .container {
   display: flex;
   flex-direction: column;
   gap: 2.5rem;
+  padding-bottom: 2rem; /* Espaço no final da página */
 }
 
 .container h1 {
   font-size: 2rem;
   color: var(--text-primary);
+  margin-bottom: 0;
 }
 
 .section {
@@ -20,8 +21,10 @@
 
 .sectionHeader {
   display: flex;
+  flex-wrap: wrap; /* Permite que os itens quebrem a linha em ecrãs pequenos */
   justify-content: space-between;
   align-items: center;
+  gap: 1rem; /* Espaço entre o título e o botão */
   margin-bottom: 1.5rem;
   border-bottom: 1px solid var(--border-color);
   padding-bottom: 1rem;
@@ -29,18 +32,21 @@
 
 .section h2 {
   margin: 0;
+  font-size: 1.5rem;
 }
 
 .settingsList {
-  display: flex;
-  flex-direction: column;
+  display: grid; /* Usa grid para melhor alinhamento */
+  grid-template-columns: 1fr; /* Uma coluna por defeito */
   gap: 1rem;
 }
 
 .settingItem {
   display: flex;
+  flex-wrap: wrap; /* Permite que as ações quebrem a linha */
   justify-content: space-between;
   align-items: center;
+  gap: 1rem;
   padding: 1rem;
   background-color: var(--bg-tertiary);
   border-radius: var(--border-radius);
@@ -50,7 +56,8 @@
   display: flex;
   flex-direction: column;
   gap: 0.25rem;
-  overflow: hidden; /* Garante que o conteúdo não transborde */
+  overflow: hidden;
+  flex-grow: 1; /* Ocupa o espaço disponível */
 }
 
 .settingInfo strong {
@@ -60,26 +67,27 @@
 
 .settingInfo span {
   font-weight: 500;
+  word-break: break-word; /* Quebra palavras longas para não transbordar */
 }
 
 .settingInfo em {
   font-style: normal;
   font-size: 0.8rem;
   color: var(--text-secondary);
+  word-break: break-word;
 }
 
-/* Novo estilo para o conteúdo do template */
 .templateContent {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  max-width: 90%;
+  max-width: 100%; /* Ajusta a largura máxima */
 }
 
 .settingActions {
   display: flex;
   gap: 0.5rem;
-  flex-shrink: 0; /* Impede que os botões encolham */
+  flex-shrink: 0;
 }
 
 .settingActions button {
@@ -100,7 +108,7 @@
 
 .colorGrid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
   gap: 1.5rem;
 }
 .colorInputGroup {
@@ -138,12 +146,15 @@
   display: flex;
   justify-content: space-between;
   align-items: center;
+  gap: 1rem;
 }
 .themeName {
   font-weight: 500;
+  word-break: break-word;
 }
 .themeActions {
   display: flex;
   align-items: center;
   gap: 0.5rem;
+  flex-shrink: 0;
 }

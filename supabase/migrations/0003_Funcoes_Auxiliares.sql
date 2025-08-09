@@ -1,4 +1,4 @@
--- supabase/migrations/0003_Funcoes_Auxiliares.sql
+-- path: supabase/migrations/0003_Funcoes_Auxiliares_Final.sql
 -- =============================================================================
 -- || ARQUIVO 3: FUNÇÕES RPC - AUXILIARES E ADMIN                             ||
 -- =============================================================================
@@ -8,7 +8,6 @@
 --------------------------------------------------------------------------------
 -- FUNÇÕES DE GESTÃO (ADMIN)
 --------------------------------------------------------------------------------
-
 CREATE OR REPLACE FUNCTION public.delete_employee(p_user_id UUID)
 RETURNS void LANGUAGE plpgsql SECURITY DEFINER AS $$
 BEGIN
@@ -55,7 +54,6 @@ $$;
 --------------------------------------------------------------------------------
 -- FUNÇÕES DE MATERIAIS (SUPPLIES)
 --------------------------------------------------------------------------------
-
 CREATE OR REPLACE FUNCTION public.create_or_update_supply(p_description TEXT, p_initial_stock INT, p_name VARCHAR, p_supply_id UUID)
 RETURNS office_supplies LANGUAGE plpgsql SECURITY DEFINER AS $$
 DECLARE result_supply office_supplies;
@@ -103,7 +101,6 @@ $$;
 --------------------------------------------------------------------------------
 -- FUNÇÕES DE TAREFAS (TASKS)
 --------------------------------------------------------------------------------
-
 CREATE OR REPLACE FUNCTION public.create_or_update_task(p_description TEXT, p_due_date DATE, p_frequency_type TEXT, p_task_id INT, p_title TEXT)
 RETURNS tasks LANGUAGE plpgsql SECURITY DEFINER AS $$
 DECLARE result_task tasks;
@@ -140,7 +137,6 @@ $$;
 --------------------------------------------------------------------------------
 -- FUNÇÕES DE LINKS DO SISTEMA
 --------------------------------------------------------------------------------
-
 CREATE OR REPLACE FUNCTION public.create_or_update_link(p_description TEXT, p_details TEXT, p_id UUID, p_name TEXT, p_url TEXT)
 RETURNS system_links LANGUAGE plpgsql SECURITY DEFINER AS $$
 DECLARE result_link system_links;
@@ -177,17 +173,18 @@ $$;
 --------------------------------------------------------------------------------
 -- FUNÇÕES DE MODELOS DE MENSAGEM
 --------------------------------------------------------------------------------
-
-CREATE OR REPLACE FUNCTION public.create_or_update_message_template(p_content TEXT, p_id UUID, p_name TEXT)
-RETURNS message_templates LANGUAGE plpgsql SECURITY DEFINER AS $$
-DECLARE result_template message_templates;
+DROP FUNCTION IF EXISTS public.create_or_update_message_template(UUID, TEXT, TEXT);
+CREATE OR REPLACE FUNCTION public.create_or_update_message_template(id UUID, name TEXT, content TEXT)
+RETURNS void
+LANGUAGE plpgsql SECURITY DEFINER AS $$
 BEGIN
-    IF p_id IS NULL THEN
-        INSERT INTO public.message_templates (name, content) VALUES (p_name, p_content) RETURNING * INTO result_template;
+    IF id IS NULL THEN
+        INSERT INTO public.message_templates (name, content) VALUES (name, content);
     ELSE
-        UPDATE public.message_templates SET name = p_name, content = p_content, updated_at = NOW() WHERE id = p_id RETURNING * INTO result_template;
+        UPDATE public.message_templates
+        SET name = create_or_update_message_template.name, content = create_or_update_message_template.content, updated_at = NOW()
+        WHERE public.message_templates.id = create_or_update_message_template.id;
     END IF;
-    RETURN result_template;
 END;
 $$;
 
@@ -206,7 +203,6 @@ $$;
 --------------------------------------------------------------------------------
 -- FUNÇÕES DE TEMAS DE USUÁRIO
 --------------------------------------------------------------------------------
-
 CREATE OR REPLACE FUNCTION public.save_user_theme(p_theme_colors JSONB, p_theme_name TEXT)
 RETURNS user_themes LANGUAGE plpgsql SECURITY DEFINER AS $$
 DECLARE result_theme user_themes;
@@ -228,7 +224,6 @@ $$;
 --------------------------------------------------------------------------------
 -- FUNÇÕES DE TIPOS DE OBJETO
 --------------------------------------------------------------------------------
-
 CREATE OR REPLACE FUNCTION public.create_or_update_object_type(p_default_storage_days INT, p_name TEXT, p_type_id INT)
 RETURNS object_types LANGUAGE plpgsql SECURITY DEFINER AS $$
 DECLARE result_type object_types;
@@ -254,20 +249,63 @@ $$;
 --------------------------------------------------------------------------------
 -- FUNÇÕES DE RELATÓRIOS E CONSULTAS GERAIS
 --------------------------------------------------------------------------------
+DROP FUNCTION IF EXISTS public.get_paginated_objects(TEXT, BOOLEAN, TEXT, BOOLEAN, INT, INT);
+CREATE OR REPLACE FUNCTION public.get_paginated_objects(p_search_term TEXT, p_show_archived BOOLEAN, p_sort_key TEXT, p_sort_direction_asc BOOLEAN, p_page_size INT, p_page_offset INT)
+RETURNS TABLE (control_number INT, recipient_name TEXT, object_type VARCHAR(100), tracking_code VARCHAR(100), status VARCHAR(50), arrival_date DATE, storage_deadline DATE, is_archived BOOLEAN, customer_id UUID, delivery_street_name TEXT, delivery_address_number TEXT, delivery_neighborhood TEXT, delivery_city_name TEXT, delivery_state_uf CHAR(2), delivery_cep VARCHAR(9), customer_address JSONB, total_count BIGINT)
+LANGUAGE plpgsql STABLE AS $$
+BEGIN
+    RETURN QUERY
+    WITH filtered_objects AS (
+        SELECT o.* FROM public.objects o WHERE o.is_archived = p_show_archived AND (p_search_term IS NULL OR p_search_term = '' OR f_unaccent(o.recipient_name) ILIKE '%' || f_unaccent(p_search_term) || '%' OR (o.tracking_code IS NOT NULL AND f_unaccent(o.tracking_code) ILIKE '%' || f_unaccent(p_search_term) || '%') OR (p_search_term ~ '^\d+$' AND o.control_number = p_search_term::INT))
+    )
+    SELECT fo.control_number, fo.recipient_name::TEXT, fo.object_type, fo.tracking_code, fo.status, fo.arrival_date, fo.storage_deadline, fo.is_archived, fo.customer_id, fo.delivery_street_name, fo.delivery_address_number, fo.delivery_neighborhood, fo.delivery_city_name, fo.delivery_state_uf, fo.delivery_cep,
+        (SELECT jsonb_build_object('street_name', a.street_name, 'number', c.address_number, 'neighborhood', a.neighborhood, 'city_name', ci.name, 'state_uf', s.uf, 'cep', a.cep) FROM public.customers c JOIN public.addresses a ON c.address_id = a.id JOIN public.cities ci ON a.city_id = ci.id JOIN public.states s ON ci.state_id = s.id WHERE c.id = fo.customer_id) as customer_address,
+        (SELECT count(*) FROM filtered_objects) as total_count
+    FROM filtered_objects fo
+    ORDER BY
+        CASE WHEN p_sort_key = 'control_number' AND p_sort_direction_asc THEN fo.control_number END ASC, CASE WHEN p_sort_key = 'control_number' AND NOT p_sort_direction_asc THEN fo.control_number END DESC,
+        CASE WHEN p_sort_key = 'recipient_name' AND p_sort_direction_asc THEN fo.recipient_name END ASC, CASE WHEN p_sort_key = 'recipient_name' AND NOT p_sort_direction_asc THEN fo.recipient_name END DESC,
+        CASE WHEN p_sort_key = 'storage_deadline' AND p_sort_direction_asc THEN fo.storage_deadline END ASC, CASE WHEN p_sort_key = 'storage_deadline' AND NOT p_sort_direction_asc THEN fo.storage_deadline END DESC,
+        fo.arrival_date DESC
+    LIMIT p_page_size OFFSET p_page_offset;
+END;
+$$;
+
+DROP FUNCTION IF EXISTS public.get_objects_for_notification_by_filter(INT, INT, DATE, DATE);
+CREATE OR REPLACE FUNCTION public.get_objects_for_notification_by_filter(p_start_control INT DEFAULT NULL, p_end_control INT DEFAULT NULL, p_start_date DATE DEFAULT NULL, p_end_date DATE DEFAULT NULL)
+RETURNS TABLE (control_number INT, recipient_name TEXT, object_type TEXT, storage_deadline DATE, phone_to_use TEXT)
+LANGUAGE plpgsql STABLE AS $$
+BEGIN
+    RETURN QUERY
+    SELECT o.control_number, o.recipient_name::TEXT, o.object_type::TEXT, o.storage_deadline, COALESCE(c.cellphone, contact.cellphone)::TEXT AS phone_to_use
+    FROM public.objects o
+    JOIN public.customers c ON o.customer_id = c.id
+    LEFT JOIN public.customers contact ON c.contact_customer_id = contact.id
+    WHERE o.status = 'Aguardando Retirada' AND o.is_archived = FALSE
+        AND ((p_start_control IS NULL OR p_end_control IS NULL) OR o.control_number BETWEEN p_start_control AND p_end_control)
+        AND ((p_start_date IS NULL OR p_end_date IS NULL) OR o.arrival_date BETWEEN p_start_date AND p_end_date)
+        AND ((c.is_active = TRUE AND c.cellphone IS NOT NULL AND c.cellphone <> '') OR ((c.cellphone IS NULL OR c.cellphone = '') AND c.contact_customer_id IS NOT NULL AND contact.is_active = TRUE AND contact.cellphone IS NOT NULL AND contact.cellphone <> ''));
+END;
+$$;
+
+DROP FUNCTION IF EXISTS public.get_expiring_objects();
+CREATE OR REPLACE FUNCTION public.get_expiring_objects()
+RETURNS TABLE (recipient_name TEXT, object_type TEXT)
+LANGUAGE plpgsql STABLE AS $$
+BEGIN
+    RETURN QUERY
+    SELECT o.recipient_name::TEXT, o.object_type::TEXT
+    FROM public.objects o
+    WHERE o.status = 'Aguardando Retirada' AND o.is_archived = FALSE AND o.storage_deadline BETWEEN CURRENT_DATE AND (CURRENT_DATE + INTERVAL '3 days')
+    ORDER BY o.storage_deadline ASC, o.recipient_name ASC;
+END;
+$$;
 
 CREATE OR REPLACE FUNCTION public.save_bulk_report(p_report_data JSONB)
 RETURNS void LANGUAGE plpgsql SECURITY DEFINER AS $$
 BEGIN
     INSERT INTO public.bulk_import_reports (report_data, user_id)
     VALUES (p_report_data, auth.uid());
-END;
-$$;
-
-CREATE OR REPLACE FUNCTION public.get_objects_for_notification_by_filter(p_start_control INT DEFAULT NULL, p_end_control INT DEFAULT NULL, p_start_date DATE DEFAULT NULL, p_end_date DATE DEFAULT NULL)
-RETURNS TABLE (control_number INT, recipient_name TEXT, object_type TEXT, storage_deadline DATE, phone_to_use TEXT)
-LANGUAGE plpgsql AS $$
-BEGIN
-    RETURN QUERY SELECT o.control_number, o.recipient_name::TEXT, o.object_type::TEXT, o.storage_deadline, COALESCE(c.cellphone, contact.cellphone)::TEXT AS phone_to_use FROM public.objects o LEFT JOIN public.customers c ON o.customer_id = c.id LEFT JOIN public.customers contact ON c.contact_customer_id = contact.id WHERE o.status = 'Aguardando Retirada' AND o.is_archived = FALSE AND ((p_start_control IS NULL OR p_end_control IS NULL) OR o.control_number BETWEEN p_start_control AND p_end_control) AND ((p_start_date IS NULL OR p_end_date IS NULL) OR o.arrival_date BETWEEN p_start_date AND p_end_date) AND COALESCE(c.cellphone, contact.cellphone) IS NOT NULL AND COALESCE(c.cellphone, contact.cellphone) <> '';
 END;
 $$;
 
@@ -352,5 +390,20 @@ BEGIN
     WHERE sl.quantity_changed < 0 AND extract(year from sl.created_at) = p_year
     GROUP BY month_number, s.name
     ORDER BY month_number, s.name;
+END;
+$$;
+
+DROP FUNCTION IF EXISTS public.get_all_app_settings();
+CREATE OR REPLACE FUNCTION public.get_all_app_settings()
+RETURNS JSON
+LANGUAGE plpgsql STABLE AS $$
+DECLARE
+    settings_json JSON;
+BEGIN
+    SELECT json_object_agg(key, value)
+    INTO settings_json
+    FROM public.app_settings;
+
+    RETURN COALESCE(settings_json, '{}'::json);
 END;
 $$;

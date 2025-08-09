@@ -1,4 +1,4 @@
--- supabase/migrations/0004_Seed.sql
+-- path: supabase/migrations/0004_Seed_Final.sql
 -- =============================================================================
 -- || ARQUIVO 4: DADOS INICIAIS (SEED)                                        ||
 -- =============================================================================
@@ -7,16 +7,9 @@
 
 -- Dados para a tabela de Tipos de Objeto
 INSERT INTO public.object_types (name, default_storage_days) VALUES
-    ('PAC', 7),
-    ('SEDEX', 7),
-    ('Carta Registrada', 20),
-    ('Carta Simples', 20),
-    ('Revista', 20),
-    ('Cartão', 20),
-    ('Telegrama', 7),
-    ('Cartão Registrado', 20),
-    ('Registrado', 7),
-    ('Outro', 7)
+    ('PAC', 7), ('SEDEX', 7), ('Carta Registrada', 20), ('Carta Simples', 20),
+    ('Revista', 20), ('Cartão', 20), ('Telegrama', 7), ('Cartão Registrado', 20),
+    ('Registrado', 7), ('Outro', 7)
 ON CONFLICT (name) DO NOTHING;
 
 -- Dados para a tabela de Configurações da Aplicação
@@ -35,5 +28,11 @@ INSERT INTO public.tasks (title, description, frequency_type) VALUES
     ('Relatório Mensal de Objetos', 'Analisar o fluxo de objetos do último mês.', 'monthly')
 ON CONFLICT (title) DO NOTHING;
 
--- Adicione aqui os dados das tabelas states e cities se desejar pré-popular
--- Ex: INSERT INTO public.states (name, uf) VALUES ('Bahia', 'BA') ON CONFLICT (uf) DO NOTHING;
+-- Dados para a tabela de Modelos de Mensagem
+INSERT INTO public.message_templates (name, content) VALUES
+    ('Padrão - Chegada de Objeto', E'📢 A agência {{ENDERECO_AGENCIA}} informa!\n\nUm(a) {{TIPO_OBJETO}} está disponível para retirada em nome de:\n👤 *{{NOME_CLIENTE}}*\n\n⏳ Prazo para retirada: até {{DATA_PRAZO}}.\n🔑 Código para retirada: *{{NUMERO_CONTROLE}}*'),
+    ('Aviso de Vencimento', E'Olá, {{NOME_CLIENTE}}! Passando para avisar que o seu {{TIPO_OBJETO}} está quase no fim do prazo de guarda.\n\nEle será devolvido no dia *{{DATA_PRAZO}}*.\n\nNão perca o prazo!'),
+    ('Oferta - Tele Sena', E'Olá, {{NOME_CLIENTE}}! 🍀 A sorte está batendo na sua porta!\n\nQue tal aproveitar a retirada do seu objeto para garantir a sua Tele Sena da Sorte? Peça a sua no balcão!'),
+    ('Informativo - Novo Serviço', E'Olá, {{NOME_CLIENTE}}! Temos uma novidade na agência {{NOME_DA_AGENCIA}}!\n\nAgora oferecemos [NOME DO NOVO SERVIÇO AQUI].\n\nVenha conferir na sua próxima visita!'),
+    ('Final - Aviso de Remoção (PARE)', E'\n\n_(Se não quiser mais receber informações envie a palavra PARE e todo o seu cadastro será apagado ❌)_')
+ON CONFLICT (name) DO NOTHING;

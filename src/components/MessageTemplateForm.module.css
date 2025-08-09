@@ -1,6 +1,4 @@
 /* path: src/components/MessageTemplateForm.module.css */
-/* DESCRIÇÃO: Estilos dedicados para o formulário de modelos de mensagem. */
-
 .form {
   display: flex;
   flex-direction: column;
@@ -45,6 +43,7 @@
   transition: border-color 0.2s, box-shadow 0.2s;
   font-family: inherit;
   resize: vertical;
+  min-height: 120px;
 }
 
 .textarea:focus {
@@ -65,7 +64,34 @@
   color: var(--text-secondary);
   margin-top: 0.5rem;
   background-color: var(--bg-primary);
-  padding: 0.5rem;
+  padding: 0.75rem;
   border-radius: var(--border-radius);
-  font-family: monospace;
+}
+
+.variableHelper p {
+    margin: 0 0 0.75rem 0;
+    font-weight: 500;
+}
+
+.variableGrid {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+}
+
+.variableTag {
+    background-color: var(--bg-tertiary);
+    padding: 0.25rem 0.75rem;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: background-color 0.2s, color 0.2s;
+    border: 1px solid var(--border-color);
+    font-family: sans-serif; /* Usar uma fonte mais legível */
+    font-size: 0.8rem;
+}
+
+.variableTag:hover {
+    background-color: var(--accent-primary);
+    color: white;
+    border-color: var(--accent-primary-hover);
 }

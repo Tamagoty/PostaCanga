@@ -1,13 +1,11 @@
 // path: src/components/BulkRegisteredForm.jsx
-// CORREÇÃO (v3.1): Corrigido o array de dependências do useEffect
-// envolvendo a função fetchObjectTypes com useCallback.
-
 import React, { useState, useEffect, useCallback } from 'react';
 import styles from './BulkRegisteredForm.module.css';
 import Button from './Button';
 import toast from 'react-hot-toast';
 import { supabase } from '../lib/supabase';
 import { handleSupabaseError } from '../utils/errorHandler';
+import { capitalizeName } from '../utils/formatters'; // Importa a função de formatação
 
 const BulkRegisteredForm = ({ onSave, onClose, loading }) => {
   const [textData, setTextData] = useState('');
@@ -40,13 +38,14 @@ const BulkRegisteredForm = ({ onSave, onClose, loading }) => {
       const parsedObjects = lines.map(line => {
         const columns = line.split('\t');
         if (columns.length >= 10) {
+          // [NOVA LÓGICA] Aplica a formatação na leitura dos dados
           return {
             tracking_code: columns[1].trim().toUpperCase(),
             order_number: parseInt(columns[3].trim(), 10),
-            street_name: columns[6].trim(),
+            street_name: capitalizeName(columns[6].trim()),
             address_number: columns[7].trim(),
             address_complement: columns[8].trim(),
-            recipient_name: columns[9].trim()
+            recipient_name: capitalizeName(columns[9].trim())
           };
         }
         return null;
@@ -108,7 +107,13 @@ const BulkRegisteredForm = ({ onSave, onClose, loading }) => {
 
     const allObjects = [...classifiedObjects, ...unclassifiedObjects];
     allObjects.sort((a, b) => a.order_number - b.order_number);
-    const finalObjects = allObjects.map(({ order_number, ...rest }) => rest);
+    
+    // [NOVA LÓGICA] Garante a formatação final antes de salvar
+    const finalObjects = allObjects.map(({ order_number, ...rest }) => ({
+        ...rest,
+        recipient_name: capitalizeName(rest.recipient_name),
+        street_name: capitalizeName(rest.street_name)
+    }));
     onSave({ objects: finalObjects });
   };
 

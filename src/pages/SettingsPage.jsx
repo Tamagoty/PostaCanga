@@ -1,6 +1,4 @@
 // path: src/pages/SettingsPage.jsx
-// CORREÇÃO (v1.1): Adicionadas as importações em falta para EmptyState e o ícone FaCommentDots.
-
 import React, { useState, useEffect, useCallback } from 'react';
 import { useTheme } from '../context/ThemeContext';
 import { supabase } from '../lib/supabase';
@@ -11,10 +9,10 @@ import AppSettingForm from '../components/AppSettingForm';
 import Modal from '../components/Modal';
 import ConfirmationModal from '../components/ConfirmationModal';
 import PromptModal from '../components/PromptModal';
-import { FaTrash, FaEdit, FaPlus, FaCommentDots } from 'react-icons/fa'; // Ícone importado
+import { FaTrash, FaEdit, FaPlus, FaCommentDots } from 'react-icons/fa';
 import { handleSupabaseError } from '../utils/errorHandler';
 import MessageTemplateForm from '../components/MessageTemplateForm';
-import EmptyState from '../components/EmptyState'; // Componente importado
+import EmptyState from '../components/EmptyState';
 
 const CORE_SETTINGS = ['agency_name', 'agency_dh', 'agency_mcu', 'agency_sto', 'agency_address'];
 

@@ -1,4 +1,4 @@
--- supabase/migrations/0001_Estrutura.sql
+-- path: supabase/migrations/0001_Estrutura_Final.sql
 -- =============================================================================
 -- || ARQUIVO 1: ESTRUTURA, TIPOS, EXTENSÕES E VIEWS                          ||
 -- =============================================================================
@@ -80,4 +80,3 @@ FROM
   public.addresses a
   LEFT JOIN public.cities c ON a.city_id = c.id
   LEFT JOIN public.states s ON c.state_id = s.id;
-

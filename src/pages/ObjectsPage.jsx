@@ -1,12 +1,9 @@
 // path: src/pages/ObjectsPage.jsx
-// MELHORIA: A página foi simplificada. Agora, ela apenas abre o modal de sugestões,
-// que se tornou responsável pela sua própria lógica de busca.
-
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
 import toast from 'react-hot-toast';
 import styles from './ObjectsPage.module.css';
-import { FaBell, FaSearch, FaPlus, FaEdit, FaCheckCircle, FaUndoAlt, FaWhatsapp, FaArchive, FaHistory, FaPaperPlane, FaPhone, FaPhoneSlash, FaBoxOpen, FaCopy, FaBoxes, FaArrowUp, FaArrowDown, FaFilePdf, FaUndo, FaLink } from 'react-icons/fa';
+import { FaBell, FaSearch, FaPlus, FaEdit, FaCheckCircle, FaUndoAlt, FaWhatsapp, FaArchive, FaHistory, FaPaperPlane, FaPhone, FaPhoneSlash, FaBoxOpen, FaCopy, FaBoxes, FaArrowUp, FaArrowDown, FaFilePdf, FaUndo, FaLink, FaFileCsv } from 'react-icons/fa';
 import Input from '../components/Input';
 import Button from '../components/Button';
 import Modal from '../components/Modal';
@@ -18,34 +15,15 @@ import ProgressBar from '../components/ProgressBar';
 import { handleSupabaseError } from '../utils/errorHandler';
 import TableSkeleton from '../components/TableSkeleton';
 import EmptyState from '../components/EmptyState';
-import { ITEMS_PER_PAGE } from '../constants';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import useDebounce from '../hooks/useDebounce';
-import PromptModal from '../components/PromptModal';
 import SuggestionModal from '../components/SuggestionModal';
+import Pagination from '../components/Pagination';
+import { useObjects } from '../hooks/useObjects';
+import MessageComposerModal from '../components/MessageComposerModal';
 
-const getWhatsAppMessage = (object, extraMessage = '') => {
-  const agencyName = import.meta.env.VITE_AGENCY_NAME || "Agência dos Correios";
-  const introMessage = `📢 *${agencyName}* informa!\n\n`;
-  const getObjectEmoji = (type) => {
-    const lowerType = type.toLowerCase();
-    if (lowerType.includes('cartão')) return '💳'; if (lowerType.includes('carta')) return '✉️';
-    if (lowerType.includes('revista')) return '📖'; if (lowerType.includes('telegrama')) return '⚡';
-    return '📦';
-  };
-  const deadline = new Date(object.storage_deadline); deadline.setDate(deadline.getDate() + 1);
-  const messageBody = `${getObjectEmoji(object.object_type)} *${object.object_type.toUpperCase()}* disponível para retirada em nome de:\n` +
-    `👤 *${object.recipient_name.toUpperCase()}*\n` + `⏳ Prazo: até *${deadline.toLocaleDateString('pt-BR', { day: '2-digit', month: 'long' })}*\n` +
-    `🔑 Código para retirada: *${object.control_number}*`;
-  
-  const extraContent = extraMessage.trim() ? `\n\n----------\n\n${extraMessage.trim()}` : '';
-  const disclaimer = `\n\n_(Se não quiser mais receber informações envie a palavra PARE e todo o seu cadastro será apagado ❌)_`;
-  
-  return introMessage + messageBody + extraContent + disclaimer;
-};
-
-const replaceVariables = (template, object) => {
+const replaceVariables = (template, object, appSettings) => {
     if (!template || !object) return template;
     const deadline = new Date(object.storage_deadline);
     deadline.setDate(deadline.getDate() + 1);
@@ -55,19 +33,34 @@ const replaceVariables = (template, object) => {
     prazoFinal.setHours(0,0,0,0);
     const diffTime = prazoFinal - today;
     const diffDays = Math.max(0, Math.ceil(diffTime / (1000 * 60 * 60 * 24)));
+    const variables = {
+        '{{NOME_CLIENTE}}': object.recipient_name,
+        '{{TIPO_OBJETO}}': object.object_type,
+        '{{CODIGO_RASTREIO}}': object.tracking_code || 'N/A',
+        '{{NUMERO_CONTROLE}}': object.control_number,
+        '{{DIAS_RESTANTES}}': diffDays,
+        '{{DATA_PRAZO}}': deadline.toLocaleDateString('pt-BR'),
+        '{{NOME_DA_AGENCIA}}': appSettings?.agency_name || 'nossa agência',
+        '{{ENDERECO_AGENCIA}}': appSettings?.agency_address || 'nossa agência',
+    };
+    let populatedTemplate = template;
+    for (const variable in variables) {
+        populatedTemplate = populatedTemplate.replace(new RegExp(variable, 'g'), variables[variable]);
+    }
+    return populatedTemplate;
+};
 
-    return template
-        .replace(/{{NOME_CLIENTE}}/g, object.recipient_name)
-        .replace(/{{DIAS_RESTANTES}}/g, diffDays)
-        .replace(/{{DATA_PRAZO}}/g, deadline.toLocaleDateString('pt-BR'))
-        .replace(/{{TIPO_OBJETO}}/g, object.object_type)
-        .replace(/{{CODIGO_RASTREIO}}/g, object.tracking_code || 'N/A');
+const getAddressText = (obj) => {
+    if (obj.delivery_street_name) {
+        return `${obj.delivery_street_name}, ${obj.delivery_address_number || 'S/N'}`;
+    }
+    if (obj.customer_address && obj.customer_address.street_name) {
+        return `${obj.customer_address.street_name}, ${obj.customer_address.number || 'S/N'}`;
+    }
+    return 'Não informado';
 };
 
 const ObjectsPage = () => {
-  const [objects, setObjects] = useState([]);
-  const [contactMap, setContactMap] = useState({});
-  const [loading, setLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -81,76 +74,45 @@ const ObjectsPage = () => {
   const [objectToEdit, setObjectToEdit] = useState(null);
   const [showArchived, setShowArchived] = useState(false);
   const [selectedObjects, setSelectedObjects] = useState(new Set());
-  const [sortConfig, setSortConfig] = useState({ key: 'arrival_date', direction: 'desc' });
-  const textareaRef = useRef(null);
-  const debouncedSearchTerm = useDebounce(searchTerm, 500);
-  const [isNotifyModalOpen, setIsNotifyModalOpen] = useState(false);
+  const [isComposerModalOpen, setIsComposerModalOpen] = useState(false);
   const [notificationContext, setNotificationContext] = useState(null);
   const [objectToSuggestFor, setObjectToSuggestFor] = useState(null);
-  
-  const [currentPage, setCurrentPage] = useState(1);
-  const [totalObjects, setTotalObjects] = useState(0);
+  const [itemsPerPage, setItemsPerPage] = useState(20);
+  const [appSettings, setAppSettings] = useState(null);
+  const textareaRef = useRef(null);
+  const debouncedSearchTerm = useDebounce(searchTerm, 500);
 
-  const loadInitialData = useCallback(async () => {
-    setLoading(true);
-    try {
-      const { data, error } = await supabase.rpc('get_paginated_objects', {
-        p_search_term: debouncedSearchTerm,
-        p_show_archived: showArchived,
-        p_sort_key: sortConfig.key,
-        p_sort_direction_asc: sortConfig.direction === 'asc',
-        p_page_size: ITEMS_PER_PAGE,
-        p_page_offset: (currentPage - 1) * ITEMS_PER_PAGE
-      });
+  const { objects, contactMap, loading, currentPage, setCurrentPage, sortConfig, requestSort, totalPages, refetch } = useObjects({
+    debouncedSearchTerm, showArchived, itemsPerPage
+  });
 
-      if (error) throw error;
-
-      const currentObjects = data || [];
-      setObjects(currentObjects);
-
-      if (currentObjects.length > 0) {
-        setTotalObjects(currentObjects[0].total_count || 0);
-        const recipientNames = [...new Set(currentObjects.map(obj => obj.recipient_name))];
-        const { data: phoneData, error: phoneError } = await supabase.rpc('get_phones_for_recipients', { p_recipient_names: recipientNames });
-        if (phoneError) throw phoneError;
-        setContactMap(phoneData || {});
-      } else {
-        setObjects([]);
-        setTotalObjects(0);
-        setContactMap({});
-      }
-    } catch (error) {
-      toast.error(handleSupabaseError(error));
-    } finally {
-      setLoading(false);
-    }
-  }, [showArchived, sortConfig, debouncedSearchTerm, currentPage]);
-
-  useEffect(() => { loadInitialData(); }, [loadInitialData]);
-  
   useEffect(() => {
-    setCurrentPage(1);
-  }, [debouncedSearchTerm, showArchived]);
+    const fetchAppSettings = async () => {
+        const { data, error } = await supabase.rpc('get_all_app_settings');
+        if (error) {
+            toast.error("Não foi possível carregar as configurações da agência.");
+        } else {
+            setAppSettings(data);
+        }
+    };
+    fetchAppSettings();
+  }, []);
 
   const generateAndDownloadNotifyHTML = (objectsToNotify, rawMessage = '') => {
     let linksHTML = '';
     objectsToNotify.forEach(object => {
       const phone = object.phone_to_use || contactMap[object.recipient_name];
       if (phone) {
-        const personalizedExtraMessage = replaceVariables(rawMessage, object);
-        const message = getWhatsAppMessage(object, personalizedExtraMessage);
+        const message = replaceVariables(rawMessage, object, appSettings);
         const url = `https://wa.me/55${phone.replace(/\D/g, '')}?text=${encodeURIComponent(message)}`;
         linksHTML += `<div id="${object.control_number}" class="container" onclick="ocultarDiv(this)"><a href="${url}" target="_blank"><div class="imagem"><img src="https://i.imgur.com/S5h76II.png" alt="Ícone de mensagem" /><div class="texto">${object.control_number}</div></div></a></div>`;
       }
     });
-
     if (!linksHTML) {
       toast.error('Nenhum contato válido encontrado para os objetos nos filtros selecionados.');
       return;
     }
-    
     const fullHtml = `<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8" /><title>Notificações WhatsApp</title><style>body{background:linear-gradient(to bottom left,#1a1d24,#272b35);min-height:100vh;font-family:sans-serif;padding:20px;margin:0}.grid-container{display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:20px}.container{cursor:pointer;text-align:center;transition:opacity .3s,transform .3s}.imagem{position:relative;display:inline-block}img{width:120px;border-radius:15px;box-shadow:0 4px 15px rgba(0,0,0,.4)}.texto{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);color:#fff;font-size:1.5rem;font-weight:700;text-shadow:2px 2px 4px rgba(0,0,0,.7)}a{text-decoration:none}.hidden{opacity:.2;transform:scale(.9);pointer-events:none}</style></head><body><div class="grid-container">${linksHTML}</div><script>function ocultarDiv(e){e.classList.add("hidden")}</script></body></html>`;
-    
     const blob = new Blob([fullHtml], { type: 'text/html' });
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
@@ -158,7 +120,6 @@ const ObjectsPage = () => {
     link.setAttribute('download', 'notificacoes_whatsapp.html');
     document.body.appendChild(link);
     link.click();
-    
     document.body.removeChild(link);
     URL.revokeObjectURL(url);
     toast.success('Arquivo de notificações gerado!');
@@ -178,7 +139,7 @@ const ObjectsPage = () => {
       p_city_name: formData.city || null, p_state_uf: formData.state || null,
     });
     if (error) toast.error(handleSupabaseError(error));
-    else { toast.success(`Objeto ${objectToEdit ? 'atualizado' : 'criado'}!`); setIsModalOpen(false); loadInitialData(); }
+    else { toast.success(`Objeto ${objectToEdit ? 'atualizado' : 'criado'}!`); setIsModalOpen(false); refetch(); }
     setIsSaving(false);
   };
 
@@ -193,7 +154,7 @@ const ObjectsPage = () => {
       await supabase.rpc('save_bulk_report', { p_report_data: reportData });
       setIsReportModalOpen(true);
       setIsBulkSimpleModalOpen(false);
-      loadInitialData();
+      refetch();
     }
     setIsSaving(false);
   };
@@ -209,7 +170,7 @@ const ObjectsPage = () => {
       await supabase.rpc('save_bulk_report', { p_report_data: reportData });
       setIsReportModalOpen(true);
       setIsBulkRegisteredModalOpen(false);
-      loadInitialData();
+      refetch();
     }
     setIsSaving(false);
   };
@@ -218,28 +179,28 @@ const ObjectsPage = () => {
     const toastId = toast.loading('Arquivando objetos concluídos...');
     const { error } = await supabase.rpc('archive_completed_objects');
     if (error) toast.error(handleSupabaseError(error), { id: toastId });
-    else { toast.success('Objetos arquivados!', { id: toastId }); loadInitialData(); }
+    else { toast.success('Objetos arquivados!', { id: toastId }); refetch(); }
   };
   
   const handleUnarchive = async (controlNumber) => {
     const toastId = toast.loading('Recuperando objeto...');
     const { error } = await supabase.rpc('unarchive_object', { p_control_number: controlNumber });
     if (error) toast.error(handleSupabaseError(error), { id: toastId });
-    else { toast.success('Objeto recuperado!', { id: toastId }); loadInitialData(); }
+    else { toast.success('Objeto recuperado!', { id: toastId }); refetch(); }
   };
 
   const updateObjectStatus = async (controlNumber, action) => {
     const rpc_function = action === 'deliver' ? 'deliver_object' : 'return_object';
     const { error } = await supabase.rpc(rpc_function, { p_control_number: controlNumber });
     if (error) toast.error(handleSupabaseError(error));
-    else { toast.success('Status atualizado!'); loadInitialData(); }
+    else { toast.success('Status atualizado!'); refetch(); }
   };
 
   const handleRevertStatus = async (controlNumber) => {
     const toastId = toast.loading('Revertendo status do objeto...');
     const { error } = await supabase.rpc('revert_object_status', { p_control_number: controlNumber });
     if (error) { toast.error(handleSupabaseError(error), { id: toastId }); }
-    else { toast.success('Status revertido para "Aguardando Retirada"!', { id: toastId }); loadInitialData(); }
+    else { toast.success('Status revertido para "Aguardando Retirada"!', { id: toastId }); refetch(); }
   };
 
   const handleSelectObject = (controlNumber) => {
@@ -277,23 +238,22 @@ const ObjectsPage = () => {
 
   const startNotificationProcess = (type, object = null) => {
     setNotificationContext({ type, object });
-    setIsNotifyModalOpen(true);
+    setIsComposerModalOpen(true);
   };
 
-  const handleSendNotifications = async (rawMessageFromModal) => {
+  const handleSendNotifications = async (composedMessage) => {
     if (!notificationContext) return;
     const { type, object } = notificationContext;
 
     if (type === 'single') {
-        const personalizedExtraMessage = replaceVariables(rawMessageFromModal, object);
         const phone = contactMap[object.recipient_name];
         if (!phone) { toast.error('Nenhum contato válido encontrado.'); return; }
-        const message = getWhatsAppMessage(object, personalizedExtraMessage);
+        const message = replaceVariables(composedMessage, object, appSettings);
         const url = `https://wa.me/55${phone.replace(/\D/g, '')}?text=${encodeURIComponent(message)}`;
         window.open(url, '_blank');
     } else if (type === 'bulk') {
         const objectsToNotify = objects.filter(obj => selectedObjects.has(obj.control_number));
-        generateAndDownloadNotifyHTML(objectsToNotify, rawMessageFromModal);
+        generateAndDownloadNotifyHTML(objectsToNotify, composedMessage);
     } else if (type === 'bulk_by_filter') {
         const toastId = toast.loading('Buscando objetos e gerando notificações...');
         const { data, error } = await supabase.rpc('get_objects_for_notification_by_filter', {
@@ -306,23 +266,15 @@ const ObjectsPage = () => {
         if (error) {
             toast.error(handleSupabaseError(error), { id: toastId });
         } else if (data && data.length > 0) {
-            generateAndDownloadNotifyHTML(data, rawMessageFromModal);
+            generateAndDownloadNotifyHTML(data, composedMessage);
             toast.success('Arquivo de notificações gerado!', { id: toastId });
         } else {
             toast.success('Nenhum objeto encontrado para os filtros selecionados.', { id: toastId });
         }
     }
 
-    setIsNotifyModalOpen(false);
+    setIsComposerModalOpen(false);
     setNotificationContext(null);
-  };
-
-  const requestSort = (key) => {
-    let direction = 'asc';
-    if (sortConfig.key === key && sortConfig.direction === 'asc') {
-      direction = 'desc';
-    }
-    setSortConfig({ key, direction });
   };
 
   const getSortIcon = (name) => {
@@ -371,12 +323,39 @@ const ObjectsPage = () => {
     } else {
       toast.success('Objeto associado com sucesso!');
       setObjectToSuggestFor(null);
-      loadInitialData();
+      refetch();
     }
     setIsSaving(false);
   };
-  
-  const totalPages = Math.ceil(totalObjects / ITEMS_PER_PAGE);
+
+  const handleExportExpiring = async () => {
+    const toastId = toast.loading('Gerando CSV...');
+    const { data, error } = await supabase.rpc('get_expiring_objects');
+
+    if (error) {
+      toast.error(handleSupabaseError(error), { id: toastId });
+      return;
+    }
+
+    if (!data || data.length === 0) {
+      toast.success('Nenhum objeto vencendo nos próximos 3 dias.', { id: toastId });
+      return;
+    }
+
+    const csvHeader = "Nome,Tipo\n";
+    const csvRows = data.map(obj => `"${obj.recipient_name}","${obj.object_type}"`).join("\n");
+    const csvContent = csvHeader + csvRows;
+
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.setAttribute('href', url);
+    link.setAttribute('download', 'objetos_vencendo.csv');
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    toast.success('CSV com objetos vencendo foi gerado!', { id: toastId });
+  };
 
   return (
     <div className={styles.container}>
@@ -386,19 +365,18 @@ const ObjectsPage = () => {
       <Modal isOpen={isBulkNotifyModalOpen} onClose={() => setIsBulkNotifyModalOpen(false)} title="Gerar Notificações em Lote"><BulkNotifyForm onSave={startBulkNotifyByFilterProcess} onClose={() => setIsBulkNotifyModalOpen(false)} loading={isSaving} /></Modal>
       <Modal isOpen={isReportModalOpen} onClose={() => setIsReportModalOpen(false)} title="Relatório de Inserção"><div className={styles.reportContainer}><table className={styles.reportTable}><thead><tr><th>Destinatário</th><th>Cód. Rastreio</th><th>N° Controle</th></tr></thead><tbody>{bulkReportData.map(item => (<tr key={item.number}><td>{item.name}</td><td>{item.code || '-'}</td><td><strong>{item.number}</strong></td></tr>))}</tbody></table><div className={styles.reportActions}><Button onClick={generatePDF} variant="secondary"><FaFilePdf /> Gerar PDF</Button><Button onClick={() => setIsReportModalOpen(false)}>Fechar</Button></div></div></Modal>
       <Modal isOpen={isExportModalOpen} onClose={() => setIsExportModalOpen(false)} title="Exportar Códigos de Rastreamento"><textarea ref={textareaRef} value={codesToExport} readOnly className={styles.exportTextarea} /><div className={styles.exportActions}><Button onClick={copyToClipboard}><FaCopy /> Copiar</Button></div></Modal>
-      <PromptModal isOpen={isNotifyModalOpen} onClose={() => setIsNotifyModalOpen(false)} onSave={handleSendNotifications} title="Adicionar Mensagem Extra" label="Selecione um modelo ou digite uma mensagem" placeholder="Ex: Aproveite a nossa promoção!" confirmText="Enviar Notificações" isTextarea={true} />
-      <SuggestionModal
-        isOpen={!!objectToSuggestFor}
-        onClose={() => setObjectToSuggestFor(null)}
-        object={objectToSuggestFor}
-        onLink={handleLinkObject}
-        loading={isSaving}
-      />
+      
+      <Modal isOpen={isComposerModalOpen} onClose={() => setIsComposerModalOpen(false)} title="Compositor de Mensagens">
+        <MessageComposerModal onSave={handleSendNotifications} onClose={() => setIsComposerModalOpen(false)} loading={isSaving} />
+      </Modal>
+
+      <SuggestionModal isOpen={!!objectToSuggestFor} onClose={() => setObjectToSuggestFor(null)} object={objectToSuggestFor} onLink={handleLinkObject} loading={isSaving} />
 
       <header className={styles.header}>
         <h1>{showArchived ? "Objetos Arquivados" : "Gerenciamento de Objetos"}</h1>
         <div className={styles.actions}>
           <div className={styles.searchInputWrapper}><Input id="search" placeholder="Buscar..." icon={FaSearch} value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} /></div>
+          <Button onClick={handleExportExpiring} variant="secondary"><FaFileCsv /> Exportar Vencimentos</Button>
           <Button onClick={() => setIsBulkNotifyModalOpen(true)} variant="secondary"><FaBell /> Notificar em Lote</Button>
           {selectedObjects.size > 0 && <Button onClick={() => startNotificationProcess('bulk')} variant="secondary"><FaPaperPlane /> Notificar ({selectedObjects.size})</Button>}
           {selectedObjects.size > 0 && <Button onClick={handleExportTrackingCodes} variant="secondary"><FaCopy /> Exportar Códigos</Button>}
@@ -411,11 +389,7 @@ const ObjectsPage = () => {
       </header>
       
       <div className={styles.tableContainer}>
-        {loading ? (
-          <TableSkeleton columns={6} rows={ITEMS_PER_PAGE} />
-        ) : objects.length === 0 ? (
-          <EmptyState message="Nenhum objeto encontrado." />
-        ) : (
+        {loading ? <TableSkeleton columns={6} rows={itemsPerPage} /> : (
           <table className={styles.table}>
             <thead>
               <tr>
@@ -423,16 +397,14 @@ const ObjectsPage = () => {
                 <th onClick={() => requestSort('control_number')} className={styles.sortableHeader}>N° Controle {getSortIcon('control_number')}</th>
                 <th onClick={() => requestSort('recipient_name')} className={styles.sortableHeader}>Destinatário {getSortIcon('recipient_name')}</th>
                 <th>Endereço</th>
-                <th>Prazo de Guarda</th>
+                <th onClick={() => requestSort('storage_deadline')} className={styles.sortableHeader}>Prazo de Guarda {getSortIcon('storage_deadline')}</th>
                 <th>Ações</th>
               </tr>
             </thead>
             <tbody>
               {objects.map(obj => {
                   const hasContact = !!contactMap[obj.recipient_name];
-                  const addressText = obj.delivery_street_name 
-                    ? obj.delivery_street_name 
-                    : (obj.addresses && obj.addresses.street_name ? `${obj.addresses.street_name}, ${obj.addresses.number || 'S/N'}` : 'Não informado');
+                  const addressText = getAddressText(obj);
                   return (
                     <tr key={obj.control_number}>
                       {!showArchived && <td className={styles.checkboxCell}>{obj.status === 'Aguardando Retirada' && <input type="checkbox" checked={selectedObjects.has(obj.control_number)} onChange={() => handleSelectObject(obj.control_number)} />}</td>}
@@ -470,30 +442,13 @@ const ObjectsPage = () => {
         )}
       </div>
       
-      {totalObjects > 0 && !loading && (
-        <div className={styles.pagination}>
-            <span className={styles.paginationInfo}>
-                Mostrando {objects.length} de {totalObjects} objetos
-            </span>
-            <div className={styles.paginationControls}>
-                <Button
-                    onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
-                    disabled={currentPage === 1}
-                    variant="secondary"
-                >
-                    Anterior
-                </Button>
-                <span>Página {currentPage} de {totalPages}</span>
-                <Button
-                    onClick={() => setCurrentPage(p => p + 1)}
-                    disabled={currentPage >= totalPages}
-                    variant="secondary"
-                >
-                    Próxima
-                </Button>
-            </div>
-        </div>
-      )}
+      <Pagination
+        currentPage={currentPage - 1}
+        totalPages={totalPages}
+        onPageChange={(page) => setCurrentPage(page + 1)}
+        itemsPerPage={itemsPerPage}
+        onItemsPerPageChange={setItemsPerPage}
+      />
     </div>
   );
 };

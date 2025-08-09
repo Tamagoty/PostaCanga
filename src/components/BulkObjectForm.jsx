@@ -1,13 +1,11 @@
 // path: src/components/BulkObjectForm.jsx
-// CORREÇÃO (v2.1): Corrigido o array de dependências do useEffect
-// envolvendo a função fetchObjectTypes com useCallback.
-
 import React, { useState, useEffect, useCallback } from 'react';
 import styles from './EmployeeForm.module.css';
 import Button from './Button';
 import toast from 'react-hot-toast';
 import { supabase } from '../lib/supabase';
 import { handleSupabaseError } from '../utils/errorHandler';
+import { capitalizeName } from '../utils/formatters'; // Importa a função de formatação
 
 const BulkObjectForm = ({ onSave, onClose, loading }) => {
   const [textData, setTextData] = useState('');
@@ -41,9 +39,10 @@ const BulkObjectForm = ({ onSave, onClose, loading }) => {
     const objectsToCreate = lines.map(line => {
       const columns = line.split('\t');
       if (columns.length >= 4) {
+        // [NOVA LÓGICA] Aplica a formatação aqui
         return {
-          recipient_name: columns[2].trim(),
-          street_name: columns[3].trim()
+          recipient_name: capitalizeName(columns[2].trim()),
+          street_name: capitalizeName(columns[3].trim())
         };
       }
       return null;

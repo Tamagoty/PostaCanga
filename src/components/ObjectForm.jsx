@@ -1,6 +1,4 @@
 // path: src/components/ObjectForm.jsx
-// FUNCIONALIDADE: Adicionada a sugestão de clientes com nomes similares.
-
 import React, { useState, useEffect, useCallback } from 'react';
 import styles from './CustomerForm.module.css'; // Reutilizando estilos
 import Input from './Input';
@@ -9,6 +7,7 @@ import toast from 'react-hot-toast';
 import { supabase } from '../lib/supabase';
 import { handleSupabaseError } from '../utils/errorHandler';
 import useDebounce from '../hooks/useDebounce';
+import { capitalizeName } from '../utils/formatters'; // Importa a nova função
 
 const ObjectForm = ({ onSave, onClose, objectToEdit, loading }) => {
   const [formData, setFormData] = useState({
@@ -44,7 +43,6 @@ const ObjectForm = ({ onSave, onClose, objectToEdit, loading }) => {
       }
       const { data, error } = await supabase.rpc('suggest_customers', { p_search_term: debouncedRecipientName });
       if (error) {
-        // Não mostra erro, apenas não mostra sugestões
         console.error(error);
         setCustomerSuggestions([]);
       } else {
@@ -57,11 +55,15 @@ const ObjectForm = ({ onSave, onClose, objectToEdit, loading }) => {
   useEffect(() => {
     if (objectToEdit) {
       setFormData({
-        recipient_name: objectToEdit.recipient_name || '', object_type: objectToEdit.object_type || '',
-        tracking_code: objectToEdit.tracking_code || '', street_name: objectToEdit.addresses?.street_name || '',
-        number: objectToEdit.address_number || '', neighborhood: objectToEdit.addresses?.neighborhood || '',
-        city: objectToEdit.addresses?.city?.name || '', state: objectToEdit.addresses?.city?.state?.uf || '',
-        cep: objectToEdit.addresses?.cep || ''
+        recipient_name: objectToEdit.recipient_name || '',
+        object_type: objectToEdit.object_type || '',
+        tracking_code: objectToEdit.tracking_code || '',
+        street_name: objectToEdit.delivery_street_name || '',
+        number: objectToEdit.delivery_address_number || '',
+        neighborhood: objectToEdit.delivery_neighborhood || '',
+        city: objectToEdit.delivery_city_name || '',
+        state: objectToEdit.delivery_state_uf || '',
+        cep: objectToEdit.delivery_cep || ''
       });
     }
   }, [objectToEdit]);
@@ -69,6 +71,14 @@ const ObjectForm = ({ onSave, onClose, objectToEdit, loading }) => {
   const handleChange = (e) => {
     const { name, value } = e.target;
     setFormData(prev => ({ ...prev, [name]: value }));
+  };
+
+  // [NOVA FUNÇÃO] Formata o campo quando o usuário sai dele
+  const handleBlur = (e) => {
+    const { name, value } = e.target;
+    if (name === 'recipient_name' || name === 'street_name' || name === 'neighborhood' || name === 'city') {
+        setFormData(prev => ({ ...prev, [name]: capitalizeName(value) }));
+    }
   };
 
   const handleSelectSuggestion = (suggestion) => {
@@ -82,7 +92,15 @@ const ObjectForm = ({ onSave, onClose, objectToEdit, loading }) => {
       toast.error('O Nome do Destinatário e o Tipo de Objeto são obrigatórios.');
       return;
     }
-    onSave(formData);
+    // Formata os dados antes de salvar, como uma garantia final
+    const formattedData = {
+        ...formData,
+        recipient_name: capitalizeName(formData.recipient_name),
+        street_name: capitalizeName(formData.street_name),
+        neighborhood: capitalizeName(formData.neighborhood),
+        city: capitalizeName(formData.city),
+    };
+    onSave(formattedData);
   };
 
   return (
@@ -90,7 +108,7 @@ const ObjectForm = ({ onSave, onClose, objectToEdit, loading }) => {
       <fieldset className={styles.fieldset}>
         <legend>Dados do Objeto</legend>
         <div className={styles.searchWrapper}>
-            <Input id="recipient_name" name="recipient_name" label="Nome do Destinatário" value={formData.recipient_name} onChange={handleChange} required autoComplete="off" />
+            <Input id="recipient_name" name="recipient_name" label="Nome do Destinatário" value={formData.recipient_name} onChange={handleChange} onBlur={handleBlur} required autoComplete="off" />
             {customerSuggestions.length > 0 && (
               <ul className={styles.searchResults}>
                 {customerSuggestions.map((suggestion) => (
@@ -115,13 +133,13 @@ const ObjectForm = ({ onSave, onClose, objectToEdit, loading }) => {
 
       <fieldset className={styles.fieldset}>
         <legend>Endereço de Entrega (Opcional)</legend>
-        <Input id="street_name" name="street_name" label="Rua / Logradouro" value={formData.street_name} onChange={handleChange} />
+        <Input id="street_name" name="street_name" label="Rua / Logradouro" value={formData.street_name} onChange={handleChange} onBlur={handleBlur} />
         <div className={styles.grid}>
           <Input id="number" name="number" label="Número" value={formData.number} onChange={handleChange} />
-          <Input id="neighborhood" name="neighborhood" label="Bairro" value={formData.neighborhood} onChange={handleChange} />
+          <Input id="neighborhood" name="neighborhood" label="Bairro" value={formData.neighborhood} onChange={handleChange} onBlur={handleBlur} />
         </div>
         <div className={styles.grid}>
-          <Input id="city" name="city" label="Cidade" value={formData.city} onChange={handleChange} />
+          <Input id="city" name="city" label="Cidade" value={formData.city} onChange={handleChange} onBlur={handleBlur} />
           <Input id="state" name="state" label="UF" value={formData.state} onChange={handleChange} maxLength="2" />
         </div>
         <Input id="cep" name="cep" label="CEP" value={formData.cep} onChange={handleChange} />
