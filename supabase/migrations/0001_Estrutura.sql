@@ -1,9 +1,9 @@
--- path: supabase/migrations/0001_estrutura_db.sql
+-- supabase/migrations/0001_Estrutura.sql
 -- =============================================================================
--- || ARQUIVO MESTRE 1: ESTRUTURA, TIPOS E DADOS INICIAIS                     ||
+-- || ARQUIVO 1: ESTRUTURA, TIPOS, EXTENSÕES E VIEWS                          ||
 -- =============================================================================
--- DESCRIÇÃO: Script idempotente para criar toda a estrutura de tabelas, tipos,
--- extensões, dados iniciais e índices de performance do banco de dados.
+-- DESCRIÇÃO: Cria a estrutura fundamental do banco de dados, incluindo tabelas,
+-- tipos customizados, extensões do PostgreSQL e views de dados.
 
 --------------------------------------------------------------------------------
 -- 1. EXTENSÕES E FUNÇÕES BASE
@@ -22,7 +22,7 @@ AS $function$
 $function$;
 
 --------------------------------------------------------------------------------
--- 2. TABELAS E TIPOS
+-- 2. TABELAS
 --------------------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS public.states (id SERIAL PRIMARY KEY, name VARCHAR(100) NOT NULL, uf CHAR(2) NOT NULL UNIQUE);
 CREATE TABLE IF NOT EXISTS public.cities (id SERIAL PRIMARY KEY, name VARCHAR(255) NOT NULL, state_id INT NOT NULL REFERENCES public.states(id));
@@ -42,10 +42,12 @@ CREATE TABLE IF NOT EXISTS public.task_completions (id BIGSERIAL PRIMARY KEY, ta
 CREATE TABLE IF NOT EXISTS public.system_links (id UUID PRIMARY KEY DEFAULT uuid_generate_v4(), name TEXT NOT NULL, url TEXT NOT NULL, description TEXT, details TEXT, created_at TIMESTAMPTZ DEFAULT NOW(), updated_at TIMESTAMPTZ DEFAULT NOW());
 CREATE TABLE IF NOT EXISTS public.message_templates (id UUID PRIMARY KEY DEFAULT uuid_generate_v4(), name TEXT NOT NULL UNIQUE, content TEXT NOT NULL, created_at TIMESTAMPTZ DEFAULT NOW(), updated_at TIMESTAMPTZ DEFAULT NOW());
 
--- Adiciona constraints se não existirem
+-- Constraint de unicidade para endereços
 DO $$ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conrelid = 'public.addresses'::regclass AND conname = 'addresses_street_name_city_id_cep_key') THEN DELETE FROM public.addresses a WHERE a.id NOT IN ( SELECT id FROM ( SELECT id, ROW_NUMBER() OVER(PARTITION BY street_name, city_id, cep ORDER BY created_at) as rn FROM public.addresses ) t WHERE t.rn = 1 ); ALTER TABLE public.addresses ADD CONSTRAINT addresses_street_name_city_id_cep_key UNIQUE (street_name, city_id, cep); END IF; END; $$;
 
--- Cria tipos customizados se não existirem
+--------------------------------------------------------------------------------
+-- 3. TIPOS CUSTOMIZADOS
+--------------------------------------------------------------------------------
 DO $$ BEGIN
     IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'simple_object_input') THEN
         CREATE TYPE simple_object_input AS (recipient_name TEXT, street_name TEXT);
@@ -56,16 +58,26 @@ DO $$ BEGIN
 END $$;
 
 --------------------------------------------------------------------------------
--- 3. DADOS INICIAIS (SEED)
+-- 4. VIEWS
 --------------------------------------------------------------------------------
-INSERT INTO public.object_types (name, default_storage_days) VALUES ('PAC', 7), ('SEDEX', 7), ('Carta Registrada', 20), ('Carta Simples', 20), ('Revista', 20), ('Cartão', 20), ('Telegrama', 7), ('Cartão Registrado', 20), ('Registrado', 7), ('Outro', 7) ON CONFLICT (name) DO NOTHING;
-INSERT INTO public.app_settings (key, value, description, label) VALUES ('agency_name', 'Correio de América Dourada', 'Nome da agência exibido no sistema.', 'Nome da Agência'), ('agency_dh', '10h05', 'Horario limite de postagem', 'Horario Limite'), ('agency_mcu', '00002678', 'MCU (Unidade de Correios) da Agência', 'MCU'), ('agency_sto', '08301026', 'STO (Setor de Triagem e Operações)', 'STO'), ('agency_address', 'Avenida Romão Gramacho, sn - Centro, América Dourada/BA', 'Endereço completo da agência', 'Endereço') ON CONFLICT (key) DO NOTHING;
-INSERT INTO public.tasks (title, description, frequency_type) VALUES ('Verificar Caixa de E-mails', 'Responder e organizar os e-mails da agência.', 'daily'), ('Conferir Estoque Mínimo', 'Verificar se algum material de expediente precisa de ser reabastecido.', 'weekly'), ('Relatório Mensal de Objetos', 'Analisar o fluxo de objetos do último mês.', 'monthly') ON CONFLICT (title) DO NOTHING;
+CREATE OR REPLACE VIEW public.addresses_with_customer_count AS
+SELECT
+  a.id,
+  a.cep,
+  a.street_name,
+  a.neighborhood,
+  a.city_id,
+  c.name AS city_name,
+  s.uf AS state_uf,
+  a.created_at,
+  a.updated_at,
+  (
+    SELECT count(*)
+    FROM public.customers
+    WHERE address_id = a.id
+  ) AS customer_count
+FROM
+  public.addresses a
+  LEFT JOIN public.cities c ON a.city_id = c.id
+  LEFT JOIN public.states s ON c.state_id = s.id;
 
---------------------------------------------------------------------------------
--- 4. ÍNDICES DE PERFORMANCE
---------------------------------------------------------------------------------
-CREATE INDEX IF NOT EXISTS idx_customers_full_name_trgm ON public.customers USING gin (public.f_unaccent(full_name) gin_trgm_ops);
-CREATE INDEX IF NOT EXISTS idx_addresses_street_name_trgm ON public.addresses USING gin (public.f_unaccent(street_name) gin_trgm_ops);
-CREATE INDEX IF NOT EXISTS idx_office_supplies_name_trgm ON public.office_supplies USING gin (public.f_unaccent(name) gin_trgm_ops);
-CREATE INDEX IF NOT EXISTS idx_system_links_name_trgm ON public.system_links USING gin (public.f_unaccent(name) gin_trgm_ops);

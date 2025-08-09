@@ -23,25 +23,17 @@ export const maskCPF = (value) => {
  */
 export const maskPhone = (value) => {
   if (!value) return "";
-  // Limpa o valor, deixando apenas os dígitos
   const digitsOnly = value.replace(/\D/g, '');
-
-  // Limita a 11 dígitos (DDD + 9 dígitos do telemóvel)
   const truncatedDigits = digitsOnly.substring(0, 11);
-
   let formattedValue = truncatedDigits;
 
   if (truncatedDigits.length > 7) {
-    // Formato completo ou parcial: (XX) X.XXXX-XXXX
     formattedValue = `(${truncatedDigits.substring(0, 2)}) ${truncatedDigits.substring(2, 3)}.${truncatedDigits.substring(3, 7)}-${truncatedDigits.substring(7, 11)}`;
   } else if (truncatedDigits.length > 3) {
-    // Formato parcial: (XX) X.XXXX
     formattedValue = `(${truncatedDigits.substring(0, 2)}) ${truncatedDigits.substring(2, 3)}.${truncatedDigits.substring(3, 7)}`;
   } else if (truncatedDigits.length > 2) {
-    // Formato parcial: (XX) X
     formattedValue = `(${truncatedDigits.substring(0, 2)}) ${truncatedDigits.substring(2, 3)}`;
   } else if (truncatedDigits.length > 0) {
-    // Formato parcial: (XX
     formattedValue = `(${truncatedDigits}`;
   }
 
@@ -49,16 +41,25 @@ export const maskPhone = (value) => {
 };
 
 /**
- * Aplica a máscara de CEP (XXXXX-XXX) e permite apenas números.
+ * Aplica a máscara de CEP (XXXXX-XXX) para inputs de formulário.
  * @param {string} value O valor do input.
  * @returns {string} O valor com a máscara aplicada.
  */
 export const maskCEP = (value) => {
   if (!value) return "";
-  // Remove todos os caracteres que não são dígitos
   value = value.replace(/\D/g, '');
-  // Adiciona o hífen após o quinto dígito
   value = value.replace(/^(\d{5})(\d)/, '$1-$2');
-  // Limita o comprimento total para 9 caracteres (incluindo o hífen)
   return value.slice(0, 9);
+};
+
+/**
+ * Formata um CEP (apenas dígitos) para o formato de exibição XX.XXX-XXX.
+ * @param {string} cep O CEP contendo apenas dígitos.
+ * @returns {string} O CEP formatado.
+ */
+export const formatCEP = (cep) => {
+  if (!cep) return "";
+  const cleanedCep = cep.replace(/\D/g, '');
+  if (cleanedCep.length !== 8) return cep; // Retorna o valor original se não for um CEP completo
+  return cleanedCep.replace(/(\d{2})(\d{3})(\d{3})/, '$1.$2-$3');
 };

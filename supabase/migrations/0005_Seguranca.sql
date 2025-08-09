@@ -1,17 +1,15 @@
--- path: supabase/migrations/0003_seguranca.sql
+-- supabase/migrations/0005_Seguranca.sql
 -- =============================================================================
--- || ARQUIVO MESTRE 3: SEGURANÇA (ROW LEVEL SECURITY)                        ||
+-- || ARQUIVO 5: SEGURANÇA (ROW LEVEL SECURITY)                               ||
 -- =============================================================================
--- DESCRIÇÃO: Script idempotente para configurar toda a Segurança a Nível de Linha (RLS).
--- VERSÃO: 1.1 - Adicionado CASCADE ao DROP FUNCTION para resolver dependências.
+-- DESCRIÇÃO: Configura toda a Segurança a Nível de Linha (RLS), garantindo
+-- que os usuários só possam acessar os dados que têm permissão.
 
 --------------------------------------------------------------------------------
 -- 1. FUNÇÃO HELPER DE ADMIN
 --------------------------------------------------------------------------------
--- Apaga a função antiga e suas dependências (políticas) em cascata.
-DROP FUNCTION IF EXISTS is_admin(UUID) CASCADE;
-
 -- Cria a função que verifica se um usuário tem a permissão de 'admin'.
+DROP FUNCTION IF EXISTS is_admin(UUID) CASCADE;
 CREATE OR REPLACE FUNCTION is_admin(p_user_id UUID)
 RETURNS BOOLEAN
 LANGUAGE plpgsql
@@ -49,7 +47,7 @@ ALTER TABLE public.task_completions ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.system_links ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.message_templates ENABLE ROW LEVEL SECURITY;
 
--- Apaga políticas antigas para garantir um estado limpo (redundante com CASCADE, mas mantido por segurança)
+-- Apaga políticas antigas para garantir um estado limpo
 DO $$ DECLARE
     r RECORD;
 BEGIN

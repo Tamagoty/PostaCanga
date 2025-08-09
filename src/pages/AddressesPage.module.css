@@ -151,6 +151,7 @@
 .actionButtons {
   display: flex;
   gap: 0.5rem;
+  justify-content: center;
 }
 
 .actionButton {
@@ -174,6 +175,39 @@
 
 .removeStock:hover {
   color: var(--accent-danger) !important;
+}
+
+.cepCell {
+  white-space: nowrap;
+  font-weight: 500;
+}
+
+.centerAlign {
+  text-align: center;
+}
+
+.multiLineCell {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem; /* Espaço entre as linhas */
+}
+
+.subText {
+  font-size: 0.875rem;
+  color: var(--text-secondary);
+}
+
+.residentsInfo {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.875rem;
+  color: var(--text-secondary);
+  margin-top: 0.25rem;
+}
+
+.residentsInfo svg {
+  color: var(--accent-primary);
 }
 
 .pagination {
@@ -208,4 +242,7 @@
   .table td { text-align: right; padding-left: 50%; position: relative; border-bottom: 1px solid var(--bg-tertiary); }
   .table tr td:last-child { border-bottom: none; }
   .table td::before { content: attr(data-label); position: absolute; left: 1rem; width: calc(50% - 2rem); text-align: left; font-weight: bold; color: var(--text-secondary); text-transform: uppercase; font-size: 0.8rem; }
+  .table td[data-label="Ações"] { text-align: right; }
+  .actionButtons { justify-content: flex-end; }
+  .multiLineCell { align-items: flex-end; }
 }

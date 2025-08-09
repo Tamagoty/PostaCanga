@@ -1,0 +1,121 @@
+/* path: src/components/AddressCustomersModal.module.css */
+.container {
+  padding: 1rem;
+  min-width: 450px;
+  max-width: 600px;
+}
+
+.header {
+  margin-bottom: 1.5rem;
+  padding-bottom: 1rem;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.header h4 {
+  margin: 0 0 0.25rem 0;
+  font-size: 1.25rem;
+}
+
+.addressLine {
+  margin: 0;
+  color: var(--text-primary);
+  font-weight: 500;
+  font-size: 1rem;
+}
+
+.addressDetails {
+    margin: 0.25rem 0 0 0;
+    color: var(--text-secondary);
+    font-size: 0.9rem;
+}
+
+.centered {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    padding: 2rem;
+    flex-direction: column;
+    gap: 1rem;
+}
+
+.customerTable {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+.customerTable th {
+    padding: 0.75rem;
+    text-align: left;
+    color: var(--text-secondary);
+    font-size: 0.875rem;
+    text-transform: uppercase;
+    border-bottom: 1px solid var(--border-color);
+    cursor: pointer;
+    user-select: none;
+}
+
+.customerTable th:hover {
+    color: var(--text-primary);
+}
+
+.customerTable td {
+    padding: 0.75rem;
+    border-bottom: 1px solid var(--bg-tertiary);
+    vertical-align: middle;
+}
+
+.customerTable tbody tr:last-child td {
+    border-bottom: none;
+}
+
+.customerTable tbody tr:hover {
+    background-color: var(--bg-tertiary);
+}
+
+.customerLink {
+  font-weight: 500;
+  color: var(--text-primary);
+  text-decoration: none;
+  transition: color 0.2s;
+}
+
+.customerLink:hover {
+  color: var(--accent-primary-hover);
+}
+
+.complement {
+    margin-left: 0.5rem;
+    font-size: 0.8rem;
+    color: var(--text-secondary);
+}
+
+.active, .inactive {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-size: 0.875rem;
+    font-weight: 500;
+}
+
+.active svg {
+    color: var(--accent-secondary);
+}
+
+.inactive svg {
+    color: var(--accent-danger);
+}
+
+.sortIcon {
+    margin-left: 0.5rem;
+    opacity: 0.4;
+    transition: opacity 0.2s;
+}
+
+.sortIconActive {
+    margin-left: 0.5rem;
+    color: var(--accent-primary);
+}
+
+.customerTable th:hover .sortIcon {
+    opacity: 1;
+}
