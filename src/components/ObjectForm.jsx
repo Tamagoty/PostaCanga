@@ -1,4 +1,7 @@
 // path: src/components/ObjectForm.jsx
+// VERSÃO 2: Corrigido o handleSubmit para enviar um payload com nomes de parâmetros
+// que correspondem exatamente à função SQL, resolvendo a ambiguidade.
+
 import React, { useState, useEffect, useCallback } from 'react';
 import styles from './CustomerForm.module.css'; // Reutilizando estilos
 import Input from './Input';
@@ -7,7 +10,7 @@ import toast from 'react-hot-toast';
 import { supabase } from '../lib/supabase';
 import { handleSupabaseError } from '../utils/errorHandler';
 import useDebounce from '../hooks/useDebounce';
-import { capitalizeName } from '../utils/formatters'; // Importa a nova função
+import { capitalizeName } from '../utils/formatters';
 
 const ObjectForm = ({ onSave, onClose, objectToEdit, loading }) => {
   const [formData, setFormData] = useState({
@@ -34,7 +37,6 @@ const ObjectForm = ({ onSave, onClose, objectToEdit, loading }) => {
     fetchObjectTypes();
   }, [fetchObjectTypes]);
 
-  // Efeito para buscar sugestões de clientes
   useEffect(() => {
     const getSuggestions = async () => {
       if (debouncedRecipientName.length < 3) {
@@ -73,7 +75,6 @@ const ObjectForm = ({ onSave, onClose, objectToEdit, loading }) => {
     setFormData(prev => ({ ...prev, [name]: value }));
   };
 
-  // [NOVA FUNÇÃO] Formata o campo quando o usuário sai dele
   const handleBlur = (e) => {
     const { name, value } = e.target;
     if (name === 'recipient_name' || name === 'street_name' || name === 'neighborhood' || name === 'city') {
@@ -92,15 +93,22 @@ const ObjectForm = ({ onSave, onClose, objectToEdit, loading }) => {
       toast.error('O Nome do Destinatário e o Tipo de Objeto são obrigatórios.');
       return;
     }
-    // Formata os dados antes de salvar, como uma garantia final
-    const formattedData = {
-        ...formData,
-        recipient_name: capitalizeName(formData.recipient_name),
-        street_name: capitalizeName(formData.street_name),
-        neighborhood: capitalizeName(formData.neighborhood),
-        city: capitalizeName(formData.city),
+
+    // ALTERAÇÃO: Criar um payload com nomes de parâmetros exatos para a função RPC.
+    const payload = {
+        p_control_number: objectToEdit?.control_number || null,
+        p_recipient_name: capitalizeName(formData.recipient_name),
+        p_object_type: formData.object_type,
+        p_tracking_code: formData.tracking_code || null,
+        p_street_name: capitalizeName(formData.street_name) || null,
+        p_number: formData.number || null,
+        p_neighborhood: capitalizeName(formData.neighborhood) || null,
+        p_city_name: capitalizeName(formData.city) || null,
+        p_state_uf: formData.state || null,
+        p_cep: formData.cep || null
     };
-    onSave(formattedData);
+
+    onSave(payload);
   };
 
   return (

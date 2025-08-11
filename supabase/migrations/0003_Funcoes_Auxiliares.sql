@@ -17,18 +17,39 @@ BEGIN
 END;
 $$;
 
-CREATE OR REPLACE FUNCTION public.create_or_update_tracking_rule(p_object_type TEXT, p_prefix TEXT, p_rule_id INT, p_storage_days INT)
+-- >>>>> INÍCIO DA FUNÇÃO CORRIGIDA <<<<<
+-- ALTERAÇÃO: Limpeza agressiva de TODAS as versões conflitantes da função para resolver a ambiguidade.
+DROP FUNCTION IF EXISTS public.create_or_update_tracking_rule(p_object_type text, p_prefix text, p_rule_id integer, p_storage_days integer);
+DROP FUNCTION IF EXISTS public.create_or_update_tracking_rule(p_rule_id integer, p_prefix text, p_object_type text, p_storage_days integer);
+
+CREATE OR REPLACE FUNCTION public.create_or_update_tracking_rule(
+    p_rule_id INT,
+    p_prefix TEXT,
+    p_object_type TEXT,
+    p_storage_days INT
+)
 RETURNS tracking_code_rules LANGUAGE plpgsql SECURITY DEFINER AS $$
-DECLARE result_rule tracking_code_rules;
+DECLARE 
+    result_rule tracking_code_rules;
 BEGIN
-    IF NOT is_admin(auth.uid()) THEN RAISE EXCEPTION 'Acesso negado. Apenas administradores podem executar esta ação.'; END IF;
+    IF NOT is_admin(auth.uid()) THEN 
+        RAISE EXCEPTION 'Acesso negado. Apenas administradores podem executar esta ação.'; 
+    END IF;
+
+    -- Se p_rule_id for NULL, é uma inserção. Se não, é uma atualização (baseada no prefixo).
+    -- A lógica ON CONFLICT (prefix) lida com a atualização de forma mais robusta.
     INSERT INTO public.tracking_code_rules (id, prefix, object_type, storage_days)
     VALUES (COALESCE(p_rule_id, nextval('tracking_code_rules_id_seq')), p_prefix, p_object_type, p_storage_days)
-    ON CONFLICT (prefix) DO UPDATE SET object_type = EXCLUDED.object_type, storage_days = EXCLUDED.storage_days
+    ON CONFLICT (prefix) DO UPDATE 
+    SET object_type = EXCLUDED.object_type, 
+        storage_days = EXCLUDED.storage_days
     RETURNING * INTO result_rule;
+    
     RETURN result_rule;
 END;
 $$;
+-- >>>>> FIM DA FUNÇÃO CORRIGIDA <<<<<
+
 
 CREATE OR REPLACE FUNCTION public.create_or_update_app_setting(p_description TEXT, p_key TEXT, p_label TEXT, p_value TEXT)
 RETURNS app_settings LANGUAGE plpgsql SECURITY DEFINER AS $$
@@ -174,16 +195,16 @@ $$;
 -- FUNÇÕES DE MODELOS DE MENSAGEM
 --------------------------------------------------------------------------------
 DROP FUNCTION IF EXISTS public.create_or_update_message_template(UUID, TEXT, TEXT);
-CREATE OR REPLACE FUNCTION public.create_or_update_message_template(id UUID, name TEXT, content TEXT)
+CREATE OR REPLACE FUNCTION public.create_or_update_message_template(p_id UUID, p_name TEXT, p_content TEXT)
 RETURNS void
 LANGUAGE plpgsql SECURITY DEFINER AS $$
 BEGIN
-    IF id IS NULL THEN
-        INSERT INTO public.message_templates (name, content) VALUES (name, content);
+    IF p_id IS NULL THEN
+        INSERT INTO public.message_templates (name, content) VALUES (p_name, p_content);
     ELSE
         UPDATE public.message_templates
-        SET name = create_or_update_message_template.name, content = create_or_update_message_template.content, updated_at = NOW()
-        WHERE public.message_templates.id = create_or_update_message_template.id;
+        SET name = p_name, content = p_content, updated_at = NOW()
+        WHERE public.message_templates.id = p_id;
     END IF;
 END;
 $$;

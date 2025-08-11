@@ -21,6 +21,20 @@ BEGIN
 END;
 $$;
 
+DROP FUNCTION IF EXISTS public.get_address_details_by_id(UUID);
+CREATE OR REPLACE FUNCTION public.get_address_details_by_id(p_address_id UUID)
+RETURNS TABLE (street_name TEXT, city_name VARCHAR, state_uf CHAR(2), cep VARCHAR)
+LANGUAGE plpgsql STABLE AS $$
+BEGIN
+  RETURN QUERY
+  SELECT a.street_name::TEXT, c.name, s.uf, a.cep
+  FROM public.addresses a
+  JOIN public.cities c ON a.city_id = c.id
+  JOIN public.states s ON c.state_id = s.id
+  WHERE a.id = p_address_id;
+END;
+$$;
+
 DROP FUNCTION IF EXISTS public.get_customers_by_address(UUID);
 CREATE OR REPLACE FUNCTION public.get_customers_by_address(p_address_id UUID)
 RETURNS TABLE (id UUID, full_name TEXT, address_number VARCHAR, address_complement VARCHAR, is_active BOOLEAN)
@@ -34,19 +48,21 @@ BEGIN
 END;
 $$;
 
-CREATE OR REPLACE FUNCTION public.create_or_update_address(address_id UUID, cep VARCHAR, street_name TEXT, neighborhood TEXT, city_id INT)
+DROP FUNCTION IF EXISTS public.create_or_update_address(uuid, character varying, text, text, integer);
+CREATE OR REPLACE FUNCTION public.create_or_update_address(p_address_id UUID, p_cep VARCHAR, p_street_name TEXT, p_neighborhood TEXT, p_city_id INT)
 RETURNS addresses LANGUAGE plpgsql SECURITY DEFINER AS $$
 DECLARE result_address addresses; v_cleaned_cep TEXT;
 BEGIN
-    v_cleaned_cep := regexp_replace(cep, '\D', '', 'g');
-    IF address_id IS NULL THEN
-        INSERT INTO public.addresses (cep, street_name, neighborhood, city_id) VALUES (v_cleaned_cep, street_name, neighborhood, city_id) RETURNING * INTO result_address;
+    v_cleaned_cep := regexp_replace(p_cep, '\D', '', 'g');
+    IF p_address_id IS NULL THEN
+        INSERT INTO public.addresses (cep, street_name, neighborhood, city_id) VALUES (v_cleaned_cep, p_street_name, p_neighborhood, p_city_id) RETURNING * INTO result_address;
     ELSE
-        UPDATE public.addresses SET cep = v_cleaned_cep, street_name = street_name, neighborhood = neighborhood, city_id = city_id, updated_at = NOW() WHERE id = address_id RETURNING * INTO result_address;
+        UPDATE public.addresses SET cep = v_cleaned_cep, street_name = p_street_name, neighborhood = p_neighborhood, city_id = p_city_id, updated_at = NOW() WHERE id = p_address_id RETURNING * INTO result_address;
     END IF;
     RETURN result_address;
 END;
 $$;
+
 
 CREATE OR REPLACE FUNCTION public.find_address_by_details(p_cep TEXT, p_street_name TEXT, p_city_name TEXT, p_state_uf TEXT)
 RETURNS addresses LANGUAGE plpgsql AS $$
@@ -104,18 +120,50 @@ BEGIN
 END;
 $$;
 
-CREATE OR REPLACE FUNCTION public.create_or_update_customer(p_address_complement varchar, p_address_id uuid, p_address_number varchar, p_birth_date date, p_cellphone varchar, p_contact_customer_id uuid, p_cpf varchar, p_customer_id uuid, p_email varchar, p_full_name text)
+DROP FUNCTION IF EXISTS public.create_or_update_customer(uuid, text, character varying, character varying, date, uuid, character varying, uuid, character varying, character varying);
+DROP FUNCTION IF EXISTS public.create_or_update_customer(uuid, text, text, text, date, uuid, text, uuid, text, text);
+DROP FUNCTION IF EXISTS public.create_or_update_customer(p_address_complement varchar, p_address_id uuid, p_address_number varchar, p_birth_date date, p_cellphone varchar, p_contact_customer_id uuid, p_cpf varchar, p_customer_id uuid, p_email varchar, p_full_name text);
+DROP FUNCTION IF EXISTS public.create_or_update_customer(p_full_name text, p_cpf varchar, p_cellphone varchar, p_email varchar, p_birth_date date, p_contact_customer_id uuid, p_address_id uuid, p_address_number varchar, p_address_complement varchar, p_customer_id uuid);
+
+CREATE OR REPLACE FUNCTION public.create_or_update_customer(
+    p_customer_id uuid,
+    p_full_name text,
+    p_cpf varchar,
+    p_cellphone varchar,
+    p_birth_date date,
+    p_contact_customer_id uuid,
+    p_email varchar,
+    p_address_id uuid,
+    p_address_number varchar,
+    p_address_complement varchar
+)
 RETURNS customers LANGUAGE plpgsql SECURITY DEFINER AS $$
-DECLARE result_customer customers;
+DECLARE 
+    result_customer customers;
 BEGIN
     IF p_customer_id IS NULL THEN
-        INSERT INTO public.customers (full_name, cpf, cellphone, email, birth_date, contact_customer_id, address_id, address_number, address_complement) VALUES (p_full_name, p_cpf, p_cellphone, p_email, p_birth_date, p_contact_customer_id, p_address_id, p_address_number, p_address_complement) RETURNING * INTO result_customer;
+        INSERT INTO public.customers (full_name, cpf, cellphone, email, birth_date, contact_customer_id, address_id, address_number, address_complement) 
+        VALUES (p_full_name, p_cpf, p_cellphone, p_email, p_birth_date, p_contact_customer_id, p_address_id, p_address_number, p_address_complement) 
+        RETURNING * INTO result_customer;
     ELSE
-        UPDATE public.customers SET full_name = p_full_name, cpf = p_cpf, cellphone = p_cellphone, email = p_email, birth_date = p_birth_date, contact_customer_id = p_contact_customer_id, address_id = p_address_id, address_number = p_address_number, address_complement = p_address_complement, updated_at = NOW() WHERE id = p_customer_id RETURNING * INTO result_customer;
+        UPDATE public.customers 
+        SET full_name = p_full_name, 
+            cpf = p_cpf, 
+            cellphone = p_cellphone, 
+            email = p_email, 
+            birth_date = p_birth_date, 
+            contact_customer_id = p_contact_customer_id, 
+            address_id = p_address_id, 
+            address_number = p_address_number, 
+            address_complement = p_address_complement, 
+            updated_at = NOW() 
+        WHERE id = p_customer_id 
+        RETURNING * INTO result_customer;
     END IF;
     RETURN result_customer;
 END;
 $$;
+
 
 DROP FUNCTION IF EXISTS public.delete_customer(uuid);
 CREATE OR REPLACE FUNCTION public.delete_customer(p_customer_id uuid)
@@ -216,22 +264,63 @@ $$;
 --------------------------------------------------------------------------------
 -- FUNÇÕES DE OBJETOS (PACKAGES)
 --------------------------------------------------------------------------------
-CREATE OR REPLACE FUNCTION public.create_or_update_object(p_cep TEXT, p_city_name TEXT, p_control_number INT, p_neighborhood TEXT, p_number TEXT, p_object_type TEXT, p_recipient_name TEXT, p_state_uf TEXT, p_street_name TEXT, p_tracking_code TEXT)
+-- >>>>> INÍCIO DA FUNÇÃO CORRIGIDA <<<<<
+-- ALTERAÇÃO: Limpeza agressiva de TODAS as versões conflitantes da função para resolver a ambiguidade.
+DROP FUNCTION IF EXISTS public.create_or_update_object(text, text, integer, text, text, text, text, text, text, text);
+DROP FUNCTION IF EXISTS public.create_or_update_object(text, text, text, integer, text, text, text, text, text, text);
+
+CREATE OR REPLACE FUNCTION public.create_or_update_object(
+    p_control_number INT,
+    p_recipient_name TEXT,
+    p_object_type TEXT,
+    p_tracking_code TEXT,
+    p_street_name TEXT,
+    p_number TEXT,
+    p_neighborhood TEXT,
+    p_city_name TEXT,
+    p_state_uf TEXT,
+    p_cep TEXT
+)
 RETURNS objects LANGUAGE plpgsql SECURITY DEFINER AS $$
-DECLARE v_customer_id UUID; v_storage_deadline DATE; v_storage_days INT; result_object objects;
+DECLARE 
+    v_customer_id UUID; 
+    v_storage_deadline DATE; 
+    v_storage_days INT; 
+    result_object objects;
 BEGIN
-    IF NOT EXISTS (SELECT 1 FROM public.object_types WHERE name = p_object_type) THEN RAISE EXCEPTION 'O tipo de objeto "%" não é válido.', p_object_type; END IF;
+    IF NOT EXISTS (SELECT 1 FROM public.object_types WHERE name = p_object_type) THEN 
+        RAISE EXCEPTION 'O tipo de objeto "%" não é válido.', p_object_type; 
+    END IF;
+
     SELECT default_storage_days INTO v_storage_days FROM public.object_types WHERE name = p_object_type;
     v_storage_deadline := CURRENT_DATE + (v_storage_days || ' days')::INTERVAL;
     SELECT id INTO v_customer_id FROM public.customers WHERE f_unaccent(full_name) ILIKE f_unaccent(p_recipient_name) LIMIT 1;
+
     IF p_control_number IS NOT NULL THEN
-        UPDATE public.objects SET recipient_name = p_recipient_name, object_type = p_object_type, tracking_code = p_tracking_code, customer_id = v_customer_id, delivery_street_name = p_street_name, delivery_address_number = p_number, delivery_neighborhood = p_neighborhood, delivery_city_name = p_city_name, delivery_state_uf = p_state_uf, delivery_cep = p_cep, delivery_address_id = CASE WHEN p_street_name IS NOT NULL THEN NULL ELSE (SELECT address_id FROM customers WHERE id = v_customer_id) END, updated_at = NOW() WHERE control_number = p_control_number RETURNING * INTO result_object;
+        UPDATE public.objects 
+        SET recipient_name = p_recipient_name, 
+            object_type = p_object_type, 
+            tracking_code = p_tracking_code, 
+            customer_id = v_customer_id, 
+            delivery_street_name = p_street_name, 
+            delivery_address_number = p_number, 
+            delivery_neighborhood = p_neighborhood, 
+            delivery_city_name = p_city_name, 
+            delivery_state_uf = p_state_uf, 
+            delivery_cep = p_cep, 
+            delivery_address_id = CASE WHEN p_street_name IS NOT NULL THEN NULL ELSE (SELECT address_id FROM customers WHERE id = v_customer_id) END, 
+            updated_at = NOW() 
+        WHERE control_number = p_control_number 
+        RETURNING * INTO result_object;
     ELSE
-        INSERT INTO public.objects (recipient_name, object_type, storage_deadline, tracking_code, customer_id, delivery_street_name, delivery_address_number, delivery_neighborhood, delivery_city_name, delivery_state_uf, delivery_cep, delivery_address_id) VALUES (p_recipient_name, p_object_type, v_storage_deadline, p_tracking_code, v_customer_id, p_street_name, p_number, p_neighborhood, p_city_name, p_state_uf, p_cep, CASE WHEN p_street_name IS NOT NULL THEN NULL ELSE (SELECT address_id FROM customers WHERE id = v_customer_id) END) RETURNING * INTO result_object;
+        INSERT INTO public.objects (recipient_name, object_type, storage_deadline, tracking_code, customer_id, delivery_street_name, delivery_address_number, delivery_neighborhood, delivery_city_name, delivery_state_uf, delivery_cep, delivery_address_id) 
+        VALUES (p_recipient_name, p_object_type, v_storage_deadline, p_tracking_code, v_customer_id, p_street_name, p_number, p_neighborhood, p_city_name, p_state_uf, p_cep, CASE WHEN p_street_name IS NOT NULL THEN NULL ELSE (SELECT address_id FROM customers WHERE id = v_customer_id) END) 
+        RETURNING * INTO result_object;
     END IF;
     RETURN result_object;
 END;
 $$;
+-- >>>>> FIM DA FUNÇÃO CORRIGIDA <<<<<
 
 CREATE OR REPLACE FUNCTION public.bulk_create_simple_objects(p_object_type TEXT, p_objects simple_object_input[])
 RETURNS TABLE (report_recipient_name TEXT, report_control_number INT)
