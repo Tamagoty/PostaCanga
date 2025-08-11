@@ -1,6 +1,6 @@
 // path: src/components/CustomerForm.jsx
-// VERSÃO 7: Corrigida a lógica de busca de CEP genérico para garantir que o modal
-// de novo endereço seja aberto corretamente e a execução seja interrompida.
+// VERSÃO 8: Corrigida a lógica de submissão para enviar o customer_id durante a edição
+// e garantir que o payload corresponda à função SQL.
 
 import React, { useState, useEffect, useCallback } from "react";
 import styles from "./CustomerForm.module.css";
@@ -17,8 +17,9 @@ import { FaPlus } from "react-icons/fa";
 
 const CustomerForm = ({ onSave, onClose, customerToEdit, loading }) => {
   const initialFormData = {
+    customer_id: null, // ALTERAÇÃO: Adicionado para consistência no estado
     full_name: "", cpf: "", cellphone: "", birth_date: "", email: "",
-    contact_customer_id: "", address_id: "", address_number: "", address_complement: "",
+    contact_customer_id: null, address_id: null, address_number: "", address_complement: "",
   };
   const [formData, setFormData] = useState(initialFormData);
   const [addressOptions, setAddressOptions] = useState([]);
@@ -107,11 +108,11 @@ const CustomerForm = ({ onSave, onClose, customerToEdit, loading }) => {
           }
 
           const { data: newAddress, error: createError } = await supabase.rpc('create_or_update_address', {
-              p_cep: viaCepData.cep.replace(/\D/g, ''),
-              p_street_name: viaCepData.logradouro,
-              p_neighborhood: viaCepData.bairro,
-              p_city_id: cityData.id,
-              p_address_id: null
+              address_id: null,
+              cep: viaCepData.cep.replace(/\D/g, ''),
+              street_name: viaCepData.logradouro,
+              neighborhood: viaCepData.bairro,
+              city_id: cityData.id
           });
 
           if (createError) throw createError;
@@ -164,21 +165,23 @@ const CustomerForm = ({ onSave, onClose, customerToEdit, loading }) => {
   useEffect(() => {
     if (customerToEdit) {
       setFormData({
+        customer_id: customerToEdit.id, // ALTERAÇÃO: Preencher o ID do cliente
         full_name: customerToEdit.full_name || "", 
         cpf: customerToEdit.cpf || "", 
         cellphone: customerToEdit.cellphone || "",
         birth_date: customerToEdit.birth_date ? new Date(customerToEdit.birth_date).toISOString().split("T")[0] : "",
         email: customerToEdit.email || "", 
-        contact_customer_id: customerToEdit.contact_customer_id || "",
-        address_id: customerToEdit.address_id || "",
+        contact_customer_id: customerToEdit.contact_customer_id || null,
+        address_id: customerToEdit.address_id || null,
         address_number: customerToEdit.address_number || "",
         address_complement: customerToEdit.address_complement || "",
       });
 
       if (customerToEdit.address_id) {
         supabase.rpc('get_address_details_by_id', { p_address_id: customerToEdit.address_id }).then(({ data, error }) => {
-          if (!error && data.length > 0) {
+          if (!error && data && data.length > 0) {
             setFoundAddress({ street: data[0].street_name, city: data[0].city_name, state: data[0].state_uf });
+            setCep(data[0].cep || '');
           }
         });
       }
@@ -198,7 +201,7 @@ const CustomerForm = ({ onSave, onClose, customerToEdit, loading }) => {
       setContactResults([]);
       setSelectedContactName('');
     }
-  }, [customerToEdit]);
+  }, [customerToEdit, fetchAddressOptions]);
 
   const handleSelectContact = (contact) => {
     setFormData((prev) => ({ ...prev, contact_customer_id: contact.id }));
@@ -209,13 +212,11 @@ const CustomerForm = ({ onSave, onClose, customerToEdit, loading }) => {
 
   const handleChange = (e) => {
     const { name, value } = e.target;
-    if (name === 'cpf') {
-      setFormData((prev) => ({ ...prev, [name]: maskCPF(value) }));
-    } else if (name === 'cellphone') {
-      setFormData((prev) => ({ ...prev, [name]: maskPhone(value) }));
-    } else {
-      setFormData((prev) => ({ ...prev, [name]: value }));
-    }
+    let finalValue = value;
+    if (name === 'cpf') finalValue = maskCPF(value);
+    else if (name === 'cellphone') finalValue = maskPhone(value);
+    
+    setFormData((prev) => ({ ...prev, [name]: finalValue }));
   };
   
   const handleCepChange = (e) => {
@@ -228,7 +229,22 @@ const CustomerForm = ({ onSave, onClose, customerToEdit, loading }) => {
       toast.error("O nome completo é obrigatório.");
       return;
     }
-    onSave(formData);
+    
+    // ALTERAÇÃO: Montar o payload com os nomes de parâmetros corretos para a função SQL.
+    const payload = {
+      p_full_name: formData.full_name,
+      p_cpf: formData.cpf || null,
+      p_cellphone: formData.cellphone || null,
+      p_email: formData.email || null,
+      p_birth_date: formData.birth_date || null,
+      p_contact_customer_id: formData.contact_customer_id || null,
+      p_address_id: formData.address_id || null,
+      p_address_number: formData.address_number || null,
+      p_address_complement: formData.address_complement || null,
+      p_customer_id: formData.customer_id // Será 'null' para novos clientes, ou o UUID para edições.
+    };
+    
+    onSave(payload);
   };
 
   const handleSaveNewAddress = async (addressData) => {
@@ -241,6 +257,7 @@ const CustomerForm = ({ onSave, onClose, customerToEdit, loading }) => {
         toast.success('Novo endereço criado com sucesso!');
         await fetchAddressOptions();
         setFormData(prev => ({ ...prev, address_id: newAddress.id }));
+        setFoundAddress({ street: newAddress.street_name, city: newAddress.city.name, state: newAddress.city.state.uf });
         setIsAddressModalOpen(false);
     }
     setIsSavingAddress(false);
@@ -252,7 +269,7 @@ const CustomerForm = ({ onSave, onClose, customerToEdit, loading }) => {
           <AddressForm 
             onSave={handleSaveNewAddress}
             onClose={() => setIsAddressModalOpen(false)}
-            initialCep={cep}
+            initialCep={cepForManualAdd}
             loading={isSavingAddress}
           />
       </Modal>
@@ -274,7 +291,7 @@ const CustomerForm = ({ onSave, onClose, customerToEdit, loading }) => {
               {selectedContactName ? (
                 <div className={styles.selectedContact}>
                   <span>{selectedContactName}</span>
-                  <button type="button" onClick={() => { setSelectedContactName(""); setFormData((prev) => ({ ...prev, contact_customer_id: "" })); }}>
+                  <button type="button" onClick={() => { setSelectedContactName(""); setFormData((prev) => ({ ...prev, contact_customer_id: null })); }}>
                     Alterar
                   </button>
                 </div>
