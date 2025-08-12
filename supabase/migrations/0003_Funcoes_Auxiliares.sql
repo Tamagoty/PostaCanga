@@ -413,30 +413,45 @@ BEGIN
 END;
 $$;
 
+-- >>>>> INÍCIO DAS FUNÇÕES CORRIGIDAS <<<<<
+-- ALTERAÇÃO: Adicionado DROP FUNCTION para permitir a alteração do tipo de retorno.
+DROP FUNCTION IF EXISTS public.get_monthly_objects_report(integer);
 CREATE OR REPLACE FUNCTION public.get_monthly_objects_report(p_year INT)
-RETURNS TABLE (month_number TEXT, object_type TEXT, object_count BIGINT)
+RETURNS TABLE (month_number TEXT, object_type VARCHAR(100), object_count BIGINT)
 LANGUAGE plpgsql AS $$
 BEGIN
     RETURN QUERY
-    SELECT to_char(arrival_date, 'YYYY-MM') as month_number, o.object_type, count(*) as object_count
-    FROM public.objects o WHERE extract(year from o.arrival_date) = p_year
+    SELECT 
+        to_char(arrival_date, 'YYYY-MM') as month_number, 
+        o.object_type, 
+        count(*) as object_count
+    FROM public.objects o 
+    WHERE extract(year from o.arrival_date) = p_year
     GROUP BY month_number, o.object_type
     ORDER BY month_number, o.object_type;
 END;
 $$;
 
-CREATE OR REPLACE FUNCTION public.get_supplies_usage_report(p_year INT)
+-- ALTERAÇÃO: Corrigida a função para aceitar o número de meses como parâmetro e calcular o período corretamente.
+DROP FUNCTION IF EXISTS public.get_supplies_usage_report(integer);
+CREATE OR REPLACE FUNCTION public.get_supplies_usage_report(p_months INT)
 RETURNS TABLE (month_number TEXT, supply_name TEXT, total_used BIGINT)
 LANGUAGE plpgsql AS $$
 BEGIN
     RETURN QUERY
-    SELECT to_char(sl.created_at, 'YYYY-MM') as month_number, s.name as supply_name, SUM(sl.quantity_changed * -1) as total_used
-    FROM public.supply_stock_log sl JOIN public.office_supplies s ON sl.supply_id = s.id
-    WHERE sl.quantity_changed < 0 AND extract(year from sl.created_at) = p_year
+    SELECT 
+        to_char(sl.created_at, 'YYYY-MM') as month_number, 
+        s.name as supply_name, 
+        SUM(sl.quantity_changed * -1) as total_used
+    FROM public.supply_stock_log sl 
+    JOIN public.office_supplies s ON sl.supply_id = s.id
+    WHERE sl.quantity_changed < 0 AND sl.created_at >= (NOW() - (p_months || ' months')::interval)
     GROUP BY month_number, s.name
     ORDER BY month_number, s.name;
 END;
 $$;
+-- >>>>> FIM DAS FUNÇÕES CORRIGIDAS <<<<<
+
 
 DROP FUNCTION IF EXISTS public.get_all_app_settings();
 CREATE OR REPLACE FUNCTION public.get_all_app_settings()

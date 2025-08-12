@@ -156,7 +156,7 @@ const CustomersPage = () => {
         <h1>Gerenciamento de Clientes</h1>
         <div className={styles.actions}>
           <div className={styles.searchInputWrapper}>
-            <Input id="search" placeholder="Buscar por nome ou CPF..." icon={FaSearch} value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} />
+            <Input id="search" placeholder="Digite 🔤, 📞 ou 🪪..." icon={FaSearch} value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} />
           </div>
           <div className={styles.filterGroup}>
             <Button variant={statusFilter === 'active' ? 'primary' : 'secondary'} onClick={() => setStatusFilter('active')}>Ativos</Button>
