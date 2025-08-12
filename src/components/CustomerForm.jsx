@@ -1,6 +1,5 @@
 // path: src/components/CustomerForm.jsx
-// VERSÃO 8: Corrigida a lógica de submissão para enviar o customer_id durante a edição
-// e garantir que o payload corresponda à função SQL.
+// VERSÃO 11: Substituído o dropdown de endereços por um campo de busca inteligente com debounce.
 
 import React, { useState, useEffect, useCallback } from "react";
 import styles from "./CustomerForm.module.css";
@@ -17,12 +16,11 @@ import { FaPlus } from "react-icons/fa";
 
 const CustomerForm = ({ onSave, onClose, customerToEdit, loading }) => {
   const initialFormData = {
-    customer_id: null, // ALTERAÇÃO: Adicionado para consistência no estado
+    customer_id: null,
     full_name: "", cpf: "", cellphone: "", birth_date: "", email: "",
     contact_customer_id: null, address_id: null, address_number: "", address_complement: "",
   };
   const [formData, setFormData] = useState(initialFormData);
-  const [addressOptions, setAddressOptions] = useState([]);
   const [cep, setCep] = useState("");
   const [cepLoading, setCepLoading] = useState(false);
   const [contactSearch, setContactSearch] = useState("");
@@ -35,17 +33,14 @@ const CustomerForm = ({ onSave, onClose, customerToEdit, loading }) => {
   const [isSavingAddress, setIsSavingAddress] = useState(false);
   const [cepForManualAdd, setCepForManualAdd] = useState("");
 
+  // Novos estados para a busca de endereço
+  const [addressSearch, setAddressSearch] = useState("");
+  const [addressResults, setAddressResults] = useState([]);
+  const [isSearchingAddresses, setIsSearchingAddresses] = useState(false);
+
   const debouncedCep = useDebounce(cep, 500);
   const debouncedContactSearch = useDebounce(contactSearch, 500);
-
-  const fetchAddressOptions = useCallback(async () => {
-    const { data: addresses, error } = await supabase
-      .from("addresses")
-      .select("*, city:cities(name, state:states(uf))")
-      .order("street_name");
-    if (error) toast.error(handleSupabaseError(error));
-    else if (addresses) setAddressOptions(addresses);
-  }, []);
+  const debouncedAddressSearch = useDebounce(addressSearch, 400);
 
   const autoFetchAddress = useCallback(async () => {
       const cleanedCep = debouncedCep.replace(/\D/g, "");
@@ -66,17 +61,13 @@ const CustomerForm = ({ onSave, onClose, customerToEdit, loading }) => {
           toast.error("CEP não encontrado. Cadastre o endereço manualmente.");
           setCepForManualAdd(debouncedCep);
           setIsAddressModalOpen(true);
-          setCepLoading(false);
           return;
         }
 
-        const isGenericCep = !viaCepData.logradouro;
-
-        if (isGenericCep) {
-          toast.info("CEP de cidade/região. Especifique a rua para cadastrar.");
+        if (!viaCepData.logradouro) {
+          toast("CEP de cidade/região. Especifique a rua para cadastrar.");
           setCepForManualAdd(debouncedCep);
           setIsAddressModalOpen(true);
-          setCepLoading(false);
           return;
         }
         
@@ -94,43 +85,17 @@ const CustomerForm = ({ onSave, onClose, customerToEdit, loading }) => {
           setFoundAddress({ street: existingAddress.street_name, city: viaCepData.localidade, state: viaCepData.uf });
           toast.success("Endereço existente selecionado!");
         } else {
-          toast.loading('Endereço novo, a cadastrar...');
-          
-          const { data: cityData, error: cityError } = await supabase
-              .from('cities')
-              .select('id')
-              .ilike('name', viaCepData.localidade)
-              .single();
-
-          if (cityError || !cityData) {
-              toast.error('Cidade do CEP não encontrada no banco de dados.');
-              throw cityError || new Error('Cidade não encontrada');
-          }
-
-          const { data: newAddress, error: createError } = await supabase.rpc('create_or_update_address', {
-              address_id: null,
-              cep: viaCepData.cep.replace(/\D/g, ''),
-              street_name: viaCepData.logradouro,
-              neighborhood: viaCepData.bairro,
-              city_id: cityData.id
-          });
-
-          if (createError) throw createError;
-          
-          toast.dismiss();
-          toast.success('Endereço novo cadastrado e selecionado!');
-          await fetchAddressOptions();
-          setFormData(prev => ({ ...prev, address_id: newAddress.id }));
-          setFoundAddress({ street: newAddress.street_name, city: viaCepData.localidade, state: viaCepData.uf });
+          toast('Endereço novo. Preencha os detalhes e adicione-o manualmente se necessário.');
+          setCepForManualAdd(debouncedCep);
+          setIsAddressModalOpen(true);
         }
 
       } catch (error) {
-        toast.dismiss();
         toast.error(handleSupabaseError(error));
       } finally {
         setCepLoading(false);
       }
-  }, [debouncedCep, fetchAddressOptions]);
+  }, [debouncedCep]);
 
   const searchContacts = useCallback(async () => {
       if (debouncedContactSearch.length < 2) {
@@ -148,24 +113,42 @@ const CustomerForm = ({ onSave, onClose, customerToEdit, loading }) => {
       setIsSearchingContacts(false);
   }, [debouncedContactSearch]);
 
+  const searchAddresses = useCallback(async () => {
+    if (debouncedAddressSearch.length < 3) {
+      setAddressResults([]);
+      return;
+    }
+    setIsSearchingAddresses(true);
+    const { data, error } = await supabase.rpc("search_addresses", { p_search_term: debouncedAddressSearch });
+    if (error) {
+      toast.error(handleSupabaseError(error));
+      setAddressResults([]);
+    } else {
+      setAddressResults(data || []);
+    }
+    setIsSearchingAddresses(false);
+  }, [debouncedAddressSearch]);
+
   useEffect(() => {
     if (debouncedCep) {
         autoFetchAddress();
     }
   }, [debouncedCep, autoFetchAddress]);
+  
+  useEffect(() => {
+    if (!cep) { // Só busca por rua se não houver CEP
+        searchAddresses();
+    }
+  }, [debouncedAddressSearch, searchAddresses, cep]);
 
   useEffect(() => {
     searchContacts();
   }, [searchContacts]);
 
   useEffect(() => {
-    fetchAddressOptions();
-  }, [fetchAddressOptions]);
-
-  useEffect(() => {
     if (customerToEdit) {
       setFormData({
-        customer_id: customerToEdit.id, // ALTERAÇÃO: Preencher o ID do cliente
+        customer_id: customerToEdit.id,
         full_name: customerToEdit.full_name || "", 
         cpf: customerToEdit.cpf || "", 
         cellphone: customerToEdit.cellphone || "",
@@ -178,12 +161,18 @@ const CustomerForm = ({ onSave, onClose, customerToEdit, loading }) => {
       });
 
       if (customerToEdit.address_id) {
-        supabase.rpc('get_address_details_by_id', { p_address_id: customerToEdit.address_id }).then(({ data, error }) => {
-          if (!error && data && data.length > 0) {
-            setFoundAddress({ street: data[0].street_name, city: data[0].city_name, state: data[0].state_uf });
-            setCep(data[0].cep || '');
-          }
-        });
+         supabase
+          .from('addresses')
+          .select('*, city:cities(name, state:states(uf))')
+          .eq('id', customerToEdit.address_id)
+          .single()
+          .then(({ data, error }) => {
+            if (!error && data) {
+              setFoundAddress({ street: data.street_name, city: data.city.name, state: data.city.state.uf });
+              setAddressSearch(data.street_name);
+              setCep(data.cep || '');
+            }
+          });
       }
 
       if (customerToEdit.contact_customer_id) {
@@ -200,14 +189,22 @@ const CustomerForm = ({ onSave, onClose, customerToEdit, loading }) => {
       setContactSearch('');
       setContactResults([]);
       setSelectedContactName('');
+      setAddressSearch('');
     }
-  }, [customerToEdit, fetchAddressOptions]);
+  }, [customerToEdit]);
 
   const handleSelectContact = (contact) => {
     setFormData((prev) => ({ ...prev, contact_customer_id: contact.id }));
     setSelectedContactName(contact.full_name);
     setContactSearch("");
     setContactResults([]);
+  };
+
+  const handleSelectAddress = (address) => {
+    setFormData(prev => ({ ...prev, address_id: address.id }));
+    setFoundAddress({ street: address.street_name, city: address.city_name, state: address.state_uf });
+    setAddressSearch(address.street_name);
+    setAddressResults([]);
   };
 
   const handleChange = (e) => {
@@ -220,7 +217,12 @@ const CustomerForm = ({ onSave, onClose, customerToEdit, loading }) => {
   };
   
   const handleCepChange = (e) => {
-    setCep(maskCEP(e.target.value));
+    const maskedCep = maskCEP(e.target.value);
+    setCep(maskedCep);
+    if (maskedCep) {
+        setAddressSearch('');
+        setAddressResults([]);
+    }
   };
 
   const handleSubmit = (e) => {
@@ -230,18 +232,17 @@ const CustomerForm = ({ onSave, onClose, customerToEdit, loading }) => {
       return;
     }
     
-    // ALTERAÇÃO: Montar o payload com os nomes de parâmetros corretos para a função SQL.
     const payload = {
+      p_customer_id: formData.customer_id,
       p_full_name: formData.full_name,
       p_cpf: formData.cpf || null,
       p_cellphone: formData.cellphone || null,
-      p_email: formData.email || null,
       p_birth_date: formData.birth_date || null,
       p_contact_customer_id: formData.contact_customer_id || null,
+      p_email: formData.email || null,
       p_address_id: formData.address_id || null,
       p_address_number: formData.address_number || null,
       p_address_complement: formData.address_complement || null,
-      p_customer_id: formData.customer_id // Será 'null' para novos clientes, ou o UUID para edições.
     };
     
     onSave(payload);
@@ -249,18 +250,35 @@ const CustomerForm = ({ onSave, onClose, customerToEdit, loading }) => {
 
   const handleSaveNewAddress = async (addressData) => {
     setIsSavingAddress(true);
-    const { data: newAddress, error } = await supabase.rpc('create_or_update_address', addressData);
+    try {
+        const { data: newAddress, error } = await supabase.rpc('create_or_update_address', addressData);
 
-    if (error) {
-        toast.error(handleSupabaseError(error));
-    } else {
-        toast.success('Novo endereço criado com sucesso!');
-        await fetchAddressOptions();
-        setFormData(prev => ({ ...prev, address_id: newAddress.id }));
-        setFoundAddress({ street: newAddress.street_name, city: newAddress.city.name, state: newAddress.city.state.uf });
-        setIsAddressModalOpen(false);
+        if (error) {
+            toast.error(handleSupabaseError(error));
+        } else {
+            toast.success('Novo endereço criado com sucesso!');
+            setFormData(prev => ({ ...prev, address_id: newAddress.id }));
+            
+            const { data: fullAddress, error: fetchError } = await supabase
+                .from('addresses')
+                .select('*, city:cities(name, state:states(uf))')
+                .eq('id', newAddress.id)
+                .single();
+
+            if (fetchError) {
+                toast.error("Não foi possível carregar os detalhes do novo endereço.");
+            } else if (fullAddress) {
+                setFoundAddress({ street: fullAddress.street_name, city: fullAddress.city.name, state: fullAddress.city.state.uf });
+                setAddressSearch(fullAddress.street_name);
+            }
+            
+            setIsAddressModalOpen(false);
+        }
+    } catch (e) {
+        toast.error("Ocorreu um erro inesperado ao guardar o endereço.");
+    } finally {
+        setIsSavingAddress(false);
     }
-    setIsSavingAddress(false);
   };
 
   return (
@@ -328,19 +346,33 @@ const CustomerForm = ({ onSave, onClose, customerToEdit, loading }) => {
           )}
 
           <div className={styles.formGroup}>
-            <label htmlFor="address_id">Rua / Logradouro</label>
-            <div className={styles.addressSelectGroup}>
-              <select id="address_id" name="address_id" value={formData.address_id || ''} onChange={handleChange} className={styles.select}>
-                <option value="">Selecione um endereço ou busque por CEP</option>
-                {addressOptions.map((addr) => (
-                  <option key={addr.id} value={addr.id}>
-                    {`${addr.street_name}${addr.neighborhood ? ` (${addr.neighborhood})` : ''} - ${addr.city.name}/${addr.city.state.uf}`}
-                  </option>
-                ))}
-              </select>
-              <button type="button" onClick={() => setIsAddressModalOpen(true)} className={styles.newAddressBtn}>
-                <FaPlus /> Novo
-              </button>
+            <label htmlFor="address_search">Rua / Logradouro</label>
+            <div className={styles.searchWrapper}>
+                <Input
+                    id="address_search"
+                    name="address_search"
+                    placeholder="Digite para buscar um endereço..."
+                    value={addressSearch}
+                    onChange={(e) => {
+                        setAddressSearch(e.target.value);
+                        if (formData.address_id) {
+                            setFoundAddress(null);
+                            setFormData(prev => ({...prev, address_id: null}));
+                        }
+                    }}
+                    disabled={!!cep}
+                />
+                {isSearchingAddresses && <div className={styles.loaderSmall}></div>}
+                {addressResults.length > 0 && (
+                    <ul className={styles.searchResults}>
+                        {addressResults.map((addr) => (
+                            <li key={addr.id} onClick={() => handleSelectAddress(addr)}>
+                                {`${addr.street_name}${addr.neighborhood ? ` (${addr.neighborhood})` : ''}`}
+                                <span className={styles.searchResultAddress}>{`${addr.city_name}/${addr.state_uf}`}</span>
+                            </li>
+                        ))}
+                    </ul>
+                )}
             </div>
           </div>
           <div className={styles.grid}>

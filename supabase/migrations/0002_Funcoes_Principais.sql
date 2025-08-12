@@ -10,8 +10,9 @@
 --------------------------------------------------------------------------------
 DROP FUNCTION IF EXISTS public.delete_address(UUID);
 CREATE OR REPLACE FUNCTION public.delete_address(p_address_id UUID)
-RETURNS void LANGUAGE plpgsql SECURITY DEFINER AS $$
-DECLARE is_in_use BOOLEAN;
+RETURNS void LANGUAGE plpgsql SECURITY DEFINER SET search_path = 'public' AS $$
+DECLARE 
+    is_in_use BOOLEAN;
 BEGIN
   SELECT EXISTS (SELECT 1 FROM public.customers WHERE address_id = p_address_id) INTO is_in_use;
   IF is_in_use THEN
@@ -49,15 +50,34 @@ END;
 $$;
 
 DROP FUNCTION IF EXISTS public.create_or_update_address(uuid, character varying, text, text, integer);
-CREATE OR REPLACE FUNCTION public.create_or_update_address(p_address_id UUID, p_cep VARCHAR, p_street_name TEXT, p_neighborhood TEXT, p_city_id INT)
-RETURNS addresses LANGUAGE plpgsql SECURITY DEFINER AS $$
-DECLARE result_address addresses; v_cleaned_cep TEXT;
+DROP FUNCTION IF EXISTS public.create_or_update_address(uuid, character varying, integer, text, text);
+DROP FUNCTION IF EXISTS public.create_or_update_address(uuid, text, text, text, integer);
+CREATE OR REPLACE FUNCTION public.create_or_update_address(
+    p_address_id UUID, 
+    p_cep VARCHAR, 
+    p_street_name TEXT, 
+    p_neighborhood TEXT, 
+    p_city_id INT
+)
+RETURNS addresses LANGUAGE plpgsql SECURITY DEFINER SET search_path = 'public' AS $$
+DECLARE 
+    result_address addresses; 
+    v_cleaned_cep TEXT;
 BEGIN
     v_cleaned_cep := regexp_replace(p_cep, '\D', '', 'g');
     IF p_address_id IS NULL THEN
-        INSERT INTO public.addresses (cep, street_name, neighborhood, city_id) VALUES (v_cleaned_cep, p_street_name, p_neighborhood, p_city_id) RETURNING * INTO result_address;
+        INSERT INTO public.addresses (cep, street_name, neighborhood, city_id) 
+        VALUES (v_cleaned_cep, p_street_name, p_neighborhood, p_city_id) 
+        RETURNING * INTO result_address;
     ELSE
-        UPDATE public.addresses SET cep = v_cleaned_cep, street_name = p_street_name, neighborhood = p_neighborhood, city_id = p_city_id, updated_at = NOW() WHERE id = p_address_id RETURNING * INTO result_address;
+        UPDATE public.addresses 
+        SET cep = v_cleaned_cep, 
+            street_name = p_street_name, 
+            neighborhood = p_neighborhood, 
+            city_id = p_city_id, 
+            updated_at = NOW() 
+        WHERE id = p_address_id 
+        RETURNING * INTO result_address;
     END IF;
     RETURN result_address;
 END;
@@ -73,6 +93,40 @@ BEGIN
     IF v_city_id IS NULL THEN RETURN NULL; END IF;
     SELECT * INTO result_address FROM public.addresses a WHERE a.cep = v_cleaned_cep AND f_unaccent(a.street_name) ILIKE f_unaccent(p_street_name) AND a.city_id = v_city_id LIMIT 1;
     RETURN result_address;
+END;
+$$;
+
+CREATE OR REPLACE FUNCTION public.search_addresses(p_search_term TEXT)
+RETURNS TABLE (
+    id UUID,
+    street_name TEXT,
+    neighborhood TEXT,
+    city_name VARCHAR,
+    state_uf CHAR(2)
+)
+LANGUAGE plpgsql STABLE AS $$
+BEGIN
+    RETURN QUERY
+    SELECT
+        a.id,
+        a.street_name::TEXT,
+        a.neighborhood::TEXT,
+        c.name AS city_name,
+        s.uf AS state_uf
+    FROM
+        public.addresses a
+    JOIN
+        public.cities c ON a.city_id = c.id
+    JOIN
+        public.states s ON c.state_id = s.id
+    WHERE
+        p_search_term IS NULL OR p_search_term = '' OR
+        f_unaccent(a.street_name) ILIKE f_unaccent('%' || p_search_term || '%') OR
+        f_unaccent(a.neighborhood) ILIKE f_unaccent('%' || p_search_term || '%') OR
+        a.cep ILIKE '%' || p_search_term || '%'
+    ORDER BY
+        a.street_name
+    LIMIT 20;
 END;
 $$;
 
@@ -137,7 +191,7 @@ CREATE OR REPLACE FUNCTION public.create_or_update_customer(
     p_address_number varchar,
     p_address_complement varchar
 )
-RETURNS customers LANGUAGE plpgsql SECURITY DEFINER AS $$
+RETURNS customers LANGUAGE plpgsql SECURITY DEFINER SET search_path = 'public' AS $$
 DECLARE 
     result_customer customers;
 BEGIN
@@ -167,7 +221,7 @@ $$;
 
 DROP FUNCTION IF EXISTS public.delete_customer(uuid);
 CREATE OR REPLACE FUNCTION public.delete_customer(p_customer_id uuid)
-RETURNS void LANGUAGE plpgsql SECURITY DEFINER AS $$
+RETURNS void LANGUAGE plpgsql SECURITY DEFINER SET search_path = 'public' AS $$
 DECLARE has_objects boolean;
 BEGIN
   SELECT EXISTS (SELECT 1 FROM public.objects WHERE customer_id = p_customer_id) INTO has_objects;
@@ -180,7 +234,7 @@ END;
 $$;
 
 CREATE OR REPLACE FUNCTION public.set_customer_status(p_customer_id UUID, p_is_active BOOLEAN)
-RETURNS void LANGUAGE plpgsql SECURITY DEFINER AS $$
+RETURNS void LANGUAGE plpgsql SECURITY DEFINER SET search_path = 'public' AS $$
 BEGIN
     UPDATE public.customers SET is_active = p_is_active, updated_at = NOW() WHERE id = p_customer_id;
 END;
@@ -188,29 +242,72 @@ $$;
 
 CREATE OR REPLACE FUNCTION public.count_customers_filtered(p_search_term TEXT, p_status_filter TEXT)
 RETURNS INT LANGUAGE plpgsql AS $$
-DECLARE total_count INT;
+DECLARE 
+    total_count INT;
+    v_cleaned_search_term TEXT;
 BEGIN
-    SELECT COUNT(*) INTO total_count FROM public.customers WHERE (p_search_term IS NULL OR p_search_term = '' OR (f_unaccent(full_name) ILIKE f_unaccent('%' || p_search_term || '%') OR cpf ILIKE '%' || p_search_term || '%')) AND (p_status_filter IS NULL OR p_status_filter = 'all' OR (p_status_filter = 'active' AND is_active = TRUE) OR (p_status_filter = 'inactive' AND is_active = FALSE));
+    v_cleaned_search_term := regexp_replace(p_search_term, '\D', '', 'g');
+
+    SELECT COUNT(*) INTO total_count 
+    FROM public.customers
+    WHERE 
+        (p_search_term IS NULL OR p_search_term = '' OR
+            (
+                f_unaccent(full_name) ILIKE f_unaccent('%' || p_search_term || '%') OR
+                (v_cleaned_search_term <> '' AND regexp_replace(cpf, '\D', '', 'g') ILIKE '%' || v_cleaned_search_term || '%') OR
+                (v_cleaned_search_term <> '' AND regexp_replace(cellphone, '\D', '', 'g') ILIKE '%' || v_cleaned_search_term || '%')
+            )
+        ) AND 
+        (p_status_filter IS NULL OR p_status_filter = 'all' OR 
+            (p_status_filter = 'active' AND is_active = TRUE) OR 
+            (p_status_filter = 'inactive' AND is_active = FALSE)
+        );
     RETURN total_count;
 END;
 $$;
 
+-- >>>>> INÍCIO DA FUNÇÃO CORRIGIDA <<<<<
+-- ALTERAÇÃO: Adicionado DROP FUNCTION para permitir a alteração do tipo de retorno.
+DROP FUNCTION IF EXISTS public.get_paginated_customers_with_details(integer, integer, text, text);
 CREATE OR REPLACE FUNCTION public.get_paginated_customers_with_details(p_limit INT, p_offset INT, p_search_term TEXT, p_status_filter TEXT)
-RETURNS TABLE (id UUID, full_name TEXT, cpf VARCHAR, cellphone VARCHAR, is_active BOOLEAN, address_info TEXT, total_count BIGINT)
+RETURNS TABLE (id UUID, full_name TEXT, cpf VARCHAR, cellphone VARCHAR, is_active BOOLEAN, address_info TEXT)
 LANGUAGE plpgsql AS $$
+DECLARE
+    v_cleaned_search_term TEXT;
 BEGIN
+    v_cleaned_search_term := regexp_replace(p_search_term, '\D', '', 'g');
+
     RETURN QUERY
-    WITH filtered_customers AS (
-        SELECT c.* FROM public.customers c WHERE (p_search_term IS NULL OR p_search_term = '' OR (f_unaccent(c.full_name) ILIKE f_unaccent('%' || p_search_term || '%') OR c.cpf ILIKE '%' || p_search_term || '%')) AND (p_status_filter IS NULL OR p_status_filter = 'all' OR (p_status_filter = 'active' AND c.is_active = TRUE) OR (p_status_filter = 'inactive' AND c.is_active = FALSE))
-    )
-    SELECT fc.id, fc.full_name::TEXT, fc.cpf, fc.cellphone, fc.is_active, COALESCE(a.street_name || ', ' || fc.address_number || ' - ' || a.neighborhood, 'Endereço não informado')::TEXT AS address_info, (SELECT count(*) FROM filtered_customers) AS total_count
-    FROM filtered_customers fc LEFT JOIN public.addresses a ON fc.address_id = a.id
-    ORDER BY fc.full_name LIMIT p_limit OFFSET p_offset;
+    SELECT 
+        c.id, 
+        c.full_name::TEXT, 
+        c.cpf, 
+        c.cellphone, 
+        c.is_active, 
+        COALESCE(a.street_name || ', ' || c.address_number || ' - ' || a.neighborhood, 'Endereço não informado')::TEXT AS address_info
+    FROM public.customers c
+    LEFT JOIN public.addresses a ON c.address_id = a.id
+    WHERE 
+        (p_search_term IS NULL OR p_search_term = '' OR
+            (
+                f_unaccent(c.full_name) ILIKE f_unaccent('%' || p_search_term || '%') OR
+                (v_cleaned_search_term <> '' AND regexp_replace(c.cpf, '\D', '', 'g') ILIKE '%' || v_cleaned_search_term || '%') OR
+                (v_cleaned_search_term <> '' AND regexp_replace(c.cellphone, '\D', '', 'g') ILIKE '%' || v_cleaned_search_term || '%')
+            )
+        ) AND
+        (p_status_filter IS NULL OR p_status_filter = 'all' OR
+            (p_status_filter = 'active' AND c.is_active = TRUE) OR
+            (p_status_filter = 'inactive' AND c.is_active = FALSE)
+        )
+    ORDER BY c.full_name
+    LIMIT p_limit
+    OFFSET p_offset;
 END;
 $$;
+-- >>>>> FIM DA FUNÇÃO CORRIGIDA <<<<<
 
 CREATE OR REPLACE FUNCTION public.get_customer_details(p_customer_id UUID)
-RETURNS JSON LANGUAGE plpgsql SECURITY DEFINER AS $$
+RETURNS JSON LANGUAGE plpgsql SECURITY DEFINER SET search_path = 'public' AS $$
 DECLARE v_customer_profile JSON; v_customer_objects JSON; v_this_customer_is_contact_for JSON; v_contacts_for_this_customer JSON; v_main_contact_associations JSON;
 BEGIN
     SELECT json_build_object('id', c.id, 'full_name', c.full_name, 'cpf', c.cpf, 'cellphone', c.cellphone, 'birth_date', c.birth_date, 'is_active', c.is_active, 'contact_customer_id', c.contact_customer_id, 'email', c.email, 'address_id', c.address_id, 'address_number', c.address_number, 'address_complement', c.address_complement, 'address', json_build_object('street_name', a.street_name, 'neighborhood', a.neighborhood, 'cep', a.cep, 'city', ci.name, 'state', s.uf)) INTO v_customer_profile FROM public.customers c LEFT JOIN public.addresses a ON c.address_id = a.id LEFT JOIN public.cities ci ON a.city_id = ci.id LEFT JOIN public.states s ON ci.state_id = s.id WHERE c.id = p_customer_id;
@@ -224,7 +321,7 @@ $$;
 
 CREATE OR REPLACE FUNCTION public.search_contacts(p_search_term TEXT)
 RETURNS TABLE (id UUID, full_name TEXT, address_info TEXT)
-LANGUAGE plpgsql SECURITY DEFINER AS $$
+LANGUAGE plpgsql SECURITY DEFINER SET search_path = 'public' AS $$
 BEGIN
     RETURN QUERY SELECT c.id, c.full_name::TEXT, COALESCE(a.street_name || ', ' || c.address_number || ' - ' || a.neighborhood, 'Endereço não informado') AS address_info FROM public.customers c LEFT JOIN public.addresses a ON c.address_id = a.id WHERE c.is_active = TRUE AND c.cellphone IS NOT NULL AND public.f_unaccent(c.full_name) ILIKE '%' || public.f_unaccent(p_search_term) || '%' ORDER BY c.full_name LIMIT 20;
 END;
@@ -264,8 +361,6 @@ $$;
 --------------------------------------------------------------------------------
 -- FUNÇÕES DE OBJETOS (PACKAGES)
 --------------------------------------------------------------------------------
--- >>>>> INÍCIO DA FUNÇÃO CORRIGIDA <<<<<
--- ALTERAÇÃO: Limpeza agressiva de TODAS as versões conflitantes da função para resolver a ambiguidade.
 DROP FUNCTION IF EXISTS public.create_or_update_object(text, text, integer, text, text, text, text, text, text, text);
 DROP FUNCTION IF EXISTS public.create_or_update_object(text, text, text, integer, text, text, text, text, text, text);
 
@@ -281,7 +376,7 @@ CREATE OR REPLACE FUNCTION public.create_or_update_object(
     p_state_uf TEXT,
     p_cep TEXT
 )
-RETURNS objects LANGUAGE plpgsql SECURITY DEFINER AS $$
+RETURNS objects LANGUAGE plpgsql SECURITY DEFINER SET search_path = 'public' AS $$
 DECLARE 
     v_customer_id UUID; 
     v_storage_deadline DATE; 
@@ -320,11 +415,10 @@ BEGIN
     RETURN result_object;
 END;
 $$;
--- >>>>> FIM DA FUNÇÃO CORRIGIDA <<<<<
 
 CREATE OR REPLACE FUNCTION public.bulk_create_simple_objects(p_object_type TEXT, p_objects simple_object_input[])
 RETURNS TABLE (report_recipient_name TEXT, report_control_number INT)
-LANGUAGE plpgsql SECURITY DEFINER AS $$
+LANGUAGE plpgsql SECURITY DEFINER SET search_path = 'public' AS $$
 DECLARE obj simple_object_input; v_recipient_name TEXT; v_street_name TEXT; v_customer_id UUID; v_storage_deadline DATE; v_new_control_number INT; v_storage_days INT;
 BEGIN
     SELECT default_storage_days INTO v_storage_days FROM public.object_types WHERE name = p_object_type;
@@ -345,7 +439,7 @@ $$;
 
 CREATE OR REPLACE FUNCTION public.bulk_create_registered_objects(p_objects registered_object_input[])
 RETURNS TABLE (report_recipient_name TEXT, report_tracking_code TEXT, report_control_number INT)
-LANGUAGE plpgsql SECURITY DEFINER AS $$
+LANGUAGE plpgsql SECURITY DEFINER SET search_path = 'public' AS $$
 DECLARE obj registered_object_input; v_customer_id UUID; v_storage_deadline DATE; v_storage_days INT; v_new_control_number INT;
 BEGIN
     FOREACH obj IN ARRAY p_objects LOOP
@@ -363,28 +457,28 @@ END;
 $$;
 
 CREATE OR REPLACE FUNCTION public.link_object_to_customer(p_control_number INT, p_customer_id UUID)
-RETURNS void LANGUAGE plpgsql SECURITY DEFINER AS $$
+RETURNS void LANGUAGE plpgsql SECURITY DEFINER SET search_path = 'public' AS $$
 BEGIN
     UPDATE public.objects SET customer_id = p_customer_id, recipient_name = (SELECT full_name FROM public.customers WHERE id = p_customer_id) WHERE control_number = p_control_number;
 END;
 $$;
 
 CREATE OR REPLACE FUNCTION public.revert_object_status(p_control_number INT)
-RETURNS void LANGUAGE plpgsql SECURITY DEFINER AS $$
+RETURNS void LANGUAGE plpgsql SECURITY DEFINER SET search_path = 'public' AS $$
 BEGIN
     UPDATE public.objects SET status = 'Aguardando Retirada', updated_at = NOW() WHERE control_number = p_control_number;
 END;
 $$;
 
 CREATE OR REPLACE FUNCTION public.deliver_object(p_control_number INT)
-RETURNS void LANGUAGE plpgsql SECURITY DEFINER AS $$
+RETURNS void LANGUAGE plpgsql SECURITY DEFINER SET search_path = 'public' AS $$
 BEGIN
     UPDATE public.objects SET status = 'Entregue', updated_at = NOW() WHERE control_number = p_control_number;
 END;
 $$;
 
 CREATE OR REPLACE FUNCTION public.return_object(p_control_number INT)
-RETURNS void LANGUAGE plpgsql SECURITY DEFINER AS $$
+RETURNS void LANGUAGE plpgsql SECURITY DEFINER SET search_path = 'public' AS $$
 BEGIN
     UPDATE public.objects SET status = 'Devolvido', updated_at = NOW() WHERE control_number = p_control_number;
 END;
@@ -392,7 +486,7 @@ $$;
 
 DROP FUNCTION IF EXISTS public.archive_completed_objects();
 CREATE OR REPLACE FUNCTION public.archive_completed_objects()
-RETURNS void LANGUAGE plpgsql SECURITY DEFINER AS $$
+RETURNS void LANGUAGE plpgsql SECURITY DEFINER SET search_path = 'public' AS $$
 BEGIN
     IF NOT is_admin(auth.uid()) THEN 
         RAISE EXCEPTION 'Acesso negado. Apenas administradores podem executar esta ação.'; 
@@ -406,7 +500,7 @@ END;
 $$;
 
 CREATE OR REPLACE FUNCTION public.unarchive_object(p_control_number INT)
-RETURNS void LANGUAGE plpgsql SECURITY DEFINER AS $$
+RETURNS void LANGUAGE plpgsql SECURITY DEFINER SET search_path = 'public' AS $$
 BEGIN
     UPDATE public.objects SET is_archived = FALSE WHERE control_number = p_control_number;
 END;

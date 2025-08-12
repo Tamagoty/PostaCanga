@@ -9,7 +9,7 @@
 -- FUNÇÕES DE GESTÃO (ADMIN)
 --------------------------------------------------------------------------------
 CREATE OR REPLACE FUNCTION public.delete_employee(p_user_id UUID)
-RETURNS void LANGUAGE plpgsql SECURITY DEFINER AS $$
+RETURNS void LANGUAGE plpgsql SECURITY DEFINER SET search_path = 'public' AS $$
 BEGIN
     IF NOT is_admin(auth.uid()) THEN RAISE EXCEPTION 'Acesso negado. Apenas administradores podem executar esta ação.'; END IF;
     IF auth.uid() = p_user_id THEN RAISE EXCEPTION 'Um administrador não pode se auto-excluir.'; END IF;
@@ -17,8 +17,6 @@ BEGIN
 END;
 $$;
 
--- >>>>> INÍCIO DA FUNÇÃO CORRIGIDA <<<<<
--- ALTERAÇÃO: Limpeza agressiva de TODAS as versões conflitantes da função para resolver a ambiguidade.
 DROP FUNCTION IF EXISTS public.create_or_update_tracking_rule(p_object_type text, p_prefix text, p_rule_id integer, p_storage_days integer);
 DROP FUNCTION IF EXISTS public.create_or_update_tracking_rule(p_rule_id integer, p_prefix text, p_object_type text, p_storage_days integer);
 
@@ -28,7 +26,7 @@ CREATE OR REPLACE FUNCTION public.create_or_update_tracking_rule(
     p_object_type TEXT,
     p_storage_days INT
 )
-RETURNS tracking_code_rules LANGUAGE plpgsql SECURITY DEFINER AS $$
+RETURNS tracking_code_rules LANGUAGE plpgsql SECURITY DEFINER SET search_path = 'public' AS $$
 DECLARE 
     result_rule tracking_code_rules;
 BEGIN
@@ -36,8 +34,6 @@ BEGIN
         RAISE EXCEPTION 'Acesso negado. Apenas administradores podem executar esta ação.'; 
     END IF;
 
-    -- Se p_rule_id for NULL, é uma inserção. Se não, é uma atualização (baseada no prefixo).
-    -- A lógica ON CONFLICT (prefix) lida com a atualização de forma mais robusta.
     INSERT INTO public.tracking_code_rules (id, prefix, object_type, storage_days)
     VALUES (COALESCE(p_rule_id, nextval('tracking_code_rules_id_seq')), p_prefix, p_object_type, p_storage_days)
     ON CONFLICT (prefix) DO UPDATE 
@@ -48,11 +44,10 @@ BEGIN
     RETURN result_rule;
 END;
 $$;
--- >>>>> FIM DA FUNÇÃO CORRIGIDA <<<<<
 
 
 CREATE OR REPLACE FUNCTION public.create_or_update_app_setting(p_description TEXT, p_key TEXT, p_label TEXT, p_value TEXT)
-RETURNS app_settings LANGUAGE plpgsql SECURITY DEFINER AS $$
+RETURNS app_settings LANGUAGE plpgsql SECURITY DEFINER SET search_path = 'public' AS $$
 DECLARE result_setting app_settings;
 BEGIN
     IF NOT is_admin(auth.uid()) THEN RAISE EXCEPTION 'Acesso negado. Apenas administradores podem executar esta ação.'; END IF;
@@ -65,7 +60,7 @@ END;
 $$;
 
 CREATE OR REPLACE FUNCTION public.delete_app_setting(p_key TEXT)
-RETURNS void LANGUAGE plpgsql SECURITY DEFINER AS $$
+RETURNS void LANGUAGE plpgsql SECURITY DEFINER SET search_path = 'public' AS $$
 BEGIN
     IF NOT is_admin(auth.uid()) THEN RAISE EXCEPTION 'Acesso negado. Apenas administradores podem executar esta ação.'; END IF;
     DELETE FROM public.app_settings WHERE key = p_key;
@@ -76,7 +71,7 @@ $$;
 -- FUNÇÕES DE MATERIAIS (SUPPLIES)
 --------------------------------------------------------------------------------
 CREATE OR REPLACE FUNCTION public.create_or_update_supply(p_description TEXT, p_initial_stock INT, p_name VARCHAR, p_supply_id UUID)
-RETURNS office_supplies LANGUAGE plpgsql SECURITY DEFINER AS $$
+RETURNS office_supplies LANGUAGE plpgsql SECURITY DEFINER SET search_path = 'public' AS $$
 DECLARE result_supply office_supplies;
 BEGIN
     IF p_supply_id IS NULL THEN
@@ -92,7 +87,7 @@ END;
 $$;
 
 CREATE OR REPLACE FUNCTION public.log_and_adjust_stock(p_quantity_change INT, p_reason TEXT, p_supply_id UUID)
-RETURNS void LANGUAGE plpgsql SECURITY DEFINER AS $$
+RETURNS void LANGUAGE plpgsql SECURITY DEFINER SET search_path = 'public' AS $$
 DECLARE v_new_stock_total INT;
 BEGIN
     UPDATE public.office_supplies SET stock = stock + p_quantity_change WHERE id = p_supply_id
@@ -123,7 +118,7 @@ $$;
 -- FUNÇÕES DE TAREFAS (TASKS)
 --------------------------------------------------------------------------------
 CREATE OR REPLACE FUNCTION public.create_or_update_task(p_description TEXT, p_due_date DATE, p_frequency_type TEXT, p_task_id INT, p_title TEXT)
-RETURNS tasks LANGUAGE plpgsql SECURITY DEFINER AS $$
+RETURNS tasks LANGUAGE plpgsql SECURITY DEFINER SET search_path = 'public' AS $$
 DECLARE result_task tasks;
 BEGIN
     IF NOT is_admin(auth.uid()) THEN RAISE EXCEPTION 'Acesso negado. Apenas administradores podem executar esta ação.'; END IF;
@@ -140,7 +135,7 @@ END;
 $$;
 
 CREATE OR REPLACE FUNCTION public.delete_task(p_task_id INT)
-RETURNS void LANGUAGE plpgsql SECURITY DEFINER AS $$
+RETURNS void LANGUAGE plpgsql SECURITY DEFINER SET search_path = 'public' AS $$
 BEGIN
     IF NOT is_admin(auth.uid()) THEN RAISE EXCEPTION 'Acesso negado. Apenas administradores podem executar esta ação.'; END IF;
     DELETE FROM public.tasks WHERE id = p_task_id;
@@ -148,7 +143,7 @@ END;
 $$;
 
 CREATE OR REPLACE FUNCTION public.complete_task(p_task_id INT)
-RETURNS void LANGUAGE plpgsql SECURITY DEFINER AS $$
+RETURNS void LANGUAGE plpgsql SECURITY DEFINER SET search_path = 'public' AS $$
 BEGIN
     INSERT INTO public.task_completions (task_id, user_id, completed_at)
     VALUES (p_task_id, auth.uid(), NOW());
@@ -159,7 +154,7 @@ $$;
 -- FUNÇÕES DE LINKS DO SISTEMA
 --------------------------------------------------------------------------------
 CREATE OR REPLACE FUNCTION public.create_or_update_link(p_description TEXT, p_details TEXT, p_id UUID, p_name TEXT, p_url TEXT)
-RETURNS system_links LANGUAGE plpgsql SECURITY DEFINER AS $$
+RETURNS system_links LANGUAGE plpgsql SECURITY DEFINER SET search_path = 'public' AS $$
 DECLARE result_link system_links;
 BEGIN
     IF p_id IS NULL THEN
@@ -175,7 +170,7 @@ END;
 $$;
 
 CREATE OR REPLACE FUNCTION public.delete_link(p_link_id UUID)
-RETURNS void LANGUAGE plpgsql SECURITY DEFINER AS $$
+RETURNS void LANGUAGE plpgsql SECURITY DEFINER SET search_path = 'public' AS $$
 BEGIN
     DELETE FROM public.system_links WHERE id = p_link_id;
 END;
@@ -197,7 +192,7 @@ $$;
 DROP FUNCTION IF EXISTS public.create_or_update_message_template(UUID, TEXT, TEXT);
 CREATE OR REPLACE FUNCTION public.create_or_update_message_template(p_id UUID, p_name TEXT, p_content TEXT)
 RETURNS void
-LANGUAGE plpgsql SECURITY DEFINER AS $$
+LANGUAGE plpgsql SECURITY DEFINER SET search_path = 'public' AS $$
 BEGIN
     IF p_id IS NULL THEN
         INSERT INTO public.message_templates (name, content) VALUES (p_name, p_content);
@@ -210,7 +205,7 @@ END;
 $$;
 
 CREATE OR REPLACE FUNCTION public.delete_message_template(p_id UUID)
-RETURNS void LANGUAGE plpgsql SECURITY DEFINER AS $$
+RETURNS void LANGUAGE plpgsql SECURITY DEFINER SET search_path = 'public' AS $$
 BEGIN
     DELETE FROM public.message_templates WHERE id = p_id;
 END;
@@ -225,7 +220,7 @@ $$;
 -- FUNÇÕES DE TEMAS DE USUÁRIO
 --------------------------------------------------------------------------------
 CREATE OR REPLACE FUNCTION public.save_user_theme(p_theme_colors JSONB, p_theme_name TEXT)
-RETURNS user_themes LANGUAGE plpgsql SECURITY DEFINER AS $$
+RETURNS user_themes LANGUAGE plpgsql SECURITY DEFINER SET search_path = 'public' AS $$
 DECLARE result_theme user_themes;
 BEGIN
     INSERT INTO public.user_themes (user_id, theme_name, theme_colors) VALUES (auth.uid(), p_theme_name, p_theme_colors)
@@ -236,7 +231,7 @@ END;
 $$;
 
 CREATE OR REPLACE FUNCTION public.delete_user_theme(p_theme_id UUID)
-RETURNS void LANGUAGE plpgsql SECURITY DEFINER AS $$
+RETURNS void LANGUAGE plpgsql SECURITY DEFINER SET search_path = 'public' AS $$
 BEGIN
     DELETE FROM public.user_themes WHERE id = p_theme_id AND user_id = auth.uid();
 END;
@@ -246,7 +241,7 @@ $$;
 -- FUNÇÕES DE TIPOS DE OBJETO
 --------------------------------------------------------------------------------
 CREATE OR REPLACE FUNCTION public.create_or_update_object_type(p_default_storage_days INT, p_name TEXT, p_type_id INT)
-RETURNS object_types LANGUAGE plpgsql SECURITY DEFINER AS $$
+RETURNS object_types LANGUAGE plpgsql SECURITY DEFINER SET search_path = 'public' AS $$
 DECLARE result_type object_types;
 BEGIN
     IF NOT is_admin(auth.uid()) THEN RAISE EXCEPTION 'Acesso negado. Apenas administradores podem executar esta ação.'; END IF;
@@ -260,7 +255,7 @@ END;
 $$;
 
 CREATE OR REPLACE FUNCTION public.delete_object_type(p_type_id INT)
-RETURNS void LANGUAGE plpgsql SECURITY DEFINER AS $$
+RETURNS void LANGUAGE plpgsql SECURITY DEFINER SET search_path = 'public' AS $$
 BEGIN
     IF NOT is_admin(auth.uid()) THEN RAISE EXCEPTION 'Acesso negado. Apenas administradores podem executar esta ação.'; END IF;
     DELETE FROM public.object_types WHERE id = p_type_id;
@@ -328,24 +323,48 @@ END;
 $$;
 
 CREATE OR REPLACE FUNCTION public.save_bulk_report(p_report_data JSONB)
-RETURNS void LANGUAGE plpgsql SECURITY DEFINER AS $$
+RETURNS void LANGUAGE plpgsql SECURITY DEFINER SET search_path = 'public' AS $$
 BEGIN
     INSERT INTO public.bulk_import_reports (report_data, user_id)
     VALUES (p_report_data, auth.uid());
 END;
 $$;
 
+DROP FUNCTION IF EXISTS public.get_customers_for_export();
 CREATE OR REPLACE FUNCTION public.get_customers_for_export()
 RETURNS JSONB LANGUAGE plpgsql AS $$
-DECLARE export_data JSONB;
+DECLARE 
+    export_data JSONB;
 BEGIN
-    SELECT jsonb_agg(t) INTO export_data FROM (SELECT c.full_name, c.cellphone AS cellphone_to_use, c.is_active, c.birth_date, c.email, a.street_name, c.address_number, a.neighborhood, ci.name AS city_name, s.uf AS state_uf, a.cep, (SELECT STRING_AGG(dependent.full_name, ', ') FROM public.customers dependent WHERE dependent.contact_customer_id = c.id) AS associated_contacts FROM public.customers c LEFT JOIN public.addresses a ON c.address_id = a.id LEFT JOIN public.cities ci ON a.city_id = ci.id LEFT JOIN public.states s ON ci.state_id = s.id WHERE c.cellphone IS NOT NULL AND c.cellphone <> '') t;
+    SELECT jsonb_agg(t) INTO export_data 
+    FROM (
+        SELECT 
+            c.full_name, 
+            c.cellphone AS cellphone_to_use, 
+            c.is_active, 
+            to_char(c.birth_date, 'YYYY-MM-DD') AS birth_date, 
+            c.email, 
+            a.street_name, 
+            c.address_number, 
+            a.neighborhood, 
+            ci.name AS city_name, 
+            s.uf AS state_uf, 
+            a.cep, 
+            (SELECT STRING_AGG(dependent.full_name, ', ') 
+             FROM public.customers dependent 
+             WHERE dependent.contact_customer_id = c.id) AS associated_contacts 
+        FROM public.customers c 
+        LEFT JOIN public.addresses a ON c.address_id = a.id 
+        LEFT JOIN public.cities ci ON a.city_id = ci.id 
+        LEFT JOIN public.states s ON ci.state_id = s.id 
+        WHERE c.cellphone IS NOT NULL AND c.cellphone <> ''
+    ) t;
     RETURN COALESCE(export_data, '[]'::jsonb);
 END;
 $$;
 
 CREATE OR REPLACE FUNCTION public.get_dashboard_data()
-RETURNS JSON LANGUAGE plpgsql SECURITY DEFINER AS $$
+RETURNS JSON LANGUAGE plpgsql SECURITY DEFINER SET search_path = 'public' AS $$
 DECLARE v_awaiting_count INT; v_expiring_count INT; v_low_stock_count INT; v_recent_objects JSON; v_upcoming_birthdays JSON; v_pending_tasks JSON;
 BEGIN
     SELECT COUNT(*) INTO v_awaiting_count FROM public.objects WHERE status = 'Aguardando Retirada' AND is_archived = FALSE;
@@ -360,7 +379,7 @@ $$;
 
 CREATE OR REPLACE FUNCTION public.get_notifications()
 RETURNS TABLE(unique_id TEXT, type TEXT, message TEXT, link TEXT)
-LANGUAGE plpgsql SECURITY DEFINER AS $$
+LANGUAGE plpgsql SECURITY DEFINER SET search_path = 'public' AS $$
 BEGIN
     RETURN QUERY
     SELECT 'stock_' || s.id as unique_id, 'stock' as type, 'Estoque baixo para ' || s.name || ': ' || s.stock || ' unidades restantes.' as message, '/supplies' as link FROM public.office_supplies s WHERE s.stock < 10

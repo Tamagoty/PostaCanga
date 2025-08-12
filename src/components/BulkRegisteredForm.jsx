@@ -1,11 +1,13 @@
 // path: src/components/BulkRegisteredForm.jsx
+// VERSÃO 2: Corrigida a chamada da função RPC para corresponder à assinatura única e correta no banco de dados.
+
 import React, { useState, useEffect, useCallback } from 'react';
 import styles from './BulkRegisteredForm.module.css';
 import Button from './Button';
 import toast from 'react-hot-toast';
 import { supabase } from '../lib/supabase';
 import { handleSupabaseError } from '../utils/errorHandler';
-import { capitalizeName } from '../utils/formatters'; // Importa a função de formatação
+import { capitalizeName } from '../utils/formatters';
 
 const BulkRegisteredForm = ({ onSave, onClose, loading }) => {
   const [textData, setTextData] = useState('');
@@ -38,7 +40,6 @@ const BulkRegisteredForm = ({ onSave, onClose, loading }) => {
       const parsedObjects = lines.map(line => {
         const columns = line.split('\t');
         if (columns.length >= 10) {
-          // [NOVA LÓGICA] Aplica a formatação na leitura dos dados
           return {
             tracking_code: columns[1].trim().toUpperCase(),
             order_number: parseInt(columns[3].trim(), 10),
@@ -95,8 +96,12 @@ const BulkRegisteredForm = ({ onSave, onClose, loading }) => {
     }));
 
     for (const rule of newRules) {
+        // ALTERAÇÃO: Garantir que os nomes dos parâmetros correspondem à função SQL.
         const { error } = await supabase.rpc('create_or_update_tracking_rule', {
-            p_rule_id: null, p_prefix: rule.prefix, p_object_type: rule.object_type, p_storage_days: rule.storage_days
+            p_rule_id: null, 
+            p_prefix: rule.prefix, 
+            p_object_type: rule.object_type, 
+            p_storage_days: rule.storage_days
         });
         if (error) {
             toast.error(handleSupabaseError(error));
@@ -108,7 +113,6 @@ const BulkRegisteredForm = ({ onSave, onClose, loading }) => {
     const allObjects = [...classifiedObjects, ...unclassifiedObjects];
     allObjects.sort((a, b) => a.order_number - b.order_number);
     
-    // [NOVA LÓGICA] Garante a formatação final antes de salvar
     const finalObjects = allObjects.map(({ order_number, ...rest }) => ({
         ...rest,
         recipient_name: capitalizeName(rest.recipient_name),

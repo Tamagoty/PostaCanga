@@ -10,7 +10,7 @@
 --------------------------------------------------------------------------------
 DROP FUNCTION IF EXISTS is_admin(UUID) CASCADE;
 CREATE OR REPLACE FUNCTION is_admin(p_user_id UUID)
-RETURNS BOOLEAN LANGUAGE plpgsql SECURITY DEFINER AS $$
+RETURNS BOOLEAN LANGUAGE plpgsql SECURITY DEFINER SET search_path = 'public' AS $$
 BEGIN
     RETURN EXISTS (SELECT 1 FROM public.employees WHERE id = p_user_id AND role = 'admin');
 END;
