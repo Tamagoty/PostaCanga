@@ -40,8 +40,8 @@ const replaceVariables = (template, object, appSettings) => {
         '{{NUMERO_CONTROLE}}': object.control_number,
         '{{DIAS_RESTANTES}}': diffDays,
         '{{DATA_PRAZO}}': deadline.toLocaleDateString('pt-BR'),
-        '{{NOME_DA_AGENCIA}}': appSettings?.agency_name || 'nossa agência',
-        '{{ENDERECO_AGENCIA}}': appSettings?.agency_address || 'nossa agência',
+        '{{NOME_DA_AGENCIA}}': appSettings?.agency_name || 'AC América Dourada',
+        '{{ENDERECO_AGENCIA}}': appSettings?.agency_address || 'Avenida Romão Gramacho, sn - Centro, América Dourada/BA',
     };
     let populatedTemplate = template;
     for (const variable in variables) {
