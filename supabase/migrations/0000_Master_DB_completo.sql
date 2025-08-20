@@ -1,9 +1,9 @@
--- path: supabase/migrations/0001_Estrutura_Final.sql
+-- path: supabase/migrations/0000_Master_DB_completo_final.sql
 -- =============================================================================
--- || ARQUIVO 1: ESTRUTURA, TIPOS, EXTENSÕES E VIEWS                          ||
+-- || ARQUIVO MESTRE: ESTRUTURA COMPLETA, FUNÇÕES E DADOS INICIAIS            ||
 -- =============================================================================
--- DESCRIÇÃO: Cria a estrutura fundamental do banco de dados, incluindo tabelas,
--- tipos customizados, extensões do PostgreSQL e views de dados.
+-- DESCRIÇÃO: Script consolidado que contém a estrutura do banco de dados,
+-- todas as funções RPC e os dados iniciais (seed) para a aplicação.
 
 --------------------------------------------------------------------------------
 -- 1. EXTENSÕES E FUNÇÕES BASE
@@ -11,6 +11,7 @@
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 CREATE EXTENSION IF NOT EXISTS "unaccent";
 CREATE EXTENSION IF NOT EXISTS "pg_trgm";
+
 
 CREATE OR REPLACE FUNCTION public.f_unaccent(text)
  RETURNS text
@@ -81,16 +82,11 @@ FROM
   LEFT JOIN public.cities c ON a.city_id = c.id
   LEFT JOIN public.states s ON c.state_id = s.id;
 
--- path: supabase/migrations/0002_Funcoes_Principais_Final.sql
--- =============================================================================
--- || ARQUIVO 2: FUNÇÕES RPC - PRINCIPAIS                                     ||
--- =============================================================================
--- DESCRIÇÃO: Contém as funções relacionadas às entidades centrais da aplicação:
--- Endereços, Clientes e Objetos.
+--------------------------------------------------------------------------------
+-- 5. FUNÇÕES RPC
+--------------------------------------------------------------------------------
 
---------------------------------------------------------------------------------
 -- FUNÇÕES DE ENDEREÇOS (ADDRESSES)
---------------------------------------------------------------------------------
 DROP FUNCTION IF EXISTS public.delete_address(UUID);
 CREATE OR REPLACE FUNCTION public.delete_address(p_address_id UUID)
 RETURNS void LANGUAGE plpgsql SECURITY DEFINER AS $$
@@ -117,6 +113,7 @@ BEGIN
 END;
 $$;
 
+DROP FUNCTION IF EXISTS public.create_or_update_address(UUID, VARCHAR, TEXT, TEXT, INT);
 CREATE OR REPLACE FUNCTION public.create_or_update_address(address_id UUID, cep VARCHAR, street_name TEXT, neighborhood TEXT, city_id INT)
 RETURNS addresses LANGUAGE plpgsql SECURITY DEFINER AS $$
 DECLARE result_address addresses; v_cleaned_cep TEXT;
@@ -131,6 +128,7 @@ BEGIN
 END;
 $$;
 
+DROP FUNCTION IF EXISTS public.find_address_by_details(TEXT, TEXT, TEXT, TEXT);
 CREATE OR REPLACE FUNCTION public.find_address_by_details(p_cep TEXT, p_street_name TEXT, p_city_name TEXT, p_state_uf TEXT)
 RETURNS addresses LANGUAGE plpgsql AS $$
 DECLARE v_cleaned_cep TEXT; v_city_id INT; result_address addresses;
@@ -143,6 +141,7 @@ BEGIN
 END;
 $$;
 
+DROP FUNCTION IF EXISTS public.count_addresses(INT, TEXT, TEXT);
 CREATE OR REPLACE FUNCTION public.count_addresses(p_city_id INT, p_neighborhood TEXT, p_search_term TEXT)
 RETURNS INT LANGUAGE plpgsql AS $$
 DECLARE total_count INT;
@@ -152,11 +151,13 @@ BEGIN
 END;
 $$;
 
+DROP FUNCTION IF EXISTS public.get_neighborhoods_by_city(INT);
 CREATE OR REPLACE FUNCTION public.get_neighborhoods_by_city(p_city_id INT)
 RETURNS TABLE(neighborhood TEXT) LANGUAGE sql AS $$
     SELECT DISTINCT neighborhood FROM public.addresses WHERE city_id = p_city_id AND neighborhood IS NOT NULL ORDER BY neighborhood;
 $$;
 
+DROP FUNCTION IF EXISTS public.search_cities(TEXT);
 CREATE OR REPLACE FUNCTION public.search_cities(p_search_term TEXT)
 RETURNS TABLE(id INT, name VARCHAR, uf CHAR(2)) LANGUAGE plpgsql AS $$
 BEGIN
@@ -164,9 +165,7 @@ BEGIN
 END;
 $$;
 
---------------------------------------------------------------------------------
 -- FUNÇÕES DE CLIENTES (CUSTOMERS)
---------------------------------------------------------------------------------
 DROP FUNCTION IF EXISTS public.get_phones_for_recipients(text[]);
 CREATE OR REPLACE FUNCTION public.get_phones_for_recipients(p_recipient_names TEXT[])
 RETURNS JSON
@@ -187,6 +186,7 @@ BEGIN
 END;
 $$;
 
+DROP FUNCTION IF EXISTS public.create_or_update_customer(varchar, uuid, varchar, date, varchar, uuid, varchar, uuid, varchar, text);
 CREATE OR REPLACE FUNCTION public.create_or_update_customer(p_address_complement varchar, p_address_id uuid, p_address_number varchar, p_birth_date date, p_cellphone varchar, p_contact_customer_id uuid, p_cpf varchar, p_customer_id uuid, p_email varchar, p_full_name text)
 RETURNS customers LANGUAGE plpgsql SECURITY DEFINER AS $$
 DECLARE result_customer customers;
@@ -214,6 +214,7 @@ BEGIN
 END;
 $$;
 
+DROP FUNCTION IF EXISTS public.set_customer_status(UUID, BOOLEAN);
 CREATE OR REPLACE FUNCTION public.set_customer_status(p_customer_id UUID, p_is_active BOOLEAN)
 RETURNS void LANGUAGE plpgsql SECURITY DEFINER AS $$
 BEGIN
@@ -221,6 +222,7 @@ BEGIN
 END;
 $$;
 
+DROP FUNCTION IF EXISTS public.count_customers_filtered(TEXT, TEXT);
 CREATE OR REPLACE FUNCTION public.count_customers_filtered(p_search_term TEXT, p_status_filter TEXT)
 RETURNS INT LANGUAGE plpgsql AS $$
 DECLARE total_count INT;
@@ -230,6 +232,7 @@ BEGIN
 END;
 $$;
 
+DROP FUNCTION IF EXISTS public.get_paginated_customers_with_details(INT, INT, TEXT, TEXT);
 CREATE OR REPLACE FUNCTION public.get_paginated_customers_with_details(p_limit INT, p_offset INT, p_search_term TEXT, p_status_filter TEXT)
 RETURNS TABLE (id UUID, full_name TEXT, cpf VARCHAR, cellphone VARCHAR, is_active BOOLEAN, address_info TEXT, total_count BIGINT)
 LANGUAGE plpgsql AS $$
@@ -244,6 +247,7 @@ BEGIN
 END;
 $$;
 
+DROP FUNCTION IF EXISTS public.get_customer_details(UUID);
 CREATE OR REPLACE FUNCTION public.get_customer_details(p_customer_id UUID)
 RETURNS JSON LANGUAGE plpgsql SECURITY DEFINER AS $$
 DECLARE v_customer_profile JSON; v_customer_objects JSON; v_this_customer_is_contact_for JSON; v_contacts_for_this_customer JSON; v_main_contact_associations JSON;
@@ -257,6 +261,7 @@ BEGIN
 END;
 $$;
 
+DROP FUNCTION IF EXISTS public.search_contacts(TEXT);
 CREATE OR REPLACE FUNCTION public.search_contacts(p_search_term TEXT)
 RETURNS TABLE (id UUID, full_name TEXT, address_info TEXT)
 LANGUAGE plpgsql SECURITY DEFINER AS $$
@@ -296,9 +301,8 @@ BEGIN
 END;
 $$;
 
---------------------------------------------------------------------------------
 -- FUNÇÕES DE OBJETOS (PACKAGES)
---------------------------------------------------------------------------------
+DROP FUNCTION IF EXISTS public.create_or_update_object(TEXT, TEXT, INT, TEXT, TEXT, TEXT, TEXT, TEXT, TEXT, TEXT);
 CREATE OR REPLACE FUNCTION public.create_or_update_object(p_cep TEXT, p_city_name TEXT, p_control_number INT, p_neighborhood TEXT, p_number TEXT, p_object_type TEXT, p_recipient_name TEXT, p_state_uf TEXT, p_street_name TEXT, p_tracking_code TEXT)
 RETURNS objects LANGUAGE plpgsql SECURITY DEFINER AS $$
 DECLARE v_customer_id UUID; v_storage_deadline DATE; v_storage_days INT; result_object objects;
@@ -316,6 +320,7 @@ BEGIN
 END;
 $$;
 
+DROP FUNCTION IF EXISTS public.bulk_create_simple_objects(TEXT, simple_object_input[]);
 CREATE OR REPLACE FUNCTION public.bulk_create_simple_objects(p_object_type TEXT, p_objects simple_object_input[])
 RETURNS TABLE (report_recipient_name TEXT, report_control_number INT)
 LANGUAGE plpgsql SECURITY DEFINER AS $$
@@ -337,6 +342,7 @@ BEGIN
 END;
 $$;
 
+DROP FUNCTION IF EXISTS public.bulk_create_registered_objects(registered_object_input[]);
 CREATE OR REPLACE FUNCTION public.bulk_create_registered_objects(p_objects registered_object_input[])
 RETURNS TABLE (report_recipient_name TEXT, report_tracking_code TEXT, report_control_number INT)
 LANGUAGE plpgsql SECURITY DEFINER AS $$
@@ -356,6 +362,7 @@ BEGIN
 END;
 $$;
 
+DROP FUNCTION IF EXISTS public.link_object_to_customer(INT, UUID);
 CREATE OR REPLACE FUNCTION public.link_object_to_customer(p_control_number INT, p_customer_id UUID)
 RETURNS void LANGUAGE plpgsql SECURITY DEFINER AS $$
 BEGIN
@@ -363,6 +370,7 @@ BEGIN
 END;
 $$;
 
+DROP FUNCTION IF EXISTS public.revert_object_status(INT);
 CREATE OR REPLACE FUNCTION public.revert_object_status(p_control_number INT)
 RETURNS void LANGUAGE plpgsql SECURITY DEFINER AS $$
 BEGIN
@@ -370,6 +378,7 @@ BEGIN
 END;
 $$;
 
+DROP FUNCTION IF EXISTS public.deliver_object(INT);
 CREATE OR REPLACE FUNCTION public.deliver_object(p_control_number INT)
 RETURNS void LANGUAGE plpgsql SECURITY DEFINER AS $$
 BEGIN
@@ -377,6 +386,7 @@ BEGIN
 END;
 $$;
 
+DROP FUNCTION IF EXISTS public.return_object(INT);
 CREATE OR REPLACE FUNCTION public.return_object(p_control_number INT)
 RETURNS void LANGUAGE plpgsql SECURITY DEFINER AS $$
 BEGIN
@@ -399,6 +409,7 @@ BEGIN
 END;
 $$;
 
+DROP FUNCTION IF EXISTS public.unarchive_object(INT);
 CREATE OR REPLACE FUNCTION public.unarchive_object(p_control_number INT)
 RETURNS void LANGUAGE plpgsql SECURITY DEFINER AS $$
 BEGIN
@@ -406,16 +417,8 @@ BEGIN
 END;
 $$;
 
--- path: supabase/migrations/0003_Funcoes_Auxiliares_Final.sql
--- =============================================================================
--- || ARQUIVO 3: FUNÇÕES RPC - AUXILIARES E ADMIN                             ||
--- =============================================================================
--- DESCRIÇÃO: Contém as funções relacionadas a tarefas administrativas e
--- entidades secundárias, como Materiais, Tarefas, Links, etc.
-
---------------------------------------------------------------------------------
 -- FUNÇÕES DE GESTÃO (ADMIN)
---------------------------------------------------------------------------------
+DROP FUNCTION IF EXISTS public.delete_employee(UUID);
 CREATE OR REPLACE FUNCTION public.delete_employee(p_user_id UUID)
 RETURNS void LANGUAGE plpgsql SECURITY DEFINER AS $$
 BEGIN
@@ -425,6 +428,7 @@ BEGIN
 END;
 $$;
 
+DROP FUNCTION IF EXISTS public.create_or_update_tracking_rule(TEXT, TEXT, INT, INT);
 CREATE OR REPLACE FUNCTION public.create_or_update_tracking_rule(p_object_type TEXT, p_prefix TEXT, p_rule_id INT, p_storage_days INT)
 RETURNS tracking_code_rules LANGUAGE plpgsql SECURITY DEFINER AS $$
 DECLARE result_rule tracking_code_rules;
@@ -438,6 +442,7 @@ BEGIN
 END;
 $$;
 
+DROP FUNCTION IF EXISTS public.create_or_update_app_setting(TEXT, TEXT, TEXT, TEXT);
 CREATE OR REPLACE FUNCTION public.create_or_update_app_setting(p_description TEXT, p_key TEXT, p_label TEXT, p_value TEXT)
 RETURNS app_settings LANGUAGE plpgsql SECURITY DEFINER AS $$
 DECLARE result_setting app_settings;
@@ -451,6 +456,7 @@ BEGIN
 END;
 $$;
 
+DROP FUNCTION IF EXISTS public.delete_app_setting(TEXT);
 CREATE OR REPLACE FUNCTION public.delete_app_setting(p_key TEXT)
 RETURNS void LANGUAGE plpgsql SECURITY DEFINER AS $$
 BEGIN
@@ -459,9 +465,8 @@ BEGIN
 END;
 $$;
 
---------------------------------------------------------------------------------
 -- FUNÇÕES DE MATERIAIS (SUPPLIES)
---------------------------------------------------------------------------------
+DROP FUNCTION IF EXISTS public.create_or_update_supply(TEXT, INT, VARCHAR, UUID);
 CREATE OR REPLACE FUNCTION public.create_or_update_supply(p_description TEXT, p_initial_stock INT, p_name VARCHAR, p_supply_id UUID)
 RETURNS office_supplies LANGUAGE plpgsql SECURITY DEFINER AS $$
 DECLARE result_supply office_supplies;
@@ -478,6 +483,7 @@ BEGIN
 END;
 $$;
 
+DROP FUNCTION IF EXISTS public.log_and_adjust_stock(INT, TEXT, UUID);
 CREATE OR REPLACE FUNCTION public.log_and_adjust_stock(p_quantity_change INT, p_reason TEXT, p_supply_id UUID)
 RETURNS void LANGUAGE plpgsql SECURITY DEFINER AS $$
 DECLARE v_new_stock_total INT;
@@ -489,6 +495,7 @@ BEGIN
 END;
 $$;
 
+DROP FUNCTION IF EXISTS public.count_supplies(TEXT);
 CREATE OR REPLACE FUNCTION public.count_supplies(p_search_term TEXT)
 RETURNS INT LANGUAGE plpgsql AS $$
 DECLARE total_count INT;
@@ -499,6 +506,7 @@ BEGIN
 END;
 $$;
 
+DROP FUNCTION IF EXISTS public.get_supply_stock_log(UUID, DATE);
 CREATE OR REPLACE FUNCTION public.get_supply_stock_log(p_supply_id UUID, p_start_date DATE)
 RETURNS SETOF supply_stock_log LANGUAGE sql AS $$
     SELECT * FROM public.supply_stock_log
@@ -506,9 +514,8 @@ RETURNS SETOF supply_stock_log LANGUAGE sql AS $$
     ORDER BY created_at DESC;
 $$;
 
---------------------------------------------------------------------------------
 -- FUNÇÕES DE TAREFAS (TASKS)
---------------------------------------------------------------------------------
+DROP FUNCTION IF EXISTS public.create_or_update_task(TEXT, DATE, TEXT, INT, TEXT);
 CREATE OR REPLACE FUNCTION public.create_or_update_task(p_description TEXT, p_due_date DATE, p_frequency_type TEXT, p_task_id INT, p_title TEXT)
 RETURNS tasks LANGUAGE plpgsql SECURITY DEFINER AS $$
 DECLARE result_task tasks;
@@ -526,6 +533,7 @@ BEGIN
 END;
 $$;
 
+DROP FUNCTION IF EXISTS public.delete_task(INT);
 CREATE OR REPLACE FUNCTION public.delete_task(p_task_id INT)
 RETURNS void LANGUAGE plpgsql SECURITY DEFINER AS $$
 BEGIN
@@ -534,6 +542,7 @@ BEGIN
 END;
 $$;
 
+DROP FUNCTION IF EXISTS public.complete_task(INT);
 CREATE OR REPLACE FUNCTION public.complete_task(p_task_id INT)
 RETURNS void LANGUAGE plpgsql SECURITY DEFINER AS $$
 BEGIN
@@ -542,9 +551,8 @@ BEGIN
 END;
 $$;
 
---------------------------------------------------------------------------------
 -- FUNÇÕES DE LINKS DO SISTEMA
---------------------------------------------------------------------------------
+DROP FUNCTION IF EXISTS public.create_or_update_link(TEXT, TEXT, UUID, TEXT, TEXT);
 CREATE OR REPLACE FUNCTION public.create_or_update_link(p_description TEXT, p_details TEXT, p_id UUID, p_name TEXT, p_url TEXT)
 RETURNS system_links LANGUAGE plpgsql SECURITY DEFINER AS $$
 DECLARE result_link system_links;
@@ -561,6 +569,7 @@ BEGIN
 END;
 $$;
 
+DROP FUNCTION IF EXISTS public.delete_link(UUID);
 CREATE OR REPLACE FUNCTION public.delete_link(p_link_id UUID)
 RETURNS void LANGUAGE plpgsql SECURITY DEFINER AS $$
 BEGIN
@@ -568,6 +577,7 @@ BEGIN
 END;
 $$;
 
+DROP FUNCTION IF EXISTS public.count_links(TEXT);
 CREATE OR REPLACE FUNCTION public.count_links(p_search_term TEXT)
 RETURNS INT LANGUAGE plpgsql AS $$
 DECLARE total_count INT;
@@ -578,9 +588,7 @@ BEGIN
 END;
 $$;
 
---------------------------------------------------------------------------------
 -- FUNÇÕES DE MODELOS DE MENSAGEM
---------------------------------------------------------------------------------
 DROP FUNCTION IF EXISTS public.create_or_update_message_template(UUID, TEXT, TEXT);
 CREATE OR REPLACE FUNCTION public.create_or_update_message_template(id UUID, name TEXT, content TEXT)
 RETURNS void
@@ -596,6 +604,7 @@ BEGIN
 END;
 $$;
 
+DROP FUNCTION IF EXISTS public.delete_message_template(UUID);
 CREATE OR REPLACE FUNCTION public.delete_message_template(p_id UUID)
 RETURNS void LANGUAGE plpgsql SECURITY DEFINER AS $$
 BEGIN
@@ -603,14 +612,14 @@ BEGIN
 END;
 $$;
 
+DROP FUNCTION IF EXISTS public.get_message_templates();
 CREATE OR REPLACE FUNCTION public.get_message_templates()
 RETURNS SETOF message_templates LANGUAGE sql STABLE AS $$
     SELECT * FROM public.message_templates ORDER BY name;
 $$;
 
---------------------------------------------------------------------------------
 -- FUNÇÕES DE TEMAS DE USUÁRIO
---------------------------------------------------------------------------------
+DROP FUNCTION IF EXISTS public.save_user_theme(JSONB, TEXT);
 CREATE OR REPLACE FUNCTION public.save_user_theme(p_theme_colors JSONB, p_theme_name TEXT)
 RETURNS user_themes LANGUAGE plpgsql SECURITY DEFINER AS $$
 DECLARE result_theme user_themes;
@@ -622,6 +631,7 @@ BEGIN
 END;
 $$;
 
+DROP FUNCTION IF EXISTS public.delete_user_theme(UUID);
 CREATE OR REPLACE FUNCTION public.delete_user_theme(p_theme_id UUID)
 RETURNS void LANGUAGE plpgsql SECURITY DEFINER AS $$
 BEGIN
@@ -629,9 +639,8 @@ BEGIN
 END;
 $$;
 
---------------------------------------------------------------------------------
 -- FUNÇÕES DE TIPOS DE OBJETO
---------------------------------------------------------------------------------
+DROP FUNCTION IF EXISTS public.create_or_update_object_type(INT, TEXT, INT);
 CREATE OR REPLACE FUNCTION public.create_or_update_object_type(p_default_storage_days INT, p_name TEXT, p_type_id INT)
 RETURNS object_types LANGUAGE plpgsql SECURITY DEFINER AS $$
 DECLARE result_type object_types;
@@ -646,6 +655,7 @@ BEGIN
 END;
 $$;
 
+DROP FUNCTION IF EXISTS public.delete_object_type(INT);
 CREATE OR REPLACE FUNCTION public.delete_object_type(p_type_id INT)
 RETURNS void LANGUAGE plpgsql SECURITY DEFINER AS $$
 BEGIN
@@ -654,33 +664,144 @@ BEGIN
 END;
 $$;
 
---------------------------------------------------------------------------------
 -- FUNÇÕES DE RELATÓRIOS E CONSULTAS GERAIS
---------------------------------------------------------------------------------
 DROP FUNCTION IF EXISTS public.get_paginated_objects(TEXT, BOOLEAN, TEXT, BOOLEAN, INT, INT, TEXT[]);
-CREATE OR REPLACE FUNCTION public.get_paginated_objects(p_search_term TEXT, p_show_archived BOOLEAN, p_sort_key TEXT, p_sort_direction_asc BOOLEAN, p_page_size INT, p_page_offset INT, p_status_filters TEXT[] DEFAULT NULL)
-RETURNS TABLE (control_number INT, recipient_name TEXT, object_type VARCHAR(100), tracking_code VARCHAR(100), status VARCHAR(50), arrival_date DATE, storage_deadline DATE, is_archived BOOLEAN, customer_id UUID, delivery_street_name TEXT, delivery_address_number TEXT, delivery_neighborhood TEXT, delivery_city_name TEXT, delivery_state_uf CHAR(2), delivery_cep VARCHAR(9), customer_address JSONB, total_count BIGINT)
-LANGUAGE plpgsql STABLE AS $$
-DECLARE v_normal_statuses TEXT[];
+CREATE OR REPLACE FUNCTION public.get_paginated_objects(
+    p_search_term TEXT,
+    p_show_archived BOOLEAN,
+    p_sort_key TEXT,
+    p_sort_direction_asc BOOLEAN,
+    p_page_size INT,
+    p_page_offset INT,
+    p_status_filters TEXT [] DEFAULT NULL
+) RETURNS TABLE (
+    control_number INT,
+    recipient_name TEXT,
+    object_type VARCHAR(100),
+    tracking_code VARCHAR(100),
+    status VARCHAR(50),
+    arrival_date DATE,
+    storage_deadline DATE,
+    is_archived BOOLEAN,
+    customer_id UUID,
+    customer_is_active BOOLEAN,
+    customer_cellphone VARCHAR,
+    contact_is_active BOOLEAN,
+    contact_cellphone VARCHAR,
+    delivery_street_name TEXT,
+    delivery_address_number TEXT,
+    delivery_neighborhood TEXT,
+    delivery_city_name TEXT,
+    delivery_state_uf CHAR(2),
+    delivery_cep VARCHAR(9),
+    customer_address JSONB,
+    total_count BIGINT
+) LANGUAGE plpgsql STABLE AS $$
+DECLARE
+    v_normal_statuses TEXT [];
 BEGIN
-    SELECT array_agg(elem) INTO v_normal_statuses FROM unnest(p_status_filters) elem WHERE elem <> 'Vencidos';
-    RETURN QUERY
-    WITH filtered_objects AS (
-        SELECT o.* FROM public.objects o
+    SELECT array_agg(elem) INTO v_normal_statuses
+    FROM unnest(p_status_filters) elem
+    WHERE elem <> 'Vencidos';
+    RETURN QUERY WITH filtered_objects AS (
+        SELECT o.*
+        FROM public.objects o
         WHERE o.is_archived = p_show_archived
-            AND (p_status_filters IS NULL OR ((v_normal_statuses IS NOT NULL AND o.status = ANY(v_normal_statuses)) OR ('Vencidos' = ANY(p_status_filters) AND o.status = 'Aguardando Retirada' AND o.storage_deadline < CURRENT_DATE)))
-            AND (p_search_term IS NULL OR p_search_term = '' OR f_unaccent(o.recipient_name) ILIKE '%' || f_unaccent(p_search_term) || '%' OR (o.tracking_code IS NOT NULL AND f_unaccent(o.tracking_code) ILIKE '%' || f_unaccent(p_search_term) || '%') OR (p_search_term ~ '^\d+$' AND o.control_number = p_search_term::INT))
+            AND (
+                p_status_filters IS NULL OR (
+                    (
+                        v_normal_statuses IS NOT NULL
+                        AND o.status = ANY(v_normal_statuses)
+                    ) OR (
+                        'Vencidos' = ANY(p_status_filters)
+                        AND o.status = 'Aguardando Retirada'
+                        AND o.storage_deadline < CURRENT_DATE
+                    )
+                )
+            )
+            AND (
+                p_search_term IS NULL OR p_search_term = '' OR f_unaccent(o.recipient_name) ILIKE '%' || f_unaccent(p_search_term) || '%' OR (
+                    o.tracking_code IS NOT NULL
+                    AND f_unaccent(o.tracking_code) ILIKE '%' || f_unaccent(p_search_term) || '%'
+                ) OR (
+                    p_search_term ~ '^\d+$'
+                    AND o.control_number = p_search_term::INT
+                )
+            )
     )
-    SELECT fo.control_number, fo.recipient_name::TEXT, fo.object_type, fo.tracking_code, fo.status, fo.arrival_date, fo.storage_deadline, fo.is_archived, fo.customer_id, fo.delivery_street_name, fo.delivery_address_number, fo.delivery_neighborhood, fo.delivery_city_name, fo.delivery_state_uf, fo.delivery_cep,
-        (SELECT jsonb_build_object('street_name', a.street_name, 'number', c.address_number, 'neighborhood', a.neighborhood, 'city_name', ci.name, 'state_uf', s.uf, 'cep', a.cep) FROM public.customers c JOIN public.addresses a ON c.address_id = a.id JOIN public.cities ci ON a.city_id = ci.id JOIN public.states s ON ci.state_id = s.id WHERE c.id = fo.customer_id) as customer_address,
-        (SELECT count(*) FROM filtered_objects) as total_count
-    FROM filtered_objects fo
-    ORDER BY
-        CASE WHEN p_sort_key = 'control_number' AND p_sort_direction_asc THEN fo.control_number END ASC, CASE WHEN p_sort_key = 'control_number' AND NOT p_sort_direction_asc THEN fo.control_number END DESC,
-        CASE WHEN p_sort_key = 'recipient_name' AND p_sort_direction_asc THEN fo.recipient_name END ASC, CASE WHEN p_sort_key = 'recipient_name' AND NOT p_sort_direction_asc THEN fo.recipient_name END DESC,
-        CASE WHEN p_sort_key = 'storage_deadline' AND p_sort_direction_asc THEN fo.storage_deadline END ASC, CASE WHEN p_sort_key = 'storage_deadline' AND NOT p_sort_direction_asc THEN fo.storage_deadline END DESC,
-        fo.arrival_date DESC
-    LIMIT p_page_size OFFSET p_page_offset;
+SELECT fo.control_number,
+    fo.recipient_name::TEXT,
+    fo.object_type,
+    fo.tracking_code,
+    fo.status,
+    fo.arrival_date,
+    fo.storage_deadline,
+    fo.is_archived,
+    fo.customer_id,
+    c.is_active AS customer_is_active,
+    c.cellphone AS customer_cellphone,
+    contact.is_active AS contact_is_active,
+    contact.cellphone AS contact_cellphone,
+    fo.delivery_street_name,
+    fo.delivery_address_number,
+    fo.delivery_neighborhood,
+    fo.delivery_city_name,
+    fo.delivery_state_uf,
+    fo.delivery_cep,
+    (
+        SELECT jsonb_build_object(
+                'street_name',
+                a.street_name,
+                'number',
+                cust.address_number,
+                'neighborhood',
+                a.neighborhood,
+                'city_name',
+                ci.name,
+                'state_uf',
+                s.uf,
+                'cep',
+                a.cep
+            )
+        FROM public.customers cust
+            JOIN public.addresses a ON cust.address_id = a.id
+            JOIN public.cities ci ON a.city_id = ci.id
+            JOIN public.states s ON ci.state_id = s.id
+        WHERE cust.id = fo.customer_id
+    ) as customer_address,
+    (
+        SELECT count(*)
+        FROM filtered_objects
+    ) as total_count
+FROM filtered_objects fo
+    LEFT JOIN public.customers c ON fo.customer_id = c.id
+    LEFT JOIN public.customers contact ON c.contact_customer_id = contact.id
+ORDER BY CASE
+        WHEN p_sort_key = 'control_number'
+        AND p_sort_direction_asc THEN fo.control_number
+    END ASC,
+    CASE
+        WHEN p_sort_key = 'control_number'
+        AND NOT p_sort_direction_asc THEN fo.control_number
+    END DESC,
+    CASE
+        WHEN p_sort_key = 'recipient_name'
+        AND p_sort_direction_asc THEN fo.recipient_name
+    END ASC,
+    CASE
+        WHEN p_sort_key = 'recipient_name'
+        AND NOT p_sort_direction_asc THEN fo.recipient_name
+    END DESC,
+    CASE
+        WHEN p_sort_key = 'storage_deadline'
+        AND p_sort_direction_asc THEN fo.storage_deadline
+    END ASC,
+    CASE
+        WHEN p_sort_key = 'storage_deadline'
+        AND NOT p_sort_direction_asc THEN fo.storage_deadline
+    END DESC,
+    fo.arrival_date DESC
+LIMIT p_page_size OFFSET p_page_offset;
 END;
 $$;
 
@@ -714,6 +835,7 @@ BEGIN
 END;
 $$;
 
+DROP FUNCTION IF EXISTS public.save_bulk_report(JSONB);
 CREATE OR REPLACE FUNCTION public.save_bulk_report(p_report_data JSONB)
 RETURNS void LANGUAGE plpgsql SECURITY DEFINER AS $$
 BEGIN
@@ -722,6 +844,7 @@ BEGIN
 END;
 $$;
 
+DROP FUNCTION IF EXISTS public.get_customers_for_export();
 CREATE OR REPLACE FUNCTION public.get_customers_for_export()
 RETURNS JSONB LANGUAGE plpgsql AS $$
 DECLARE export_data JSONB;
@@ -731,6 +854,7 @@ BEGIN
 END;
 $$;
 
+DROP FUNCTION IF EXISTS public.get_dashboard_data();
 CREATE OR REPLACE FUNCTION public.get_dashboard_data()
 RETURNS JSON LANGUAGE plpgsql SECURITY DEFINER AS $$
 DECLARE v_awaiting_count INT; v_expiring_count INT; v_low_stock_count INT; v_recent_objects JSON; v_upcoming_birthdays JSON; v_pending_tasks JSON;
@@ -745,6 +869,7 @@ BEGIN
 END;
 $$;
 
+DROP FUNCTION IF EXISTS public.get_notifications();
 CREATE OR REPLACE FUNCTION public.get_notifications()
 RETURNS TABLE(unique_id TEXT, type TEXT, message TEXT, link TEXT)
 LANGUAGE plpgsql SECURITY DEFINER AS $$
@@ -758,6 +883,7 @@ BEGIN
 END;
 $$;
 
+DROP FUNCTION IF EXISTS public.get_pending_tasks();
 CREATE OR REPLACE FUNCTION public.get_pending_tasks()
 RETURNS SETOF tasks LANGUAGE plpgsql AS $$
 BEGIN
@@ -781,6 +907,7 @@ BEGIN
 END;
 $$;
 
+DROP FUNCTION IF EXISTS public.get_monthly_objects_report(INT);
 CREATE OR REPLACE FUNCTION public.get_monthly_objects_report(p_year INT)
 RETURNS TABLE (month_number TEXT, object_type TEXT, object_count BIGINT)
 LANGUAGE plpgsql AS $$
@@ -793,6 +920,7 @@ BEGIN
 END;
 $$;
 
+DROP FUNCTION IF EXISTS public.get_supplies_usage_report(INT);
 CREATE OR REPLACE FUNCTION public.get_supplies_usage_report(p_year INT)
 RETURNS TABLE (month_number TEXT, supply_name TEXT, total_used BIGINT)
 LANGUAGE plpgsql AS $$
@@ -821,21 +949,60 @@ BEGIN
 END;
 $$;
 
--- path: supabase/migrations/0004_Seed_Final.sql
--- =============================================================================
--- || ARQUIVO 4: DADOS INICIAIS (SEED)                                        ||
--- =============================================================================
--- DESCRIÇÃO: Insere os dados iniciais necessários para o funcionamento da
--- aplicação, como tipos de objetos, configurações e tarefas padrão.
+DROP FUNCTION IF EXISTS public.get_object_status_counts();
+CREATE OR REPLACE FUNCTION public.get_object_status_counts()
+RETURNS TABLE (status TEXT, count BIGINT)
+LANGUAGE plpgsql STABLE AS $$
+BEGIN
+    RETURN QUERY
+    -- Contagem para status diretos (não arquivados)
+    SELECT
+        o.status::TEXT,
+        COUNT(o.control_number)::BIGINT
+    FROM
+        public.objects o
+    WHERE
+        o.is_archived = FALSE
+        AND o.status IN ('Aguardando Retirada', 'Entregue', 'Devolvido')
+    GROUP BY
+        o.status
 
--- Dados para a tabela de Tipos de Objeto
+    UNION ALL
+
+    -- Contagem especial para 'Vencidos'
+    SELECT
+        'Vencidos'::TEXT AS status,
+        COUNT(o.control_number)::BIGINT
+    FROM
+        public.objects o
+    WHERE
+        o.is_archived = FALSE
+        AND o.status = 'Aguardando Retirada'
+        AND o.storage_deadline < CURRENT_DATE
+
+    UNION ALL
+
+    -- Contagem para 'Arquivados'
+    SELECT
+        'Arquivados'::TEXT AS status,
+        COUNT(o.control_number)::BIGINT
+    FROM
+        public.objects o
+    WHERE
+        o.is_archived = TRUE;
+END;
+$$;
+
+
+--------------------------------------------------------------------------------
+-- 6. DADOS INICIAIS (SEED)
+--------------------------------------------------------------------------------
 INSERT INTO public.object_types (name, default_storage_days) VALUES
     ('PAC', 7), ('SEDEX', 7), ('Carta Registrada', 20), ('Carta Simples', 20),
     ('Revista', 20), ('Cartão', 20), ('Telegrama', 7), ('Cartão Registrado', 20),
     ('Registrado', 7), ('Outro', 7)
 ON CONFLICT (name) DO NOTHING;
 
--- Dados para a tabela de Configurações da Aplicação
 INSERT INTO public.app_settings (key, value, description, label) VALUES
     ('agency_name', 'Correio de América Dourada', 'Nome da agência exibido no sistema.', 'Nome da Agência'),
     ('agency_dh', '10h05', 'Horario limite de postagem', 'Horario Limite'),
@@ -844,14 +1011,12 @@ INSERT INTO public.app_settings (key, value, description, label) VALUES
     ('agency_address', 'Avenida Romão Gramacho, sn - Centro, América Dourada/BA', 'Endereço completo da agência', 'Endereço')
 ON CONFLICT (key) DO NOTHING;
 
--- Dados para a tabela de Tarefas
 INSERT INTO public.tasks (title, description, frequency_type) VALUES
     ('Verificar Caixa de E-mails', 'Responder e organizar os e-mails da agência.', 'daily'),
     ('Conferir Estoque Mínimo', 'Verificar se algum material de expediente precisa de ser reabastecido.', 'weekly'),
     ('Relatório Mensal de Objetos', 'Analisar o fluxo de objetos do último mês.', 'monthly')
 ON CONFLICT (title) DO NOTHING;
 
--- Dados para a tabela de Modelos de Mensagem
 INSERT INTO public.message_templates (name, content) VALUES
     ('Padrão - Chegada de Objeto', E'📢 A agência {{ENDERECO_AGENCIA}} informa!\n\nUm(a) {{TIPO_OBJETO}} está disponível para retirada em nome de:\n👤 *{{NOME_CLIENTE}}*\n\n⏳ Prazo para retirada: até {{DATA_PRAZO}}.\n🔑 Código para retirada: *{{NUMERO_CONTROLE}}*'),
     ('Aviso de Vencimento', E'Olá, {{NOME_CLIENTE}}! Passando para avisar que o seu {{TIPO_OBJETO}} está quase no fim do prazo de guarda.\n\nEle será devolvido no dia *{{DATA_PRAZO}}*.\n\nNão perca o prazo!'),
@@ -860,15 +1025,8 @@ INSERT INTO public.message_templates (name, content) VALUES
     ('Final - Aviso de Remoção (PARE)', E'\n\n_(Se não quiser mais receber informações envie a palavra PARE e todo o seu cadastro será apagado ❌)_')
 ON CONFLICT (name) DO NOTHING;
 
--- path: supabase/migrations/0005_Seguranca_Final.sql
--- =============================================================================
--- || ARQUIVO 5: SEGURANÇA (ROW LEVEL SECURITY)                               ||
--- =============================================================================
--- DESCRIÇÃO: Configura toda a Segurança a Nível de Linha (RLS), garantindo
--- que os usuários só possam acessar os dados que têm permissão.
-
 --------------------------------------------------------------------------------
--- 1. FUNÇÃO HELPER DE ADMIN
+-- 7. SEGURANÇA (ROW LEVEL SECURITY)
 --------------------------------------------------------------------------------
 DROP FUNCTION IF EXISTS is_admin(UUID) CASCADE;
 CREATE OR REPLACE FUNCTION is_admin(p_user_id UUID)
@@ -878,9 +1036,6 @@ BEGIN
 END;
 $$;
 
---------------------------------------------------------------------------------
--- 2. ATIVAÇÃO DA RLS E CRIAÇÃO DAS POLÍTICAS
---------------------------------------------------------------------------------
 ALTER TABLE public.states ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.cities ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.addresses ENABLE ROW LEVEL SECURITY;
@@ -899,13 +1054,27 @@ ALTER TABLE public.task_completions ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.system_links ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.message_templates ENABLE ROW LEVEL SECURITY;
 
-DO $$ DECLARE r RECORD;
-BEGIN
-    FOR r IN (SELECT policyname, tablename FROM pg_policies WHERE schemaname = 'public') LOOP
-        EXECUTE 'DROP POLICY IF EXISTS ' || quote_ident(r.policyname) || ' ON ' || quote_ident(r.tablename) || ';';
-    END LOOP;
-END $$;
+-- Drop existing policies explicitly to ensure idempotency
+DROP POLICY IF EXISTS "Allow read access to all authenticated users" ON public.states;
+DROP POLICY IF EXISTS "Allow read access to all authenticated users" ON public.cities;
+DROP POLICY IF EXISTS "Employees can manage data" ON public.addresses;
+DROP POLICY IF EXISTS "Employees can manage data" ON public.customers;
+DROP POLICY IF EXISTS "Employees can manage data" ON public.objects;
+DROP POLICY IF EXISTS "Employees can manage data" ON public.office_supplies;
+DROP POLICY IF EXISTS "Employees can manage data" ON public.supply_stock_log;
+DROP POLICY IF EXISTS "Employees can manage data" ON public.bulk_import_reports;
+DROP POLICY IF EXISTS "Employees can manage data" ON public.system_links;
+DROP POLICY IF EXISTS "Authenticated users can manage message templates" ON public.message_templates;
+DROP POLICY IF EXISTS "Users can manage their own themes" ON public.user_themes;
+DROP POLICY IF EXISTS "Employees can view their own data" ON public.employees;
+DROP POLICY IF EXISTS "Admins can manage employees" ON public.employees;
+DROP POLICY IF EXISTS "Admins can manage object types" ON public.object_types;
+DROP POLICY IF EXISTS "Admins can manage tracking rules" ON public.tracking_code_rules;
+DROP POLICY IF EXISTS "Admins can manage app settings" ON public.app_settings;
+DROP POLICY IF EXISTS "Admins can manage tasks" ON public.tasks;
+DROP POLICY IF EXISTS "Admins can manage task completions" ON public.task_completions;
 
+-- Create new policies
 CREATE POLICY "Allow read access to all authenticated users" ON public.states FOR SELECT TO authenticated USING (true);
 CREATE POLICY "Allow read access to all authenticated users" ON public.cities FOR SELECT TO authenticated USING (true);
 CREATE POLICY "Employees can manage data" ON public.addresses FOR ALL TO authenticated USING (true) WITH CHECK (true);
@@ -918,7 +1087,6 @@ CREATE POLICY "Employees can manage data" ON public.system_links FOR ALL TO auth
 CREATE POLICY "Authenticated users can manage message templates" ON public.message_templates FOR ALL TO authenticated USING (true) WITH CHECK (true);
 CREATE POLICY "Users can manage their own themes" ON public.user_themes FOR ALL TO authenticated USING (user_id = auth.uid()) WITH CHECK (user_id = auth.uid());
 CREATE POLICY "Employees can view their own data" ON public.employees FOR SELECT TO authenticated USING (auth.uid() = id);
-
 CREATE POLICY "Admins can manage employees" ON public.employees FOR ALL TO authenticated USING (is_admin(auth.uid())) WITH CHECK (is_admin(auth.uid()));
 CREATE POLICY "Admins can manage object types" ON public.object_types FOR ALL TO authenticated USING (is_admin(auth.uid())) WITH CHECK (is_admin(auth.uid()));
 CREATE POLICY "Admins can manage tracking rules" ON public.tracking_code_rules FOR ALL TO authenticated USING (is_admin(auth.uid())) WITH CHECK (is_admin(auth.uid()));
