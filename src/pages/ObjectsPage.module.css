@@ -73,9 +73,54 @@
 .filterButton.active svg {
     color: white;
 }
+
+/* Novas cores para os filtros ativos */
+.filterButton.aguardando.active {
+    background-color: var(--accent-primary);
+    border-color: var(--accent-primary-hover);
+}
+.filterButton.vencidos.active {
+    background-color: #f97316; /* Laranja */
+    border-color: #ea580c;
+}
+.filterButton.entregues.active {
+    background-color: var(--accent-secondary); /* Verde */
+    border-color: var(--accent-secondary-hover);
+}
+.filterButton.devolvidos.active {
+    background-color: var(--accent-danger); /* Vermelho */
+    border-color: var(--accent-danger-hover);
+}
+.filterButton.arquivados.active {
+    background-color: #60a5fa; /* Azul Esmaecido */
+    border-color: #3b82f6;
+}
+
+/* Estilos para o contador (badge) */
+.countBadge {
+    background-color: var(--bg-primary);
+    color: var(--text-secondary);
+    padding: 0.1rem 0.5rem;
+    border-radius: 10px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    margin-left: 0.5rem;
+    transition: all 0.2s ease-in-out;
+}
+
+.filterButton.active .countBadge {
+    background-color: rgba(255, 255, 255, 0.2);
+    color: white;
+}
+
 .archiveActionButton {
-    /* O botão agora é um componente Button, que já tem estilos base */
-    /* Não precisa de `margin-left: auto` por causa do space-between no container */
+    /* Este botão agora usa .filterButton como seu estilo base. */
+    /* Apenas definimos um estado de hover específico para ele. */
+}
+
+.archiveActionButton:hover {
+    border-color: #60a5fa;
+    color: #60a5fa;
 }
 
 .tableContainer {
@@ -146,6 +191,14 @@
   align-items: center;
   gap: 0.5rem;
 }
+.recipientNameLink {
+    text-decoration: none;
+    color: inherit;
+    transition: color 0.2s ease-in-out;
+}
+.recipientNameLink:hover .recipientName {
+    color: var(--accent-primary);
+}
 .recipientSub {
   font-size: 0.875rem;
   color: var(--text-secondary);
@@ -153,11 +206,13 @@
 }
 .contactIcon {
   font-size: 0.9rem;
-  color: var(--accent-secondary);
 }
-.noContact {
-  color: var(--accent-danger);
-}
+/* Cores dos ícones de contato */
+.contactIcon.hasContact { color: var(--accent-secondary); } /* Verde */
+.contactIcon.responsible { color: #3b82f6; } /* Azul */
+.contactIcon.inactive { color: #6b7280; } /* Cinza */
+.contactIcon.noContact { color: var(--accent-danger); } /* Vermelho */
+
 .actionButtons {
   display: flex;
   align-items: center;

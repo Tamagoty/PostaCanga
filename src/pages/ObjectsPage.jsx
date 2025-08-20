@@ -1,5 +1,6 @@
 // path: src/pages/ObjectsPage.jsx
 import React, { useState, useRef, useEffect } from 'react';
+import { Link } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import toast from 'react-hot-toast';
 import styles from './ObjectsPage.module.css';
@@ -60,6 +61,61 @@ const getAddressText = (obj) => {
     return 'Não informado';
 };
 
+// Componente para renderizar o ícone de contato e o link
+const ContactStatus = ({ obj }) => {
+    const {
+        customer_id,
+        recipient_name,
+        customer_is_active,
+        customer_cellphone,
+        contact_is_active,
+        contact_cellphone
+    } = obj;
+
+    let icon = null;
+    let title = '';
+
+    if (!customer_id) {
+        // Vermelho: Objeto não associado a um cliente
+        icon = <FaPhoneSlash className={`${styles.contactIcon} ${styles.noContact}`} />;
+        title = 'Objeto não associado a um cliente';
+    } else if (!customer_is_active) {
+        // Cinza: Cliente associado, mas inativo
+        icon = <FaPhoneSlash className={`${styles.contactIcon} ${styles.inactive}`} />;
+        title = 'Cliente associado, mas inativo';
+    } else if (customer_cellphone) {
+        // Verde: Cliente tem telefone próprio e está ativo
+        icon = <FaPhone className={`${styles.contactIcon} ${styles.hasContact}`} />;
+        title = 'Cliente possui contato telefônico direto';
+    } else if (contact_cellphone && contact_is_active) {
+        // Azul: Cliente usa telefone do responsável, e ambos estão ativos
+        icon = <FaPhone className={`${styles.contactIcon} ${styles.responsible}`} />;
+        title = 'Utilizando telefone do contato responsável';
+    } else {
+        // Vermelho: Associado, mas sem nenhum telefone válido (próprio ou de responsável ativo)
+        icon = <FaPhoneSlash className={`${styles.contactIcon} ${styles.noContact}`} />;
+        title = 'Cliente associado, mas sem telefone válido';
+    }
+
+    const content = (
+        <span className={styles.recipientName} title={title}>
+            {icon}
+            {recipient_name}
+        </span>
+    );
+
+    if (customer_id) {
+        return (
+            <Link to={`/customers/${customer_id}`} className={styles.recipientNameLink}>
+                {content}
+            </Link>
+        );
+    }
+
+    return content;
+};
+
+
 const ObjectsPage = () => {
   const [isSaving, setIsSaving] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
@@ -81,6 +137,7 @@ const ObjectsPage = () => {
   const [statusFilters, setStatusFilters] = useState(new Set(['Aguardando Retirada']));
   const textareaRef = useRef(null);
   const debouncedSearchTerm = useDebounce(searchTerm, 500);
+  const [statusCounts, setStatusCounts] = useState({});
 
   const { objects, contactMap, loading, currentPage, setCurrentPage, sortConfig, requestSort, totalPages, refetch } = useObjects({
     debouncedSearchTerm, itemsPerPage, statusFilters
@@ -98,28 +155,39 @@ const ObjectsPage = () => {
     fetchAppSettings();
   }, []);
 
+  useEffect(() => {
+    const fetchStatusCounts = async () => {
+      const { data, error } = await supabase.rpc('get_object_status_counts');
+      if (error) {
+        console.error("Erro ao buscar contagem de status:", error.message);
+      } else if (data) {
+        const countsMap = data.reduce((acc, item) => {
+          acc[item.status] = item.count;
+          return acc;
+        }, {});
+        setStatusCounts(countsMap);
+      }
+    };
+    fetchStatusCounts();
+  }, [refetch]);
+
   const handleFilterToggle = (filter) => {
     setStatusFilters(prevFilters => {
       const newFilters = new Set(prevFilters);
-
       if (filter === 'Arquivados') {
         return new Set(['Arquivados']);
       }
-      
       if (newFilters.has('Arquivados')) {
           return new Set([filter]);
       }
-
       if (newFilters.has(filter)) {
         newFilters.delete(filter);
       } else {
         newFilters.add(filter);
       }
-      
       if (newFilters.size === 0) {
         return new Set(['Aguardando Retirada']);
       }
-      
       return newFilters;
     });
   };
@@ -208,7 +276,6 @@ const ObjectsPage = () => {
       toast.error(handleSupabaseError(error), { id: toastId });
     } else {
       toast.success('Objetos arquivados!', { id: toastId });
-      // [CORREÇÃO] Volta para a visualização padrão para que o utilizador veja o resultado
       setStatusFilters(new Set(['Aguardando Retirada']));
     }
   };
@@ -417,26 +484,26 @@ const ObjectsPage = () => {
       
       <div className={styles.filterActions}>
           <div className={styles.filterGroup}>
-            <button className={`${styles.filterButton} ${statusFilters.has('Aguardando Retirada') ? styles.active : ''}`} onClick={() => handleFilterToggle('Aguardando Retirada')}>
-                <FaBoxOpen /> Aguardando
+            <button className={`${styles.filterButton} ${styles.aguardando} ${statusFilters.has('Aguardando Retirada') ? styles.active : ''}`} onClick={() => handleFilterToggle('Aguardando Retirada')}>
+                <FaBoxOpen /> Aguardando <span className={styles.countBadge}>{statusCounts['Aguardando Retirada'] || 0}</span>
             </button>
-            <button className={`${styles.filterButton} ${statusFilters.has('Vencidos') ? styles.active : ''}`} onClick={() => handleFilterToggle('Vencidos')}>
-                <FaExclamationTriangle /> Vencidos
+            <button className={`${styles.filterButton} ${styles.vencidos} ${statusFilters.has('Vencidos') ? styles.active : ''}`} onClick={() => handleFilterToggle('Vencidos')}>
+                <FaExclamationTriangle /> Vencidos <span className={styles.countBadge}>{statusCounts['Vencidos'] || 0}</span>
             </button>
-            <button className={`${styles.filterButton} ${statusFilters.has('Entregue') ? styles.active : ''}`} onClick={() => handleFilterToggle('Entregue')}>
-                <FaCheckCircle /> Entregues
+            <button className={`${styles.filterButton} ${styles.entregues} ${statusFilters.has('Entregue') ? styles.active : ''}`} onClick={() => handleFilterToggle('Entregue')}>
+                <FaCheckCircle /> Entregues <span className={styles.countBadge}>{statusCounts['Entregue'] || 0}</span>
             </button>
-            <button className={`${styles.filterButton} ${statusFilters.has('Devolvido') ? styles.active : ''}`} onClick={() => handleFilterToggle('Devolvido')}>
-                <FaUndoAlt /> Devolvidos
+            <button className={`${styles.filterButton} ${styles.devolvidos} ${statusFilters.has('Devolvido') ? styles.active : ''}`} onClick={() => handleFilterToggle('Devolvido')}>
+                <FaUndoAlt /> Devolvidos <span className={styles.countBadge}>{statusCounts['Devolvido'] || 0}</span>
             </button>
-            <button className={`${styles.filterButton} ${statusFilters.has('Arquivados') ? styles.active : ''}`} onClick={() => handleFilterToggle('Arquivados')}>
-                <FaArchive /> Arquivados
+            <button className={`${styles.filterButton} ${styles.arquivados} ${statusFilters.has('Arquivados') ? styles.active : ''}`} onClick={() => handleFilterToggle('Arquivados')}>
+                <FaArchive /> Arquivados <span className={styles.countBadge}>{statusCounts['Arquivados'] || 0}</span>
             </button>
           </div>
           {!statusFilters.has('Arquivados') && (
-            <Button onClick={handleArchiveAction} variant="secondary" className={styles.archiveActionButton}>
+            <button onClick={handleArchiveAction} className={`${styles.filterButton} ${styles.archiveActionButton}`}>
                 <FaArchive /> Arquivar Concluídos
-            </Button>
+            </button>
           )}
       </div>
 
@@ -455,7 +522,6 @@ const ObjectsPage = () => {
             </thead>
             <tbody>
               {objects.map(obj => {
-                  const hasContact = !!contactMap[obj.recipient_name];
                   const addressText = getAddressText(obj);
                   return (
                     <tr key={obj.control_number}>
@@ -463,7 +529,7 @@ const ObjectsPage = () => {
                       <td data-label="N° Controle">{obj.control_number}</td>
                       <td data-label="Destinatário">
                         <div className={styles.recipientInfo}>
-                          <span className={styles.recipientName}>{hasContact ? <FaPhone className={styles.contactIcon} /> : <FaPhoneSlash className={`${styles.contactIcon} ${styles.noContact}`} />}{obj.recipient_name}</span>
+                           <ContactStatus obj={obj} />
                           <span className={styles.recipientSub}>{obj.tracking_code || obj.object_type}</span>
                         </div>
                       </td>
@@ -478,7 +544,7 @@ const ObjectsPage = () => {
                                   <FaLink />
                                 </button>
                               )}
-                              {hasContact && obj.status === 'Aguardando Retirada' && (<button className={`${styles.actionButton} ${styles.whatsapp}`} title="Notificar via WhatsApp" onClick={() => startNotificationProcess('single', obj)}><FaWhatsapp /></button>)}
+                              {!!contactMap[obj.recipient_name] && obj.status === 'Aguardando Retirada' && (<button className={`${styles.actionButton} ${styles.whatsapp}`} title="Notificar via WhatsApp" onClick={() => startNotificationProcess('single', obj)}><FaWhatsapp /></button>)}
                               <button className={styles.actionButton} title="Editar" onClick={() => { setObjectToEdit(obj); setIsModalOpen(true); }}><FaEdit /></button>
                               {obj.status === 'Aguardando Retirada' && (<><button className={`${styles.actionButton} ${styles.deliver}`} title="Entregar" onClick={() => updateObjectStatus(obj.control_number, 'deliver')}><FaCheckCircle /></button><button className={`${styles.actionButton} ${styles.return}`} title="Devolver" onClick={() => updateObjectStatus(obj.control_number, 'return')}><FaUndoAlt /></button></>)}
                               {(obj.status === 'Entregue' || obj.status === 'Devolvido') && (<button className={styles.actionButton} title="Reverter Status" onClick={() => handleRevertStatus(obj.control_number)}><FaUndo /></button>)}
