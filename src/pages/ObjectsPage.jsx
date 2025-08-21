@@ -3,6 +3,7 @@ import React, { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
 import useDebounce from '../hooks/useDebounce';
 import styles from './ObjectsPage.module.css';
+import toast from 'react-hot-toast';
 
 // Hooks
 import { useObjects } from '../hooks/useObjects';
@@ -21,7 +22,6 @@ import ObjectsHeader from '../components/ObjectsHeader';
 import ObjectsFilterBar from '../components/ObjectsFilterBar';
 import ObjectsTable from '../components/ObjectsTable';
 import { handleSupabaseError } from '../utils/errorHandler';
-import toast from 'react-hot-toast';
 
 const ObjectsPage = () => {
     // State Management
@@ -40,11 +40,10 @@ const ObjectsPage = () => {
     const [isBulkNotifyModalOpen, setIsBulkNotifyModalOpen] = useState(false);
     const [isComposerModalOpen, setIsComposerModalOpen] = useState(false);
     const [objectToSuggestFor, setObjectToSuggestFor] = useState(null);
+    const [objectsToNotify, setObjectsToNotify] = useState([]);
     
-    // Debounced search term for performance
     const debouncedSearchTerm = useDebounce(searchTerm, 500);
 
-    // Custom Hooks
     const { objects, contactMap, loading, currentPage, setCurrentPage, sortConfig, requestSort, totalPages, refetch } = useObjects({
         debouncedSearchTerm, itemsPerPage, statusFilters
     });
@@ -54,7 +53,6 @@ const ObjectsPage = () => {
         handleRevertStatus, handleArchiveAction, handleUnarchive 
     } = useObjectActions(refetch, setSelectedObjects);
 
-    // Effect for fetching status counts
     useEffect(() => {
         const fetchStatusCounts = async () => {
             const { data, error } = await supabase.rpc('get_object_status_counts');
@@ -72,6 +70,57 @@ const ObjectsPage = () => {
         setIsSaving(true);
         const success = await handleSaveObject(formData, objectToEdit);
         if (success) setIsModalOpen(false);
+        setIsSaving(false);
+    };
+
+    const handleSaveBulkSimple = async ({ objects, type }) => {
+        setIsSaving(true);
+        const { error } = await supabase.rpc('bulk_create_simple_objects', {
+            p_object_type: type,
+            p_objects: objects
+        });
+        if (error) {
+            toast.error(handleSupabaseError(error));
+        } else {
+            toast.success(`${objects.length} objetos simples inseridos com sucesso!`);
+            setIsBulkSimpleModalOpen(false);
+            refetch();
+        }
+        setIsSaving(false);
+    };
+
+    const handleSaveBulkRegistered = async ({ objects }) => {
+        setIsSaving(true);
+        const { error } = await supabase.rpc('bulk_create_registered_objects', {
+            p_objects: objects
+        });
+        if (error) {
+            toast.error(handleSupabaseError(error));
+        } else {
+            toast.success(`${objects.length} objetos registrados inseridos com sucesso!`);
+            setIsBulkRegisteredModalOpen(false);
+            refetch();
+        }
+        setIsSaving(false);
+    };
+
+    const handleGenerateNotifications = async (filters) => {
+        setIsSaving(true);
+        const { data, error } = await supabase.rpc('get_objects_for_notification_by_filter', {
+            p_start_control: filters.start_control || null,
+            p_end_control: filters.end_control || null,
+            p_start_date: filters.start_date || null,
+            p_end_date: filters.end_date || null,
+        });
+        if (error) {
+            toast.error(handleSupabaseError(error));
+        } else if (data && data.length > 0) {
+            setObjectsToNotify(data);
+            setIsBulkNotifyModalOpen(false);
+            setIsComposerModalOpen(true);
+        } else {
+            toast.error('Nenhum objeto encontrado para os filtros selecionados.');
+        }
         setIsSaving(false);
     };
 
@@ -130,9 +179,21 @@ const ObjectsPage = () => {
                 <ObjectForm onSave={onSave} onClose={() => setIsModalOpen(false)} objectToEdit={objectToEdit} loading={isSaving} />
             </Modal>
             <Modal isOpen={isBulkSimpleModalOpen} onClose={() => setIsBulkSimpleModalOpen(false)} title="Inserir Objetos Simples em Massa">
-                <BulkObjectForm onSave={() => {}} onClose={() => setIsBulkSimpleModalOpen(false)} loading={isSaving} />
+                <BulkObjectForm onSave={handleSaveBulkSimple} onClose={() => setIsBulkSimpleModalOpen(false)} loading={isSaving} />
             </Modal>
-            {/* Adicionar outros modais aqui... */}
+            <Modal isOpen={isBulkRegisteredModalOpen} onClose={() => setIsBulkRegisteredModalOpen(false)} title="Inserir Objetos Registrados em Massa">
+                <BulkRegisteredForm onSave={handleSaveBulkRegistered} onClose={() => setIsBulkRegisteredModalOpen(false)} loading={isSaving} />
+            </Modal>
+            <Modal isOpen={isBulkNotifyModalOpen} onClose={() => setIsBulkNotifyModalOpen(false)} title="Gerar Notificações em Lote">
+                <BulkNotifyForm onSave={handleGenerateNotifications} onClose={() => setIsBulkNotifyModalOpen(false)} loading={isSaving} />
+            </Modal>
+            {isComposerModalOpen && (
+                 <MessageComposerModal
+                    isOpen={isComposerModalOpen}
+                    onClose={() => setIsComposerModalOpen(false)}
+                    objectsToNotify={objectsToNotify}
+                />
+            )}
             <SuggestionModal isOpen={!!objectToSuggestFor} onClose={() => setObjectToSuggestFor(null)} object={objectToSuggestFor} onLink={handleLinkObject} loading={isSaving} />
 
             {/* Page Content */}
