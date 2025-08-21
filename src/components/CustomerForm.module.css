@@ -22,8 +22,27 @@
 
 .grid {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
   gap: 1rem;
+}
+
+.addressGrid {
+    display: grid;
+    grid-template-columns: 1fr 100px 1fr;
+    gap: 1rem;
+    align-items: flex-end;
+}
+
+.cepWrapper { grid-column: 1 / 2; }
+.numberWrapper { grid-column: 2 / 3; }
+.complementWrapper { grid-column: 3 / 4; }
+
+
+.formActions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 1rem;
+  margin-top: 1rem;
 }
 
 .formGroup {
@@ -38,73 +57,33 @@
   color: var(--text-secondary);
 }
 
-.cepGroup {
-  display: flex;
-  align-items: flex-end;
-  gap: 0.5rem;
-}
-
-.cepGroup > div {
-  flex-grow: 1;
-}
-
-.loader {
-  width: 24px;
-  height: 24px;
-  border: 3px solid var(--border-color);
-  border-bottom-color: transparent;
-  border-radius: 50%;
-  display: inline-block;
-  box-sizing: border-box;
-  animation: rotation 1s linear infinite;
-  margin-bottom: 0.5rem;
-}
-
-@keyframes rotation {
-  0% { transform: rotate(0deg); }
-  100% { transform: rotate(360deg); }
-}
-
 .select {
   width: 100%;
-  padding: 0.75rem 1rem;
+  padding: 0.75rem;
   background-color: var(--bg-tertiary);
   border: 1px solid var(--border-color);
   border-radius: var(--border-radius);
   color: var(--text-primary);
   font-size: 1rem;
   transition: border-color 0.2s, box-shadow 0.2s;
-  font-family: inherit;
-  -webkit-appearance: none;
-  -moz-appearance: none;
-  appearance: none;
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' fill='%23a0a0a0' viewBox='0 0 16 16'%3E%3Cpath fill-rule='evenodd' d='M1.646 4.646a.5.5 0 0 1 .708 0L8 10.293l5.646-5.647a.5.5 0 0 1 .708.708l-6 6a.5.5 0 0 1-.708 0l-6-6a.5.5 0 0 1 0-.708z'/%3E%3C/svg%3E");
-  background-repeat: no-repeat;
-  background-position: right 1rem center;
 }
 
 .select:focus {
   outline: none;
   border-color: var(--accent-primary);
-  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.5);
-}
-
-.formActions {
-  display: flex;
-  gap: 1rem;
-  justify-content: flex-end;
-  margin-top: 1rem;
+  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.4);
 }
 
 .searchWrapper {
   position: relative;
 }
+
 .searchResults {
   position: absolute;
   top: 100%;
   left: 0;
   right: 0;
-  background-color: var(--bg-tertiary);
+  background-color: var(--bg-secondary);
   border: 1px solid var(--border-color);
   border-top: none;
   border-radius: 0 0 var(--border-radius) var(--border-radius);
@@ -115,73 +94,41 @@
   max-height: 200px;
   overflow-y: auto;
 }
+
 .searchResults li {
   padding: 0.75rem 1rem;
   cursor: pointer;
+  transition: background-color 0.2s;
   display: flex;
   flex-direction: column;
-  align-items: flex-start;
 }
+
 .searchResults li:hover {
-  background-color: var(--accent-primary);
-  color: white;
+  background-color: var(--bg-tertiary);
 }
-.searchResultAddress {
-  font-size: 0.8rem;
-  color: var(--text-secondary);
-  margin-top: 0.25rem;
+
+.searchResults li span {
+    font-size: 0.8rem;
+    color: var(--text-secondary);
+    margin-top: 0.25rem;
 }
-.searchResults li:hover .searchResultAddress {
-  color: rgba(255, 255, 255, 0.8);
-}
+
+
 .selectedContact {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  background-color: var(--bg-tertiary);
-  padding: 0.75rem 1rem;
-  border-radius: var(--border-radius);
+    background-color: var(--bg-tertiary);
+    padding: 0.75rem 1rem;
+    border-radius: var(--border-radius);
+    margin-top: 0.5rem;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
 }
+
 .selectedContact button {
-  background: none;
-  border: none;
-  color: var(--accent-danger);
-  cursor: pointer;
-}
-.foundAddressDisplay {
-  background-color: var(--bg-primary);
-  border: 1px solid var(--border-color);
-  border-radius: var(--border-radius);
-  padding: 0.75rem 1rem;
-  color: var(--text-secondary);
-  font-style: italic;
-  font-size: 0.9rem;
-  margin-top: -0.5rem;
-  margin-bottom: 1rem;
-}
-
-.addressSelectGroup {
-  display: flex;
-  gap: 0.5rem;
-  align-items: stretch;
-}
-
-.addressSelectGroup .select {
-  flex-grow: 1;
-}
-
-.newAddressBtn {
-  flex-shrink: 0;
-  padding: 0.75rem 1rem;
-  background-color: var(--bg-tertiary);
-  border: 1px solid var(--border-color);
-  color: var(--text-primary);
-  font-weight: 500;
-  border-radius: var(--border-radius); /* Adicionado o arredondamento */
-  transition: background-color 0.2s, border-color 0.2s;
-}
-
-.newAddressBtn:hover {
-    background-color: var(--border-color);
-    border-color: var(--border-color);
+    background: none;
+    border: none;
+    color: var(--accent-danger);
+    cursor: pointer;
+    font-size: 0.8rem;
+    font-weight: 600;
 }

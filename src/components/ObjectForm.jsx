@@ -1,7 +1,4 @@
 // path: src/components/ObjectForm.jsx
-// VERSÃO 2: Corrigido o handleSubmit para enviar um payload com nomes de parâmetros
-// que correspondem exatamente à função SQL, resolvendo a ambiguidade.
-
 import React, { useState, useEffect, useCallback } from 'react';
 import styles from './CustomerForm.module.css'; // Reutilizando estilos
 import Input from './Input';
@@ -94,18 +91,19 @@ const ObjectForm = ({ onSave, onClose, objectToEdit, loading }) => {
       return;
     }
 
-    // ALTERAÇÃO: Criar um payload com nomes de parâmetros exatos para a função RPC.
+    // CORREÇÃO: Enviando o payload sem os prefixos 'p_'.
+    // A função `handleSaveObject` no componente pai (ObjectsPage.jsx)
+    // é responsável por montar o objeto final para a chamada RPC.
     const payload = {
-        p_control_number: objectToEdit?.control_number || null,
-        p_recipient_name: capitalizeName(formData.recipient_name),
-        p_object_type: formData.object_type,
-        p_tracking_code: formData.tracking_code || null,
-        p_street_name: capitalizeName(formData.street_name) || null,
-        p_number: formData.number || null,
-        p_neighborhood: capitalizeName(formData.neighborhood) || null,
-        p_city_name: capitalizeName(formData.city) || null,
-        p_state_uf: formData.state || null,
-        p_cep: formData.cep || null
+        recipient_name: capitalizeName(formData.recipient_name),
+        object_type: formData.object_type,
+        tracking_code: formData.tracking_code || null,
+        street_name: capitalizeName(formData.street_name) || null,
+        number: formData.number || null,
+        neighborhood: capitalizeName(formData.neighborhood) || null,
+        city: capitalizeName(formData.city) || null,
+        state: formData.state || null,
+        cep: formData.cep || null
     };
 
     onSave(payload);

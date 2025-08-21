@@ -33,6 +33,25 @@
   white-space: nowrap;
 }
 
+/* Estilos para os botões de baixa em lote */
+.bulkDeliverButton, .bulkReturnButton {
+    color: white !important;
+    border: none !important;
+}
+.bulkDeliverButton {
+    background-color: var(--accent-secondary) !important;
+}
+.bulkDeliverButton:hover {
+    background-color: var(--accent-secondary-hover) !important;
+}
+.bulkReturnButton {
+    background-color: var(--accent-danger) !important;
+}
+.bulkReturnButton:hover {
+    background-color: var(--accent-danger-hover) !important;
+}
+
+
 .filterActions {
     display: flex;
     flex-wrap: wrap;
