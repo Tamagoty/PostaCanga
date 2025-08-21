@@ -1,7 +1,4 @@
 // path: src/pages/CustomerDetailPage.jsx
-// VERSÃO 4: Refatorado o card de contacto para exibir o ícone do WhatsApp e ser
-// um link clicável apenas se o cliente estiver ativo e tiver telemóvel.
-
 import React, { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
@@ -13,7 +10,7 @@ import ProgressBar from '../components/ProgressBar';
 import Modal from '../components/Modal';
 import CustomerForm from '../components/CustomerForm';
 import { handleSupabaseError } from '../utils/errorHandler';
-import { maskPhone } from '../utils/masks';
+import { maskPhone, formatCEP } from '../utils/masks'; // Importa formatCEP
 
 const CustomerDetailPage = () => {
   const { customerId } = useParams();
@@ -59,13 +56,19 @@ const CustomerDetailPage = () => {
   if (!customerDetails?.profile) return <div className={styles.loading}>Cliente não encontrado.</div>;
 
   const { profile, objects, this_customer_is_contact_for, contacts_for_this_customer, main_contact_associations } = customerDetails;
-  const customerToEdit = profile;
+  
+  // Prepara os dados para o formulário de edição, garantindo que o nome do contato seja passado
+  const customerToEdit = {
+    ...profile,
+    contact_full_name: contacts_for_this_customer?.[0]?.full_name || ''
+  };
   
   const fullAddress = profile.address 
     ? `${profile.address.street_name}, ${profile.address_number || 'S/N'}` +
       `${profile.address.neighborhood ? ` - ${profile.address.neighborhood}` : ''}` +
       `\n${profile.address.city}/${profile.address.state}` +
-      `${profile.address.cep ? ` - CEP: ${profile.address.cep}` : ''}`
+      // Usa a função formatCEP para exibir o CEP formatado
+      `${profile.address.cep ? ` - CEP: ${formatCEP(profile.address.cep)}` : ''}`
     : 'Endereço não informado';
     
   const phoneToWhatsApp = profile.cellphone ? `55${profile.cellphone.replace(/\D/g, '')}` : null;

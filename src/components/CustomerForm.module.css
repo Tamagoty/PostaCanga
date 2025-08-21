@@ -22,8 +22,15 @@
 
 .grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  grid-template-columns: 1fr 1fr;
   gap: 1rem;
+}
+
+/* Em telas menores, volta para uma coluna para não quebrar o layout */
+@media (max-width: 500px) {
+  .grid {
+    grid-template-columns: 1fr;
+  }
 }
 
 .addressGrid {
@@ -101,6 +108,7 @@
   transition: background-color 0.2s;
   display: flex;
   flex-direction: column;
+  color: var(--text-primary); /* Garante que o texto seja legível */
 }
 
 .searchResults li:hover {
@@ -124,11 +132,17 @@
     align-items: center;
 }
 
-.selectedContact button {
+.removeContactButton {
     background: none;
     border: none;
     color: var(--accent-danger);
     cursor: pointer;
-    font-size: 0.8rem;
+    font-size: 0.9rem;
     font-weight: 600;
+    padding: 0;
+    transition: opacity 0.2s;
+}
+
+.removeContactButton:hover {
+    opacity: 0.8;
 }

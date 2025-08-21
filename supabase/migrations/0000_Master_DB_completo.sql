@@ -114,15 +114,15 @@ END;
 $$;
 
 DROP FUNCTION IF EXISTS public.create_or_update_address(UUID, VARCHAR, TEXT, TEXT, INT);
-CREATE OR REPLACE FUNCTION public.create_or_update_address(address_id UUID, cep VARCHAR, street_name TEXT, neighborhood TEXT, city_id INT)
+CREATE OR REPLACE FUNCTION public.create_or_update_address(p_address_id UUID, p_cep VARCHAR, p_street_name TEXT, p_neighborhood TEXT, p_city_id INT)
 RETURNS addresses LANGUAGE plpgsql SECURITY DEFINER AS $$
 DECLARE result_address addresses; v_cleaned_cep TEXT;
 BEGIN
-    v_cleaned_cep := regexp_replace(cep, '\D', '', 'g');
-    IF address_id IS NULL THEN
-        INSERT INTO public.addresses (cep, street_name, neighborhood, city_id) VALUES (v_cleaned_cep, street_name, neighborhood, city_id) RETURNING * INTO result_address;
+    v_cleaned_cep := regexp_replace(p_cep, '\D', '', 'g');
+    IF p_address_id IS NULL THEN
+        INSERT INTO public.addresses (cep, street_name, neighborhood, city_id) VALUES (v_cleaned_cep, p_street_name, p_neighborhood, p_city_id) RETURNING * INTO result_address;
     ELSE
-        UPDATE public.addresses SET cep = v_cleaned_cep, street_name = street_name, neighborhood = neighborhood, city_id = city_id, updated_at = NOW() WHERE id = address_id RETURNING * INTO result_address;
+        UPDATE public.addresses SET cep = v_cleaned_cep, street_name = p_street_name, neighborhood = p_neighborhood, city_id = p_city_id, updated_at = NOW() WHERE id = p_address_id RETURNING * INTO result_address;
     END IF;
     RETURN result_address;
 END;
@@ -130,14 +130,78 @@ $$;
 
 DROP FUNCTION IF EXISTS public.find_address_by_details(TEXT, TEXT, TEXT, TEXT);
 CREATE OR REPLACE FUNCTION public.find_address_by_details(p_cep TEXT, p_street_name TEXT, p_city_name TEXT, p_state_uf TEXT)
-RETURNS addresses LANGUAGE plpgsql AS $$
-DECLARE v_cleaned_cep TEXT; v_city_id INT; result_address addresses;
+RETURNS addresses LANGUAGE plpgsql STABLE AS $$
+DECLARE
+    v_cleaned_cep TEXT;
+    v_city_id INT;
+    result_address addresses;
 BEGIN
+    -- Limpa e padroniza os dados de entrada
     v_cleaned_cep := regexp_replace(p_cep, '\D', '', 'g');
-    SELECT c.id INTO v_city_id FROM public.cities c JOIN public.states s ON c.state_id = s.id WHERE f_unaccent(c.name) ILIKE f_unaccent(p_city_name) AND s.uf ILIKE p_state_uf LIMIT 1;
-    IF v_city_id IS NULL THEN RETURN NULL; END IF;
-    SELECT * INTO result_address FROM public.addresses a WHERE a.cep = v_cleaned_cep AND f_unaccent(a.street_name) ILIKE f_unaccent(p_street_name) AND a.city_id = v_city_id LIMIT 1;
+    p_street_name := trim(p_street_name);
+    p_city_name := trim(p_city_name);
+    p_state_uf := trim(p_state_uf);
+
+    -- Encontra o ID da cidade
+    SELECT c.id INTO v_city_id
+    FROM public.cities c
+    JOIN public.states s ON c.state_id = s.id
+    WHERE f_unaccent(c.name) ILIKE f_unaccent(p_city_name) AND s.uf ILIKE p_state_uf
+    LIMIT 1;
+
+    -- Se a cidade não for encontrada, não há como encontrar o endereço
+    IF v_city_id IS NULL THEN
+        RETURN NULL;
+    END IF;
+
+    -- Busca o endereço comparando os campos padronizados
+    SELECT * INTO result_address
+    FROM public.addresses a
+    WHERE 
+        -- Compara o CEP (considerando que pode ser nulo ou vazio)
+        COALESCE(a.cep, '') = COALESCE(v_cleaned_cep, '')
+        -- Compara o nome da rua de forma insensível a acentos e maiúsculas/minúsculas
+      AND f_unaccent(trim(a.street_name)) ILIKE f_unaccent(p_street_name)
+        -- Compara o ID da cidade
+      AND a.city_id = v_city_id
+    LIMIT 1;
+
     RETURN result_address;
+END;
+$$;
+
+-- NOVA FUNÇÃO: Adicionada para suportar a busca de endereços no formulário de cliente
+DROP FUNCTION IF EXISTS public.search_addresses(TEXT);
+CREATE OR REPLACE FUNCTION public.search_addresses(p_search_term TEXT)
+RETURNS TABLE (
+    id UUID,
+    street_name TEXT,
+    neighborhood TEXT,
+    city_name VARCHAR,
+    state_uf CHAR(2),
+    cep VARCHAR
+)
+LANGUAGE plpgsql STABLE AS $$
+BEGIN
+    RETURN QUERY
+    SELECT
+        a.id::UUID,
+        a.street_name::TEXT,
+        a.neighborhood::TEXT,
+        c.name::VARCHAR,
+        s.uf::CHAR(2),
+        a.cep::VARCHAR
+    FROM
+        public.addresses a
+    LEFT JOIN
+        public.cities c ON a.city_id = c.id
+    LEFT JOIN
+        public.states s ON c.state_id = s.id
+    WHERE
+        f_unaccent(a.street_name) ILIKE f_unaccent('%' || p_search_term || '%')
+    ORDER BY
+        a.street_name
+    LIMIT 10;
 END;
 $$;
 
@@ -187,14 +251,39 @@ END;
 $$;
 
 DROP FUNCTION IF EXISTS public.create_or_update_customer(varchar, uuid, varchar, date, varchar, uuid, varchar, uuid, varchar, text);
+DROP FUNCTION IF EXISTS public.create_or_update_customer(uuid, text, varchar, varchar, date, uuid, varchar, uuid, varchar, varchar);
+
 CREATE OR REPLACE FUNCTION public.create_or_update_customer(p_address_complement varchar, p_address_id uuid, p_address_number varchar, p_birth_date date, p_cellphone varchar, p_contact_customer_id uuid, p_cpf varchar, p_customer_id uuid, p_email varchar, p_full_name text)
 RETURNS customers LANGUAGE plpgsql SECURITY DEFINER AS $$
-DECLARE result_customer customers;
+DECLARE
+    result_customer customers;
+    v_cpf TEXT;
+    v_cellphone TEXT;
+    v_email TEXT;
 BEGIN
+    -- Converte strings vazias para NULL para campos com restrição UNIQUE
+    v_cpf := NULLIF(TRIM(p_cpf), '');
+    v_cellphone := NULLIF(TRIM(p_cellphone), '');
+    v_email := NULLIF(TRIM(p_email), '');
+
     IF p_customer_id IS NULL THEN
-        INSERT INTO public.customers (full_name, cpf, cellphone, email, birth_date, contact_customer_id, address_id, address_number, address_complement) VALUES (p_full_name, p_cpf, p_cellphone, p_email, p_birth_date, p_contact_customer_id, p_address_id, p_address_number, p_address_complement) RETURNING * INTO result_customer;
+        INSERT INTO public.customers (full_name, cpf, cellphone, email, birth_date, contact_customer_id, address_id, address_number, address_complement)
+        VALUES (p_full_name, v_cpf, v_cellphone, v_email, p_birth_date, p_contact_customer_id, p_address_id, p_address_number, p_address_complement)
+        RETURNING * INTO result_customer;
     ELSE
-        UPDATE public.customers SET full_name = p_full_name, cpf = p_cpf, cellphone = p_cellphone, email = p_email, birth_date = p_birth_date, contact_customer_id = p_contact_customer_id, address_id = p_address_id, address_number = p_address_number, address_complement = p_address_complement, updated_at = NOW() WHERE id = p_customer_id RETURNING * INTO result_customer;
+        UPDATE public.customers
+        SET full_name = p_full_name,
+            cpf = v_cpf,
+            cellphone = v_cellphone,
+            email = v_email,
+            birth_date = p_birth_date,
+            contact_customer_id = p_contact_customer_id,
+            address_id = p_address_id,
+            address_number = p_address_number,
+            address_complement = p_address_complement,
+            updated_at = NOW()
+        WHERE id = p_customer_id
+        RETURNING * INTO result_customer;
     END IF;
     RETURN result_customer;
 END;
@@ -303,6 +392,8 @@ $$;
 
 -- FUNÇÕES DE OBJETOS (PACKAGES)
 DROP FUNCTION IF EXISTS public.create_or_update_object(TEXT, TEXT, INT, TEXT, TEXT, TEXT, TEXT, TEXT, TEXT, TEXT);
+DROP FUNCTION IF EXISTS public.create_or_update_object(INT, TEXT, TEXT, TEXT, TEXT, TEXT, TEXT, TEXT, TEXT, TEXT);
+
 CREATE OR REPLACE FUNCTION public.create_or_update_object(p_cep TEXT, p_city_name TEXT, p_control_number INT, p_neighborhood TEXT, p_number TEXT, p_object_type TEXT, p_recipient_name TEXT, p_state_uf TEXT, p_street_name TEXT, p_tracking_code TEXT)
 RETURNS objects LANGUAGE plpgsql SECURITY DEFINER AS $$
 DECLARE v_customer_id UUID; v_storage_deadline DATE; v_storage_days INT; result_object objects;
@@ -484,6 +575,8 @@ END;
 $$;
 
 DROP FUNCTION IF EXISTS public.log_and_adjust_stock(INT, TEXT, UUID);
+DROP FUNCTION IF EXISTS public.log_and_adjust_stock(UUID, INT, TEXT);
+
 CREATE OR REPLACE FUNCTION public.log_and_adjust_stock(p_quantity_change INT, p_reason TEXT, p_supply_id UUID)
 RETURNS void LANGUAGE plpgsql SECURITY DEFINER AS $$
 DECLARE v_new_stock_total INT;

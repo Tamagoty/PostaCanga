@@ -2,12 +2,14 @@
 import { useState, useCallback } from 'react';
 import toast from 'react-hot-toast';
 
-export const useCep = (setFormData) => {
+/**
+ * Hook customizado para buscar um endereço a partir de um CEP usando a API ViaCEP.
+ * @param {function} onSuccess - Callback a ser executado quando a busca for bem-sucedida. Recebe os dados do endereço como argumento.
+ */
+export const useCep = (onSuccess) => {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState(null);
 
-  // A função foi envolvida com useCallback para evitar recriações desnecessárias,
-  // o que corrigiu o loop que causava a "chuva de toasts".
   const triggerCepFetch = useCallback(async (currentCep) => {
     const cleanedCep = currentCep.replace(/\D/g, '');
     if (cleanedCep.length !== 8) {
@@ -25,14 +27,10 @@ export const useCep = (setFormData) => {
         throw new Error('CEP não encontrado.');
       }
 
-      setFormData(prev => ({
-        ...prev,
-        street_name: data.logradouro,
-        neighborhood: data.bairro,
-        city_name: data.localidade,
-        state_uf: data.uf,
-      }));
-      toast.success('Endereço preenchido automaticamente!');
+      // Executa o callback de sucesso, passando os dados do CEP
+      if (onSuccess) {
+        onSuccess(data);
+      }
       
     } catch (err) {
       toast.error(err.message || 'Erro ao buscar CEP.');
@@ -40,7 +38,7 @@ export const useCep = (setFormData) => {
     } finally {
       setIsLoading(false);
     }
-  }, [setFormData]);
+  }, [onSuccess]);
 
   return { isCepLoading: isLoading, cepError: error, triggerCepFetch };
 };
