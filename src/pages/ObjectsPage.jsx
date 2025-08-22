@@ -21,6 +21,7 @@ import Pagination from '../components/Pagination';
 import ObjectsHeader from '../components/ObjectsHeader';
 import ObjectsFilterBar from '../components/ObjectsFilterBar';
 import ObjectsTable from '../components/ObjectsTable';
+import BulkImportReport from '../components/BulkImportReport'; // Importa o novo componente
 import { handleSupabaseError } from '../utils/errorHandler';
 
 const ObjectsPage = () => {
@@ -41,6 +42,8 @@ const ObjectsPage = () => {
     const [isComposerModalOpen, setIsComposerModalOpen] = useState(false);
     const [objectToSuggestFor, setObjectToSuggestFor] = useState(null);
     const [objectsToNotify, setObjectsToNotify] = useState([]);
+    const [isReportModalOpen, setIsReportModalOpen] = useState(false); // State para o modal de relatório
+    const [reportData, setReportData] = useState(null); // State para os dados do relatório
     
     const debouncedSearchTerm = useDebounce(searchTerm, 500);
 
@@ -75,15 +78,17 @@ const ObjectsPage = () => {
 
     const handleSaveBulkSimple = async ({ objects, type }) => {
         setIsSaving(true);
-        const { error } = await supabase.rpc('bulk_create_simple_objects', {
+        const { data, error } = await supabase.rpc('bulk_create_simple_objects', {
             p_object_type: type,
             p_objects: objects
         });
         if (error) {
             toast.error(handleSupabaseError(error));
         } else {
-            toast.success(`${objects.length} objetos simples inseridos com sucesso!`);
+            toast.success(`${objects.length} objetos simples inseridos!`);
+            setReportData({ type: 'simple', objects: data, objectType: type });
             setIsBulkSimpleModalOpen(false);
+            setIsReportModalOpen(true);
             refetch();
         }
         setIsSaving(false);
@@ -91,14 +96,16 @@ const ObjectsPage = () => {
 
     const handleSaveBulkRegistered = async ({ objects }) => {
         setIsSaving(true);
-        const { error } = await supabase.rpc('bulk_create_registered_objects', {
+        const { data, error } = await supabase.rpc('bulk_create_registered_objects', {
             p_objects: objects
         });
         if (error) {
             toast.error(handleSupabaseError(error));
         } else {
-            toast.success(`${objects.length} objetos registrados inseridos com sucesso!`);
+            toast.success(`${objects.length} objetos registrados inseridos!`);
+            setReportData({ type: 'registered', objects: data });
             setIsBulkRegisteredModalOpen(false);
+            setIsReportModalOpen(true);
             refetch();
         }
         setIsSaving(false);
@@ -186,6 +193,9 @@ const ObjectsPage = () => {
             </Modal>
             <Modal isOpen={isBulkNotifyModalOpen} onClose={() => setIsBulkNotifyModalOpen(false)} title="Gerar Notificações em Lote">
                 <BulkNotifyForm onSave={handleGenerateNotifications} onClose={() => setIsBulkNotifyModalOpen(false)} loading={isSaving} />
+            </Modal>
+            <Modal isOpen={isReportModalOpen} onClose={() => setIsReportModalOpen(false)} title="Relatório de Inserção">
+                <BulkImportReport reportData={reportData} onClose={() => setIsReportModalOpen(false)} />
             </Modal>
             {isComposerModalOpen && (
                  <MessageComposerModal

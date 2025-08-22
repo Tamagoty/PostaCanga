@@ -1,7 +1,48 @@
 // path: src/utils/exportUtils.js
-// DESCRIÇÃO: Funções utilitárias para exportação de dados.
-
+import jsPDF from 'jspdf';
+import 'jspdf-autotable';
+import { format } from 'date-fns';
 import toast from 'react-hot-toast';
+
+/**
+ * Gera um relatório em PDF a partir dos dados de inserção em lote.
+ * @param {object} reportData - Os dados do relatório.
+ * @param {string} title - O título do documento.
+ */
+export const generatePDFReport = (reportData, title) => {
+    if (!reportData || !reportData.objects) {
+        console.error("Dados inválidos para gerar PDF.");
+        return;
+    }
+
+    const doc = new jsPDF();
+    const isSimple = reportData.type === 'simple';
+
+    const tableColumn = isSimple
+        ? ["N° Controle", "Destinatário", "Tipo de Objeto"]
+        : ["N° Controle", "Cód. Rastreio", "Destinatário"];
+
+    const tableRows = reportData.objects.map(item => {
+        return isSimple
+            ? [item.report_control_number, item.report_recipient_name, reportData.objectType]
+            : [item.report_control_number, item.report_tracking_code, item.report_recipient_name];
+    });
+
+    doc.autoTable({
+        head: [tableColumn],
+        body: tableRows,
+        startY: 20,
+        theme: 'striped',
+        headStyles: { fillColor: [41, 128, 185] },
+    });
+
+    doc.setFontSize(18);
+    doc.text(title, 14, 15);
+
+    const date = format(new Date(), 'dd-MM-yyyy');
+    const fileName = `relatorio_${reportData.type}_${date}.pdf`;
+    doc.save(fileName);
+};
 
 /**
  * Exporta uma lista de clientes para um ficheiro CSV compatível com os Contactos Google.
