@@ -7,36 +7,33 @@ import Input from './Input';
 import Button from './Button';
 import { FaSearch, FaArrowRight, FaArrowLeft, FaTimes } from 'react-icons/fa';
 
+const SkeletonLoader = () => (
+    <div className={styles.skeletonContainer}>
+        {[...Array(3)].map((_, index) => (
+            <div key={index} className={styles.skeletonItem}>
+                <div className={styles.skeletonText}></div>
+                <div className={styles.skeletonSubtext}></div>
+            </div>
+        ))}
+    </div>
+);
+
 const FastLinkerModal = ({ isOpen, onClose, object, onLink, onSkip, onBack, loading, total, current }) => {
     const [searchTerm, setSearchTerm] = useState('');
     const [suggestions, setSuggestions] = useState([]);
-    const [isSearching, setIsSearching] = useState(false);
+    const [isSearching, setIsSearching] = useState(true);
     const debouncedSearchTerm = useDebounce(searchTerm, 500);
 
-    // Efeito para buscar sugestões iniciais quando o objeto muda
     useEffect(() => {
         if (object) {
-            const fetchInitialSuggestions = async () => {
-                setIsSearching(true);
-                setSearchTerm(object.recipient_name); // Atualiza o input com o nome do destinatário
-                const { data, error } = await supabase.rpc('suggest_customer_links', { p_search_term: object.recipient_name });
-                if (error) {
-                    console.error(error);
-                    setSuggestions([]);
-                } else {
-                    setSuggestions(data || []);
-                }
-                setIsSearching(false);
-            };
-            fetchInitialSuggestions();
+            setSearchTerm(object.recipient_name);
         }
     }, [object]);
 
-    // Efeito para buscar sugestões conforme o usuário digita
     useEffect(() => {
         const getSuggestions = async () => {
-            // Não busca se o termo for o mesmo do destinatário inicial (já buscado)
-            if (debouncedSearchTerm === object?.recipient_name || debouncedSearchTerm.length < 3) {
+            if (!object || !debouncedSearchTerm) {
+                setSuggestions([]);
                 return;
             }
             setIsSearching(true);
@@ -49,18 +46,18 @@ const FastLinkerModal = ({ isOpen, onClose, object, onLink, onSkip, onBack, load
             }
             setIsSearching(false);
         };
-
-        if (object) {
+        
+        if (isOpen) {
             getSuggestions();
         }
-    }, [debouncedSearchTerm, object]);
+    }, [debouncedSearchTerm, object, isOpen]);
 
     if (!isOpen || !object) return null;
 
     return (
         <div className={styles.container}>
             <div className={styles.header}>
-                <h3>Ligar Objeto a Cliente</h3>
+                <h3>Ligar Objeto</h3>
                 <span className={styles.progress}>{current + 1} de {total}</span>
             </div>
             <div className={styles.objectInfo}>
@@ -92,7 +89,7 @@ const FastLinkerModal = ({ isOpen, onClose, object, onLink, onSkip, onBack, load
                     onChange={(e) => setSearchTerm(e.target.value)}
                 />
                 {isSearching ? (
-                     <p className={styles.loadingText}>A procurar...</p>
+                     <SkeletonLoader />
                 ) : suggestions.length > 0 ? (
                     <ul className={styles.suggestionsList}>
                         {suggestions.map(customer => (

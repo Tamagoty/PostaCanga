@@ -259,7 +259,7 @@ const ObjectsPage = () => {
             <Modal isOpen={isReportModalOpen} onClose={() => setIsReportModalOpen(false)} title="Relatório de Inserção">
                 <BulkImportReport reportData={reportData} onClose={() => setIsReportModalOpen(false)} />
             </Modal>
-            <Modal isOpen={isLinkerModalOpen} onClose={() => setIsLinkerModalOpen(false)} title="">
+            <Modal isOpen={isLinkerModalOpen} onClose={() => setIsLinkerModalOpen(false)} hideHeader={true}>
                 <FastLinkerModal
                     isOpen={isLinkerModalOpen}
                     onClose={() => setIsLinkerModalOpen(false)}

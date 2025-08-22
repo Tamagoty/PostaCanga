@@ -3,15 +3,14 @@
     display: flex;
     flex-direction: column;
     gap: 1.5rem;
-    padding: 1rem;
 }
 
 .header {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    border-bottom: 1px solid var(--border-color);
     padding-bottom: 1rem;
+    border-bottom: 1px solid var(--border-color);
 }
 
 .header h3 {
@@ -103,7 +102,7 @@
     color: var(--text-secondary);
 }
 
-.loadingText, .noResults {
+.noResults {
     text-align: center;
     color: var(--text-secondary);
     font-style: italic;
@@ -141,4 +140,48 @@
 }
 .navButton:hover {
     background-color: var(--accent-primary-hover) !important;
+}
+
+/* Skeleton Loader Styles */
+.skeletonContainer {
+    padding-top: 0.5rem;
+    border: 1px solid var(--border-color);
+    border-radius: var(--border-radius);
+    background-color: var(--bg-primary);
+    padding: 0.5rem;
+}
+
+.skeletonItem {
+    padding: 0.75rem 0.5rem;
+    background-color: var(--bg-primary);
+    border-bottom: 1px solid var(--border-color);
+}
+.skeletonItem:last-child {
+    border-bottom: none;
+}
+
+.skeletonText, .skeletonSubtext {
+    background-color: var(--bg-tertiary);
+    border-radius: 4px;
+    animation: pulse 1.5s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+.skeletonText {
+    height: 1rem;
+    width: 60%;
+    margin-bottom: 0.5rem;
+}
+
+.skeletonSubtext {
+    height: 0.75rem;
+    width: 80%;
+}
+
+@keyframes pulse {
+    0%, 100% {
+        opacity: 1;
+    }
+    50% {
+        opacity: 0.5;
+    }
 }
