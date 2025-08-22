@@ -5,8 +5,8 @@ import toast from 'react-hot-toast';
 import styles from './MessageComposerModal.module.css';
 import Button from './Button';
 import { FaGripVertical, FaCopy } from 'react-icons/fa';
+import { format, differenceInDays } from 'date-fns';
 
-// [NOVA LÓGICA] Mapeamento de variáveis para nomes amigáveis
 const VARIABLE_MAP = {
   '{{NOME_CLIENTE}}': 'Nome do Cliente',
   '{{TIPO_OBJETO}}': 'Tipo do Objeto',
@@ -18,10 +18,12 @@ const VARIABLE_MAP = {
   '{{ENDERECO_AGENCIA}}': 'Endereço da Agência',
 };
 
-const MessageComposerModal = ({ onSave, onClose, loading }) => {
+// CORREÇÃO: O componente agora recebe 'objectsToNotify' para pré-visualização
+const MessageComposerModal = ({ onSave, onClose, loading, objectsToNotify }) => {
   const [allTemplates, setAllTemplates] = useState([]);
   const [selectedTemplates, setSelectedTemplates] = useState([]);
   const [composedMessage, setComposedMessage] = useState('');
+  const [previewMessage, setPreviewMessage] = useState('');
   const [isLoadingTemplates, setIsLoadingTemplates] = useState(true);
 
   const dragItem = useRef(null);
@@ -35,16 +37,43 @@ const MessageComposerModal = ({ onSave, onClose, loading }) => {
         toast.error("Não foi possível carregar os modelos de mensagem.");
       } else {
         setAllTemplates(data || []);
+        // Pré-seleciona o primeiro template se ele existir
+        if (data && data.length > 0) {
+            setSelectedTemplates([data[0]]);
+        }
       }
       setIsLoadingTemplates(false);
     };
     fetchTemplates();
   }, []);
 
+  // CORREÇÃO: Lógica de composição e pré-visualização atualizada
   useEffect(() => {
-    const message = selectedTemplates.map(t => t.content).join('');
+    const message = selectedTemplates.map(t => t.content).join('\n\n');
     setComposedMessage(message);
-  }, [selectedTemplates]);
+
+    // Gera uma pré-visualização com os dados do primeiro objeto da lista
+    if (objectsToNotify && objectsToNotify.length > 0 && message) {
+      const firstObject = objectsToNotify[0];
+      let tempPreview = message;
+      
+      const deadline = new Date(firstObject.storage_deadline);
+      const daysRemaining = differenceInDays(deadline, new Date());
+
+      tempPreview = tempPreview.replace(/{{NOME_CLIENTE}}/g, firstObject.recipient_name);
+      tempPreview = tempPreview.replace(/{{TIPO_OBJETO}}/g, firstObject.object_type);
+      tempPreview = tempPreview.replace(/{{NUMERO_CONTROLE}}/g, firstObject.control_number);
+      tempPreview = tempPreview.replace(/{{DATA_PRAZO}}/g, format(deadline, 'dd/MM/yyyy'));
+      tempPreview = tempPreview.replace(/{{DIAS_RESTANTES}}/g, daysRemaining);
+      // Adicione outras substituições de variáveis globais se necessário
+      // Ex: tempPreview = tempPreview.replace(/{{NOME_DA_AGENCIA}}/g, 'Nome da Agência');
+
+      setPreviewMessage(tempPreview);
+    } else {
+      setPreviewMessage('');
+    }
+
+  }, [selectedTemplates, objectsToNotify]);
 
   const handleToggleTemplate = (template) => {
     const isSelected = selectedTemplates.some(st => st.id === template.id);
@@ -82,7 +111,6 @@ const MessageComposerModal = ({ onSave, onClose, loading }) => {
     <div className={styles.container}>
       <div className={styles.composerLayout}>
         <div className={styles.leftColumn}>
-          {/* Coluna da Esquerda: Lista de todos os modelos */}
           <div className={styles.templateList}>
             <h4>Modelos Disponíveis</h4>
             {isLoadingTemplates ? <p>A carregar...</p> : (
@@ -102,7 +130,6 @@ const MessageComposerModal = ({ onSave, onClose, loading }) => {
               </div>
             )}
           </div>
-          {/* [NOVA SEÇÃO] Ajuda de Variáveis */}
           <div className={styles.variableHelper}>
             <h4>Variáveis</h4>
             <div className={styles.variableGrid}>
@@ -116,9 +143,8 @@ const MessageComposerModal = ({ onSave, onClose, loading }) => {
           </div>
         </div>
 
-        {/* Coluna da Direita: Mensagem sendo construída */}
         <div className={styles.messagePreview}>
-          <h4>Compositor de Mensagem</h4>
+          <h4>Compositor e Pré-visualização</h4>
           <div className={styles.selectedItemsContainer}>
             {selectedTemplates.length > 0 ? (
               selectedTemplates.map((template, index) => (
@@ -140,11 +166,10 @@ const MessageComposerModal = ({ onSave, onClose, loading }) => {
             )}
           </div>
           <textarea
-            value={composedMessage}
-            onChange={(e) => setComposedMessage(e.target.value)}
+            value={previewMessage || 'A pré-visualização da sua mensagem aparecerá aqui...'}
+            readOnly
             className={styles.textarea}
             rows="8"
-            placeholder="A sua mensagem aparecerá aqui..."
           />
         </div>
       </div>
@@ -153,7 +178,7 @@ const MessageComposerModal = ({ onSave, onClose, loading }) => {
         <Button type="button" variant="secondary" onClick={onClose} disabled={loading}>
           Cancelar
         </Button>
-        <Button type="button" onClick={handleSubmit} loading={loading} disabled={loading}>
+        <Button type="button" onClick={handleSubmit} loading={loading} disabled={loading || selectedTemplates.length === 0}>
           {loading ? 'A Enviar...' : 'Confirmar e Enviar'}
         </Button>
       </div>

@@ -28,6 +28,7 @@ import { handleSupabaseError } from '../utils/errorHandler';
 const ObjectsPage = () => {
     // State Management
     const [isSaving, setIsSaving] = useState(false);
+    const [isSending, setIsSending] = useState(false);
     const [searchTerm, setSearchTerm] = useState('');
     const [selectedObjects, setSelectedObjects] = useState(new Set());
     const [statusFilters, setStatusFilters] = useState(new Set(['Aguardando Retirada']));
@@ -126,6 +127,7 @@ const ObjectsPage = () => {
             p_start_date: filters.start_date || null,
             p_end_date: filters.end_date || null,
         });
+
         if (error) {
             toast.error(handleSupabaseError(error));
         } else if (data && data.length > 0) {
@@ -137,6 +139,78 @@ const ObjectsPage = () => {
         }
         setIsSaving(false);
     };
+    
+    // CORREÇÃO: Função reescrita para gerar e baixar um arquivo HTML.
+    const handleSendNotifications = async (composedMessage) => {
+        if (!composedMessage.trim()) {
+            toast.error("A mensagem não pode estar vazia.");
+            return;
+        }
+        setIsSending(true);
+        try {
+            const { data: messagesData, error } = await supabase.rpc('generate_whatsapp_messages', {
+                p_message_template: composedMessage,
+                p_objects_data: objectsToNotify
+            });
+
+            if (error) throw error;
+
+            if (messagesData && messagesData.length > 0) {
+                // Mapeia os dados das mensagens para os dados dos objetos originais para obter o control_number
+                const fullData = messagesData.map((msg, index) => ({
+                    ...msg,
+                    control_number: objectsToNotify[index].control_number
+                }));
+
+                const htmlContent = generateHtmlForNotifications(fullData);
+                const blob = new Blob([htmlContent], { type: 'text/html' });
+                const url = URL.createObjectURL(blob);
+                
+                const link = document.createElement('a');
+                link.href = url;
+                link.download = 'notificacoes_whatsapp.html';
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+                URL.revokeObjectURL(url);
+
+                toast.success(`Arquivo HTML com ${fullData.length} notificações gerado!`);
+                setIsComposerModalOpen(false);
+                setObjectsToNotify([]);
+            } else {
+                toast.error("Não foi possível gerar as mensagens.");
+            }
+        } catch (error) {
+            toast.error(handleSupabaseError(error));
+        } finally {
+            setIsSending(false);
+        }
+    };
+
+    // CORREÇÃO: Nova função auxiliar para criar o conteúdo do arquivo HTML.
+    const generateHtmlForNotifications = (data) => {
+        const styles = `body{background:linear-gradient(to bottom left,#1a1d24,#272b35);min-height:100vh;font-family:sans-serif;padding:20px;margin:0}.grid-container{display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:20px}.container{cursor:pointer;text-align:center;transition:opacity .3s,transform .3s}.imagem{position:relative;display:inline-block}img{width:120px;border-radius:15px;box-shadow:0 4px 15px rgba(0,0,0,.4)}.texto{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);color:#fff;font-size:1.5rem;font-weight:700;text-shadow:2px 2px 4px rgba(0,0,0,.7)}a{text-decoration:none}.hidden{opacity:.2;transform:scale(.9);pointer-events:none}`;
+        const script = `function ocultarDiv(e){e.classList.add("hidden")}`;
+
+        const divs = data.map(item => {
+            const phoneNumber = item.phone_number.replace(/\D/g, '');
+            const encodedMessage = encodeURIComponent(item.message);
+            const whatsappUrl = `https://wa.me/55${phoneNumber}?text=${encodedMessage}`;
+            
+            return `
+<div id="${item.control_number}" class="container" onclick="ocultarDiv(this)">
+    <a href="${whatsappUrl}" target="_blank">
+        <div class="imagem">
+            <img src="https://i.imgur.com/S5h76II.png" alt="Ícone de mensagem" />
+            <div class="texto">${item.control_number}</div>
+        </div>
+    </a>
+</div>`;
+        }).join('');
+
+        return `<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8" /><title>Notificações WhatsApp</title><style>${styles}</style></head><body><div class="grid-container">${divs}</div><script>${script}</script></body></html>`;
+    };
+
 
     const onArchiveAction = async () => {
         const success = await handleArchiveAction();
@@ -272,13 +346,16 @@ const ObjectsPage = () => {
                     current={currentLinkerIndex}
                 />
             </Modal>
-            {isComposerModalOpen && (
+            
+            <Modal isOpen={isComposerModalOpen} onClose={() => setIsComposerModalOpen(false)} title={`Compor Notificação para ${objectsToNotify.length} Objeto(s)`}>
                  <MessageComposerModal
-                    isOpen={isComposerModalOpen}
                     onClose={() => setIsComposerModalOpen(false)}
+                    onSave={handleSendNotifications}
+                    loading={isSending}
                     objectsToNotify={objectsToNotify}
                 />
-            )}
+            </Modal>
+
             <Modal isOpen={!!objectToSuggestFor} onClose={() => setObjectToSuggestFor(null)} title="Ligar Objeto a Cliente">
                 <SuggestionModal 
                     isOpen={!!objectToSuggestFor}
