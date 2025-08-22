@@ -1,81 +1,75 @@
 /* path: src/components/SuggestionModal.module.css */
-
 .container {
-  display: flex;
-  flex-direction: column;
-  gap: 1.5rem;
+    display: flex;
+    flex-direction: column;
+    gap: 1.5rem;
 }
 
 .objectInfo {
-  background-color: var(--bg-primary);
-  padding: 1rem;
-  border-radius: var(--border-radius);
-  border: 1px solid var(--border-color);
-}
-
-.objectInfo h4 {
-  margin-top: 0;
-  margin-bottom: 0.75rem;
-  color: var(--accent-primary);
+    background-color: var(--bg-secondary);
+    padding: 1rem;
+    border-radius: var(--border-radius);
+    border: 1px solid var(--border-color);
 }
 
 .objectInfo p {
-  margin: 0.25rem 0;
-  font-size: 0.9rem;
-  color: var(--text-secondary);
+    margin: 0 0 0.5rem 0;
+    line-height: 1.5;
 }
 
-.objectInfo p strong {
-  color: var(--text-primary);
+.objectInfo p:last-child {
+    margin-bottom: 0;
+}
+
+.searchSection {
+    position: relative;
 }
 
 .suggestionsList {
-  /* CORREÇÃO: Altura mínima para evitar que o modal "pule" */
-  min-height: 250px; 
-  max-height: 250px;
-  overflow-y: auto;
-  display: flex;
-  flex-direction: column;
-  gap: 1rem;
-  padding-right: 0.5rem;
-  border-top: 1px solid var(--border-color);
-  border-bottom: 1px solid var(--border-color);
-  padding-top: 1rem;
-  padding-bottom: 1rem;
+    list-style: none;
+    padding: 0;
+    margin: 0.5rem 0 0 0;
+    max-height: 200px;
+    overflow-y: auto;
+    border: 1px solid var(--border-color);
+    border-radius: var(--border-radius);
+    background-color: var(--bg-primary);
 }
 
-.suggestionItem {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 1rem;
-  background-color: var(--bg-tertiary);
-  border-radius: var(--border-radius);
+.suggestionsList li {
+    padding: 0.75rem 1rem;
+    cursor: pointer;
+    transition: background-color 0.2s;
+    border-bottom: 1px solid var(--border-color);
 }
 
-.customerInfo {
-  display: flex;
-  flex-direction: column;
-  gap: 0.25rem;
+.suggestionsList li:last-child {
+    border-bottom: none;
 }
 
-.customerName {
-  font-weight: 600;
+.suggestionsList li:hover {
+    background-color: var(--bg-tertiary);
 }
 
-.customerAddress {
-  font-size: 0.8rem;
-  color: var(--text-secondary);
+.suggestionsList li strong {
+    display: block;
+    color: var(--text-primary);
 }
 
-.suggestionItem button {
-  width: auto;
-  flex-shrink: 0;
+.suggestionsList li span {
+    font-size: 0.8rem;
+    color: var(--text-secondary);
+}
+
+.loadingText, .noResults {
+    padding: 1rem;
+    text-align: center;
+    color: var(--text-secondary);
+    font-style: italic;
 }
 
 .actions {
-  display: flex;
-  justify-content: flex-end;
-  gap: 1rem;
-  margin-top: 1rem;
+    display: flex;
+    justify-content: flex-end;
+    margin-top: 1rem;
 }

@@ -21,7 +21,8 @@ import Pagination from '../components/Pagination';
 import ObjectsHeader from '../components/ObjectsHeader';
 import ObjectsFilterBar from '../components/ObjectsFilterBar';
 import ObjectsTable from '../components/ObjectsTable';
-import BulkImportReport from '../components/BulkImportReport'; // Importa o novo componente
+import BulkImportReport from '../components/BulkImportReport';
+import FastLinkerModal from '../components/FastLinkerModal';
 import { handleSupabaseError } from '../utils/errorHandler';
 
 const ObjectsPage = () => {
@@ -42,8 +43,14 @@ const ObjectsPage = () => {
     const [isComposerModalOpen, setIsComposerModalOpen] = useState(false);
     const [objectToSuggestFor, setObjectToSuggestFor] = useState(null);
     const [objectsToNotify, setObjectsToNotify] = useState([]);
-    const [isReportModalOpen, setIsReportModalOpen] = useState(false); // State para o modal de relatório
-    const [reportData, setReportData] = useState(null); // State para os dados do relatório
+    const [isReportModalOpen, setIsReportModalOpen] = useState(false);
+    const [reportData, setReportData] = useState(null);
+    
+    // Fast Linker States
+    const [isLinkerModalOpen, setIsLinkerModalOpen] = useState(false);
+    const [objectsToLink, setObjectsToLink] = useState([]);
+    const [currentLinkerIndex, setCurrentLinkerIndex] = useState(0);
+    const [isLinkerLoading, setIsLinkerLoading] = useState(false);
     
     const debouncedSearchTerm = useDebounce(searchTerm, 500);
 
@@ -179,6 +186,61 @@ const ObjectsPage = () => {
         });
     };
 
+    // --- Funções do Ligador Rápido ---
+    const startFastLinker = async () => {
+        setIsLinkerLoading(true);
+        const { data, error } = await supabase.rpc('get_unlinked_objects');
+        if (error) {
+            toast.error(handleSupabaseError(error));
+        } else if (data && data.length > 0) {
+            setObjectsToLink(data);
+            setCurrentLinkerIndex(0);
+            setIsLinkerModalOpen(true);
+        } else {
+            toast.success('Todos os objetos já estão ligados a clientes!');
+        }
+        setIsLinkerLoading(false);
+    };
+
+    const handleLinkObjectAndAdvance = async (customerId) => {
+        setIsLinkerLoading(true);
+        const objectToLink = objectsToLink[currentLinkerIndex];
+        const { error } = await supabase.rpc('link_object_to_customer', {
+            p_control_number: objectToLink.control_number,
+            p_customer_id: customerId
+        });
+
+        if (error) {
+            toast.error(handleSupabaseError(error));
+        } else {
+            toast.success(`Objeto ${objectToLink.control_number} ligado!`);
+            if (currentLinkerIndex < objectsToLink.length - 1) {
+                setCurrentLinkerIndex(prev => prev + 1);
+            } else {
+                toast.success('Todos os objetos foram processados!');
+                setIsLinkerModalOpen(false);
+                refetch();
+            }
+        }
+        setIsLinkerLoading(false);
+    };
+
+    const handleSkipObject = () => {
+        if (currentLinkerIndex < objectsToLink.length - 1) {
+            setCurrentLinkerIndex(prev => prev + 1);
+        } else {
+            toast.success('Todos os objetos foram processados!');
+            setIsLinkerModalOpen(false);
+            refetch();
+        }
+    };
+
+    const handleGoBackObject = () => {
+        if (currentLinkerIndex > 0) {
+            setCurrentLinkerIndex(prev => prev - 1);
+        }
+    };
+
     return (
         <div className={styles.container}>
             {/* Modals */}
@@ -197,6 +259,19 @@ const ObjectsPage = () => {
             <Modal isOpen={isReportModalOpen} onClose={() => setIsReportModalOpen(false)} title="Relatório de Inserção">
                 <BulkImportReport reportData={reportData} onClose={() => setIsReportModalOpen(false)} />
             </Modal>
+            <Modal isOpen={isLinkerModalOpen} onClose={() => setIsLinkerModalOpen(false)} title="">
+                <FastLinkerModal
+                    isOpen={isLinkerModalOpen}
+                    onClose={() => setIsLinkerModalOpen(false)}
+                    object={objectsToLink[currentLinkerIndex]}
+                    onLink={handleLinkObjectAndAdvance}
+                    onSkip={handleSkipObject}
+                    onBack={handleGoBackObject}
+                    loading={isLinkerLoading}
+                    total={objectsToLink.length}
+                    current={currentLinkerIndex}
+                />
+            </Modal>
             {isComposerModalOpen && (
                  <MessageComposerModal
                     isOpen={isComposerModalOpen}
@@ -204,7 +279,15 @@ const ObjectsPage = () => {
                     objectsToNotify={objectsToNotify}
                 />
             )}
-            <SuggestionModal isOpen={!!objectToSuggestFor} onClose={() => setObjectToSuggestFor(null)} object={objectToSuggestFor} onLink={handleLinkObject} loading={isSaving} />
+            <Modal isOpen={!!objectToSuggestFor} onClose={() => setObjectToSuggestFor(null)} title="Ligar Objeto a Cliente">
+                <SuggestionModal 
+                    isOpen={!!objectToSuggestFor}
+                    onClose={() => setObjectToSuggestFor(null)} 
+                    object={objectToSuggestFor} 
+                    onLink={handleLinkObject} 
+                    loading={isSaving} 
+                />
+            </Modal>
 
             {/* Page Content */}
             <ObjectsHeader
@@ -212,10 +295,9 @@ const ObjectsPage = () => {
                 setSearchTerm={setSearchTerm}
                 selectedObjects={selectedObjects}
                 onBulkUpdateStatus={(status) => handleBulkUpdateStatus(selectedObjects, status)}
-                onExportExpiring={() => {}}
+                onStartFastLinker={startFastLinker}
+                isLinkerLoading={isLinkerLoading}
                 onBulkNotify={() => setIsBulkNotifyModalOpen(true)}
-                onStartNotificationProcess={() => {}}
-                onExportTrackingCodes={() => {}}
                 onBulkRegistered={() => setIsBulkRegisteredModalOpen(true)}
                 onBulkSimple={() => setIsBulkSimpleModalOpen(true)}
                 onNewObject={() => { setObjectToEdit(null); setIsModalOpen(true); }}
